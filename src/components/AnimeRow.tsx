@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Star } from "lucide-react";
 
 interface AnimeRowProps {
@@ -21,14 +22,18 @@ export default function AnimeRow({ title, items }: AnimeRowProps) {
           <Link 
             href={`/anime/${anime.slug}`} 
             key={anime.id}
-            className="snap-start shrink-0 w-[200px] md:w-[240px] group relative rounded-2xl overflow-hidden cursor-pointer"
+            className="snap-start shrink-0 w-[200px] md:w-[240px] group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900"
           >
             <div className="aspect-[2/3] relative">
-              <img 
-                src={anime.posterImage} 
-                alt={anime.title} 
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-              />
+              {anime.posterImage ? (
+                <Image 
+                  src={anime.posterImage} 
+                  alt={anime.title} 
+                  fill
+                  sizes="(max-width: 768px) 200px, 240px"
+                  className="object-cover transition-transform duration-500 group-hover:scale-110"
+                />
+              ) : null}
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
               
               {/* Top Badge */}

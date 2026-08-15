@@ -10,12 +10,14 @@ export default function AnimePageClient({
   data, 
   recommendations,
   initialBookmarked, 
+  initialBookmarkStatus,
   user, 
   lastWatchedEpisode 
 }: { 
   data: any, 
   recommendations: any[],
   initialBookmarked?: boolean, 
+  initialBookmarkStatus?: any,
   user?: any, 
   lastWatchedEpisode?: number | null 
 }) {
@@ -32,6 +34,7 @@ export default function AnimePageClient({
             episode={activeEpisode} 
             episodes={data.episodes}
             onEpisodeChange={setActiveEpisode}
+            onClose={() => setActiveEpisode(null)}
             animeSlug={data.slug}
             animeTitle={data.title}
             animeType={data.type}
@@ -42,6 +45,7 @@ export default function AnimePageClient({
           <Hero 
             anime={data}
             initialBookmarked={initialBookmarked}
+            initialBookmarkStatus={initialBookmarkStatus}
             user={user}
             lastWatchedEpisode={lastWatchedEpisode}
             onPlayEpisode={(ep) => setActiveEpisode(ep)}
@@ -50,6 +54,7 @@ export default function AnimePageClient({
         
         <EpisodesGrid 
           episodes={data.episodes} 
+          activeEpisodeId={activeEpisode?.id}
           onPlay={(episode) => setActiveEpisode(episode)} 
         />
         

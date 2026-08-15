@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -15,10 +16,15 @@ export default function UsernameModal({ isOpen, onClose, user }: UsernameModalPr
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,10 +93,5 @@ export default function UsernameModal({ isOpen, onClose, user }: UsernameModalPr
     </div>
   );
 
-  if (typeof document !== 'undefined') {
-    const { createPortal } = require('react-dom');
-    return createPortal(modalContent, document.body);
-  }
-  
-  return modalContent;
+  return createPortal(modalContent, document.body);
 }

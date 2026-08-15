@@ -1,6 +1,7 @@
 import { searchAnime } from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
+import Image from "next/image";
 import { Star } from "lucide-react";
 
 export default async function SearchPage({
@@ -31,11 +32,15 @@ export default async function SearchPage({
                 className="group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105"
               >
                 <div className="aspect-[2/3] relative">
-                  <img 
-                    src={anime.posterImage} 
-                    alt={anime.title} 
-                    className="w-full h-full object-cover"
-                  />
+                  {anime.posterImage ? (
+                    <Image 
+                      src={anime.posterImage} 
+                      alt={anime.title} 
+                      fill
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+                      className="object-cover"
+                    />
+                  ) : null}
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
                   
                   {/* Bottom Info */}

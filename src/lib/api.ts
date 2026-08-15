@@ -89,7 +89,7 @@ export const searchAnime = cache(async (query: string, limit: number = 20) => {
       "Content-Type": "application/vnd.api+json",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     },
-    cache: "no-store"
+    next: { revalidate: 300 } // 5 minutes cache
   });
   const json = await res.json();
   if (!json.data) return [];
@@ -116,8 +116,8 @@ export const getAnimeData = cache(async (slug: string) => {
   const metadata = formatAnimeData(anime);
   const episodeCount = anime.attributes.episodeCount; // Might be null for airing
 
-  // 2. Fetch real episodes from Kitsu (first 20, cached 24h)
-  const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=20`, {
+  // 2. Fetch real episodes from Kitsu (up to 100 episodes, cached 24h)
+  const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=100`, {
     headers: {
       "Accept": "application/vnd.api+json",
       "Content-Type": "application/vnd.api+json",

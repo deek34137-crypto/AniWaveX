@@ -5,6 +5,8 @@ import { Search, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+import Image from "next/image";
+
 // Custom hook for debouncing input
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -30,6 +32,7 @@ export default function SearchBar() {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRequestIdRef = useRef(0);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -42,7 +45,7 @@ export default function SearchBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Fetch results when debounced query changes
+  // Fetch results when debounced query changes using internal API + AbortController
   useEffect(() => {
     if (!debouncedQuery.trim()) {
       setResults([]);
@@ -50,36 +53,42 @@ export default function SearchBar() {
       return;
     }
 
+    const controller = new AbortController();
+    const currentRequestId = ++searchRequestIdRef.current;
+
     async function fetchSearch() {
       setIsSearching(true);
       try {
-        const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(debouncedQuery)}&page[limit]=5`, {
-          headers: {
-            "Accept": "application/vnd.api+json",
-            "Content-Type": "application/vnd.api+json"
-          }
+        const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&limit=5`, {
+          signal: controller.signal,
         });
-        const json = await res.json();
-        
-        if (json.data) {
-          const formatted = json.data.map((anime: any) => ({
-            id: anime.id,
-            slug: anime.attributes.slug,
-            title: anime.attributes.canonicalTitle,
-            year: anime.attributes.startDate ? anime.attributes.startDate.split('-')[0] : "Unknown",
-            posterImage: anime.attributes.posterImage?.tiny || anime.attributes.posterImage?.small || "",
-          }));
-          setResults(formatted);
+        const data = await res.json();
+
+        // Check if request is still active
+        if (searchRequestIdRef.current !== currentRequestId || controller.signal.aborted) {
+          return;
+        }
+
+        if (Array.isArray(data)) {
+          setResults(data);
           setIsOpen(true);
         }
-      } catch (error) {
-        console.error("Search error:", error);
+      } catch (error: any) {
+        if (error.name !== "AbortError" && !controller.signal.aborted) {
+          console.error("Search error:", error);
+        }
       } finally {
-        setIsSearching(false);
+        if (searchRequestIdRef.current === currentRequestId && !controller.signal.aborted) {
+          setIsSearching(false);
+        }
       }
     }
 
     fetchSearch();
+
+    return () => {
+      controller.abort();
+    };
   }, [debouncedQuery]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -121,11 +130,17 @@ export default function SearchBar() {
                   onClick={() => setIsOpen(false)}
                   className="flex items-center gap-3 p-3 hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0"
                 >
-                  <img 
-                    src={anime.posterImage} 
-                    alt={anime.title} 
-                    className="w-10 h-14 object-cover rounded-md"
-                  />
+                  <div className="relative w-10 h-14 shrink-0 rounded-md overflow-hidden bg-slate-800">
+                    {anime.posterImage ? (
+                      <Image 
+                        src={anime.posterImage} 
+                        alt={anime.title} 
+                        fill
+                        sizes="40px"
+                        className="object-cover"
+                      />
+                    ) : null}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-semibold text-white truncate">{anime.title}</h4>
                     <span className="text-xs text-slate-400">{anime.year}</span>

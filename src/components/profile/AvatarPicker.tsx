@@ -5,6 +5,8 @@ import { AVATARS } from "@/lib/avatars";
 import { createClient } from "@/lib/supabase/client";
 import { Check, Loader2 } from "lucide-react";
 
+import Image from "next/image";
+
 export default function AvatarPicker({ currentAvatarId }: { currentAvatarId?: string }) {
   const [selected, setSelected] = useState<string | null>(currentAvatarId || null);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,7 +50,7 @@ export default function AvatarPicker({ currentAvatarId }: { currentAvatarId?: st
                 : "border-transparent opacity-70 hover:opacity-100"
             }`}
           >
-            <img src={url} alt={id} className="w-full h-full object-cover bg-slate-800" />
+            <Image src={url} alt={id} fill sizes="80px" className="object-cover bg-slate-800" />
             {selected === id && (
               <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
                 <div className="bg-blue-600 rounded-full p-1 shadow-lg">

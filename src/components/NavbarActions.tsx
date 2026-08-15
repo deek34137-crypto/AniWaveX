@@ -9,6 +9,8 @@ import { getAvatarUrl } from "@/lib/avatars";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
+import Image from "next/image";
+
 export default function NavbarActions({ user }: { user: any }) {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -83,10 +85,10 @@ export default function NavbarActions({ user }: { user: any }) {
         <div className="relative">
           <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="ml-2 w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center border border-white/20 overflow-hidden hover:scale-105 transition-transform"
+            className="ml-2 w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center border border-white/20 overflow-hidden hover:scale-105 transition-transform relative"
           >
             {avatarUrl ? (
-              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              <Image src={avatarUrl} alt="Avatar" fill sizes="36px" className="object-cover" />
             ) : (
               <span className="text-sm font-bold text-white uppercase bg-gradient-to-br from-indigo-500 to-purple-600 w-full h-full flex items-center justify-center">{user.email?.charAt(0) || 'U'}</span>
             )}

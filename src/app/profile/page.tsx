@@ -14,19 +14,21 @@ export default async function ProfilePage() {
     redirect('/');
   }
 
-  // Fetch bookmarks sorted by newest first
-  const { data: bookmarks } = await supabase
-    .from('bookmarks')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
-
-  // Fetch watch history
-  const { data: history } = await supabase
-    .from('watch_history')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('updated_at', { ascending: false });
+  // Fetch bookmarks and watch history in parallel (bounded to 50 latest entries)
+  const [{ data: bookmarks }, { data: history }] = await Promise.all([
+    supabase
+      .from('bookmarks')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('watch_history')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(50)
+  ]);
 
   return (
     <main className="min-h-screen bg-slate-950 pb-32">

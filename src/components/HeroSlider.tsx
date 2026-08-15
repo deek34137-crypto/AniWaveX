@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { Play, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
+import Image from "next/image";
+
 interface HeroSliderProps {
   animeList: any[];
 }
@@ -36,16 +38,25 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
     <div className="relative w-full h-[70vh] min-h-[500px] overflow-hidden rounded-3xl mt-6 group">
       {animeList.map((anime, index) => {
         const isActive = index === currentIndex;
+        const imageUrl = anime.backgroundImage || anime.posterImage;
         return (
           <div 
             key={anime.id}
             className={`absolute inset-0 transition-opacity duration-1000 ${isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
           >
-            {/* Background Image */}
-            <div 
-              className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-[10000ms] ${isActive ? 'scale-105' : 'scale-100'}`}
-              style={{ backgroundImage: `url('${anime.backgroundImage || anime.posterImage}')` }}
-            />
+            {/* Optimized Background Image */}
+            {imageUrl ? (
+              <div className={`absolute inset-0 transition-transform duration-[10000ms] ${isActive ? 'scale-105' : 'scale-100'}`}>
+                <Image
+                  src={imageUrl}
+                  alt={anime.title}
+                  fill
+                  priority={index === 0}
+                  sizes="100vw"
+                  className="object-cover object-center"
+                />
+              </div>
+            ) : null}
             
             {/* Gradients for readability */}
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/70 to-transparent" />

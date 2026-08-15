@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Star, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
+import Image from "next/image";
+
 export default function WatchHistoryGrid({ initialItems }: { initialItems: any[] }) {
   const [items, setItems] = useState(initialItems);
   const supabase = createClient();
@@ -43,11 +45,15 @@ export default function WatchHistoryGrid({ initialItems }: { initialItems: any[]
             className="group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105"
           >
             <div className="aspect-[16/9] relative">
-              <img 
-                src={item.poster_image} 
-                alt={item.anime_title} 
-                className="w-full h-full object-cover"
-              />
+              {item.poster_image ? (
+                <Image 
+                  src={item.poster_image} 
+                  alt={item.anime_title} 
+                  fill
+                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+                  className="object-cover"
+                />
+              ) : null}
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent" />
               
               {/* Play Overlay */}
@@ -72,10 +78,29 @@ export default function WatchHistoryGrid({ initialItems }: { initialItems: any[]
                 <h3 className="text-white font-bold text-sm truncate">
                   {item.anime_title}
                 </h3>
-                <p className="text-blue-400 text-xs font-semibold mt-1">
-                  Episode {item.last_episode_watched}
-                </p>
+                <div className="flex items-center justify-between text-xs mt-1">
+                  <p className="text-blue-400 font-semibold">
+                    Episode {item.last_episode_watched}
+                  </p>
+                  {item.progress_seconds && item.progress_seconds > 0 ? (
+                    <span className="text-slate-400 font-mono text-[11px]">
+                      {Math.floor(item.progress_seconds / 60)}:{Math.floor(item.progress_seconds % 60).toString().padStart(2, '0')}
+                    </span>
+                  ) : null}
+                </div>
               </div>
+
+              {/* Playback Progress Bar */}
+              {item.progress_seconds && item.progress_seconds > 0 ? (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                  <div 
+                    className="h-full bg-blue-500 rounded-r shadow-[0_0_8px_rgba(59,130,246,0.8)]"
+                    style={{ 
+                      width: `${Math.min(100, Math.max(5, (item.progress_seconds / (item.duration_seconds || 1440)) * 100))}%` 
+                    }}
+                  />
+                </div>
+              ) : null}
             </div>
           </Link>
         ))}

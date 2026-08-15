@@ -59,16 +59,18 @@ export default async function AnimePage({
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   let initialBookmarked = false;
+  let initialBookmarkStatus = null;
   let lastWatchedEpisode = null;
 
   if (user) {
     const [bookmarkRes, historyRes] = await Promise.all([
-      supabase.from('bookmarks').select('id').eq('user_id', user.id).eq('anime_slug', data.slug).single(),
-      supabase.from('watch_history').select('last_episode_watched').eq('user_id', user.id).eq('anime_slug', data.slug).single()
+      supabase.from('bookmarks').select('id, status').eq('user_id', user.id).eq('anime_slug', data.slug).maybeSingle(),
+      supabase.from('watch_history').select('last_episode_watched, progress_seconds').eq('user_id', user.id).eq('anime_slug', data.slug).maybeSingle()
     ]);
 
     if (bookmarkRes.data) {
       initialBookmarked = true;
+      initialBookmarkStatus = bookmarkRes.data.status || 'watching';
     }
     
     if (historyRes.data) {
@@ -83,6 +85,7 @@ export default async function AnimePage({
         data={data} 
         recommendations={recommendations}
         initialBookmarked={initialBookmarked} 
+        initialBookmarkStatus={initialBookmarkStatus}
         user={user} 
         lastWatchedEpisode={lastWatchedEpisode} 
       />

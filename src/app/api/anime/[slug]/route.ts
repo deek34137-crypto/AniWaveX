@@ -12,5 +12,9 @@ export async function GET(
     return NextResponse.json({ error: "Anime not found" }, { status: 404 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json(data, {
+    headers: {
+      "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=43200"
+    }
+  });
 }

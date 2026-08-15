@@ -1,71 +1,109 @@
 "use client";
 
 import { useState } from "react";
-import { Play, Bookmark, Share2, MessageSquare, Star, Calendar, Clock } from "lucide-react";
+import { Play, Bookmark, Star, Calendar, Clock, ChevronDown, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
+import Image from "next/image";
+
 interface HeroProps {
   anime: any;
   initialBookmarked?: boolean;
+  initialBookmarkStatus?: WatchlistStatus | null;
   user?: any;
   lastWatchedEpisode?: number | null;
   onPlayEpisode?: (ep: any) => void;
 }
 
-export default function Hero({ anime, initialBookmarked = false, user, lastWatchedEpisode, onPlayEpisode }: HeroProps) {
+export default function Hero({ 
+  anime, 
+  initialBookmarked = false, 
+  initialBookmarkStatus = 'watching',
+  user, 
+  lastWatchedEpisode, 
+  onPlayEpisode 
+}: HeroProps) {
   const [isBookmarked, setIsBookmarked] = useState(initialBookmarked);
+  const [currentStatus, setCurrentStatus] = useState<WatchlistStatus>(initialBookmarkStatus || 'watching');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const supabase = createClient();
 
-  const handleBookmark = async () => {
+  const handleSetStatus = async (status: WatchlistStatus) => {
     if (!user) {
       alert("Please log in to save bookmarks!");
       return;
     }
 
-    // Optimistic UI update
-    setIsBookmarked(!isBookmarked);
     setIsSaving(true);
+    setIsBookmarked(true);
+    setCurrentStatus(status);
+    setIsDropdownOpen(false);
 
     try {
-      if (isBookmarked) {
-        // Remove bookmark
-        const { error } = await supabase
-          .from('bookmarks')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('anime_slug', anime.slug);
-          
-        if (error) throw error;
-      } else {
-        // Add bookmark
-        const { error } = await supabase
-          .from('bookmarks')
-          .insert({
-            user_id: user.id, 
-            anime_slug: anime.slug,
-            anime_title: anime.title,
-            poster_image: anime.posterImage
-          });
-          
-        if (error) throw error;
-      }
+      const { error } = await supabase
+        .from('bookmarks')
+        .upsert({
+          user_id: user.id, 
+          anime_slug: anime.slug,
+          anime_title: anime.title,
+          poster_image: anime.posterImage,
+          status: status,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id, anime_slug'
+        });
+        
+      if (error) throw error;
     } catch (error) {
-      console.error("Bookmark error:", error);
-      // Revert optimistic update
-      setIsBookmarked(isBookmarked);
-      alert("Failed to save bookmark.");
+      console.error("Bookmark status error:", error);
+      alert("Failed to update status.");
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleRemoveBookmark = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    setIsBookmarked(false);
+    setIsDropdownOpen(false);
+
+    try {
+      const { error } = await supabase
+        .from('bookmarks')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('anime_slug', anime.slug);
+        
+      if (error) throw error;
+    } catch (error) {
+      console.error("Remove bookmark error:", error);
+      setIsBookmarked(true);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const activeStatusConfig = WATCHLIST_STATUSES[currentStatus] || WATCHLIST_STATUSES.watching;
+
+  const bgImage = anime.backgroundImage || anime.posterImage;
+
   return (
-    <div className="relative w-full h-[85vh] min-h-[500px] md:min-h-[600px] flex items-end">
+    <div className="relative w-full h-[85vh] min-h-[500px] md:min-h-[600px] flex items-end overflow-hidden">
       {/* Background Image */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url('${anime.backgroundImage || anime.posterImage}')` }}
-      />
+      {bgImage ? (
+        <div className="absolute inset-0">
+          <Image
+            src={bgImage}
+            alt={anime.title}
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover object-center"
+          />
+        </div>
+      ) : null}
       
       {/* Gradients */}
       <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent" />
@@ -76,13 +114,18 @@ export default function Hero({ anime, initialBookmarked = false, user, lastWatch
       <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 pb-12 md:pb-24 z-10 flex flex-col md:flex-row gap-6 md:gap-10 items-end">
         
         {/* Poster (Hidden on mobile, visible on md+) */}
-        <div className="hidden md:block w-64 shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative group">
-          <img 
-            src={anime.posterImage} 
-            alt={anime.title} 
-            className="w-full h-auto object-cover transform transition-transform duration-500 group-hover:scale-105"
-          />
-        </div>
+        {anime.posterImage ? (
+          <div className="hidden md:block w-64 aspect-[2/3] shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative group bg-slate-900">
+            <Image 
+              src={anime.posterImage} 
+              alt={anime.title} 
+              fill
+              sizes="256px"
+              priority
+              className="object-cover transform transition-transform duration-500 group-hover:scale-105"
+            />
+          </div>
+        ) : null}
 
         {/* Text Details */}
         <div className="flex-1 flex flex-col gap-4">
@@ -150,18 +193,74 @@ export default function Hero({ anime, initialBookmarked = false, user, lastWatch
               </button>
             )}
             
-            <button 
-              onClick={handleBookmark}
-              disabled={isSaving}
-              className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-4 font-semibold rounded-xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 border ${
+            {/* Categorized Watchlist Dropdown (Feature 3.5) */}
+            <div className="relative w-full sm:w-auto">
+              <div className={`flex items-center rounded-xl backdrop-blur-md transition-all border ${
                 isBookmarked 
                   ? 'bg-blue-600/20 text-blue-400 border-blue-500/30' 
                   : 'bg-slate-800/50 hover:bg-slate-700/50 text-white border-white/10'
-              }`}
-            >
-              <Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-current' : ''}`} />
-              {isSaving ? "Saving..." : isBookmarked ? "Saved to Watchlist" : "Add to Watchlist"}
-            </button>
+              }`}>
+                <button 
+                  onClick={() => {
+                    if (isBookmarked) {
+                      setIsDropdownOpen(!isDropdownOpen);
+                    } else {
+                      handleSetStatus('watching');
+                    }
+                  }}
+                  disabled={isSaving}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-4 font-semibold hover:scale-105 active:scale-95 transition-all"
+                >
+                  <Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-current' : ''}`} />
+                  {isSaving ? "Saving..." : isBookmarked ? activeStatusConfig.label : "Add to Watchlist"}
+                </button>
+
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="px-3 py-4 border-l border-white/10 hover:bg-white/10 text-slate-300 hover:text-white rounded-r-xl transition-colors"
+                  title="Change watchlist status"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Status Dropdown Menu */}
+              {isDropdownOpen && (
+                <div className="absolute left-0 bottom-full mb-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-2 flex flex-col z-50 animate-in fade-in zoom-in-95">
+                  <div className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                    Watchlist Status
+                  </div>
+                  {Object.values(WATCHLIST_STATUSES).map((status) => {
+                    const isSelected = isBookmarked && currentStatus === status.id;
+                    return (
+                      <button
+                        key={status.id}
+                        onClick={() => handleSetStatus(status.id as WatchlistStatus)}
+                        className={`flex items-center justify-between px-4 py-2.5 text-sm font-medium text-left hover:bg-slate-800 transition-colors ${
+                          isSelected ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-200'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${status.id === 'watching' ? 'bg-blue-400' : status.id === 'plan_to_watch' ? 'bg-amber-400' : status.id === 'completed' ? 'bg-emerald-400' : status.id === 'on_hold' ? 'bg-purple-400' : 'bg-rose-400'}`} />
+                          {status.label}
+                        </span>
+                        {isSelected && <Check className="w-4 h-4 text-blue-400" />}
+                      </button>
+                    );
+                  })}
+                  {isBookmarked && (
+                    <div className="pt-1 mt-1 border-t border-slate-800">
+                      <button
+                        onClick={handleRemoveBookmark}
+                        className="w-full px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 text-left font-medium transition-colors"
+                      >
+                        Remove from Watchlist
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
