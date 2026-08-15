@@ -96,7 +96,8 @@ export default function InPageVideoPlayer({
         try {
           const typeParam = animeType ? `&type=${encodeURIComponent(animeType)}` : '';
           const audioParam = `&audio=${activeTab}`;
-          const res = await fetch(`/api/stream?id=${encodeURIComponent(animeSlug)}&ep=${episode.id}&title=${encodeURIComponent(animeTitle)}${typeParam}${audioParam}`);
+          const baseUrl = process.env.NEXT_PUBLIC_STREAM_API_URL || "http://localhost:3001/stream";
+          const res = await fetch(`${baseUrl}?id=${encodeURIComponent(animeSlug)}&ep=${episode.id}&title=${encodeURIComponent(animeTitle)}${typeParam}${audioParam}`);
           const data = await res.json();
           if (!data.error) {
             setStreams(data);
