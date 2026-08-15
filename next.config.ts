@@ -5,7 +5,23 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
+        hostname: "media.kitsu.app",
+      },
+      {
+        protocol: "https",
         hostname: "media.kitsu.io",
+      },
+      {
+        protocol: "https",
+        hostname: "kitsu.io",
+      },
+      {
+        protocol: "https",
+        hostname: "kitsu.app",
+      },
+      {
+        protocol: "https",
+        hostname: "s4.anilist.co",
       },
       {
         protocol: "https",
@@ -16,4 +32,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-

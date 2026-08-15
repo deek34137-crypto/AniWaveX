@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, X, Keyboard } from "lucide-react";
+import { Loader2, X, Keyboard, Tv } from "lucide-react";
 import NativePlayer from "./NativePlayer";
 import { createClient } from "@/lib/supabase/client";
 import type { MediaPlayerInstance } from "@vidstack/react";
@@ -43,6 +43,7 @@ export default function InPageVideoPlayer({
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [initialTime, setInitialTime] = useState(0);
   const [resumedBanner, setResumedBanner] = useState<string | null>(null);
+  const [fallbackToIframe, setFallbackToIframe] = useState(false);
   
   const playerRef = useRef<HTMLDivElement>(null);
   const mediaPlayerRef = useRef<MediaPlayerInstance>(null);
@@ -52,6 +53,7 @@ export default function InPageVideoPlayer({
   // Load initial resume progress from localStorage on episode change
   useEffect(() => {
     if (!episode) return;
+    setFallbackToIframe(false);
     try {
       const storageKey = `watch_progress_${animeSlug}_ep_${episode.id}`;
       const saved = localStorage.getItem(storageKey);
@@ -157,6 +159,7 @@ export default function InPageVideoPlayer({
       setIsLoading(true);
       setStreams(null);
       setSelectedServerIndex(0); // Reset server index
+      setFallbackToIframe(false);
       try {
         const typeParam = animeType ? `&type=${encodeURIComponent(animeType)}` : '';
         const audioParam = `&audio=${activeTab}`;
@@ -337,7 +340,10 @@ export default function InPageVideoPlayer({
                 {activeSources.map((source, idx) => (
                   <button
                     key={idx}
-                    onClick={() => setSelectedServerIndex(idx)}
+                    onClick={() => {
+                      setSelectedServerIndex(idx);
+                      setFallbackToIframe(false);
+                    }}
                     className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${validServerIndex === idx ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'}`}
                   >
                     Server {source.quality}
@@ -371,7 +377,7 @@ export default function InPageVideoPlayer({
               <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
               <p className="font-semibold tracking-wide">Resolving Stream Servers...</p>
             </div>
-          ) : isM3U8 && currentUrl ? (
+          ) : isM3U8 && currentUrl && !fallbackToIframe ? (
             <NativePlayer 
               key={currentUrl}
               playerRef={mediaPlayerRef}
@@ -381,6 +387,10 @@ export default function InPageVideoPlayer({
               subtitles={streams?.nativeStream?.subtitles}
               initialTime={initialTime}
               onTimeUpdate={handleTimeUpdate}
+              onError={() => {
+                console.warn("Native HLS stream playback failed, falling back to embed player");
+                setFallbackToIframe(true);
+              }}
               onEnded={() => {
                 if (autoplayNext && hasNext) {
                   handleNext();
@@ -429,7 +439,23 @@ export default function InPageVideoPlayer({
             </button>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Manual Player Mode Switcher (if m3u8) */}
+            {isM3U8 && currentUrl && (
+              <button
+                onClick={() => setFallbackToIframe(!fallbackToIframe)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                  fallbackToIframe
+                    ? "bg-amber-600/20 text-amber-300 border-amber-500/30"
+                    : "bg-slate-900/50 text-slate-400 hover:text-white border-white/5"
+                }`}
+                title={fallbackToIframe ? "Switch to Native Player" : "Switch to Embed Player"}
+              >
+                <Tv className="w-3.5 h-3.5" />
+                <span>{fallbackToIframe ? "Embed Mode" : "Native Mode"}</span>
+              </button>
+            )}
+
             {/* Keyboard Shortcuts Info Button */}
             <button
               onClick={() => setShowShortcuts((prev) => !prev)}

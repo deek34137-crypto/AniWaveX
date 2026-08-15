@@ -14,6 +14,7 @@ interface NativePlayerProps {
   initialTime?: number;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onEnded?: () => void;
+  onError?: (error: any) => void;
   playerRef?: React.RefObject<MediaPlayerInstance | null>;
 }
 
@@ -25,6 +26,7 @@ export default function NativePlayer({
   initialTime = 0,
   onTimeUpdate,
   onEnded,
+  onError,
   playerRef: externalRef
 }: NativePlayerProps) {
   const internalRef = useRef<MediaPlayerInstance>(null);
@@ -53,6 +55,7 @@ export default function NativePlayer({
         }
       }}
       onEnd={onEnded}
+      onError={onError}
     >
       <MediaProvider>
         {subtitles?.map((sub: any, idx: number) => {
