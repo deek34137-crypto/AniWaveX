@@ -21,13 +21,25 @@ function formatAnimeData(anime: any) {
 }
 
 export const getTrendingAnime = cache(async () => {
-  const res = await fetch('https://kitsu.io/api/edge/trending/anime');
+  const res = await fetch('https://kitsu.io/api/edge/trending/anime', {
+    headers: {
+      "Accept": "application/vnd.api+json",
+      "Content-Type": "application/vnd.api+json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+  });
   const json = await res.json();
   return json.data.map(formatAnimeData);
 });
 
 export const getTopRatedAnime = cache(async () => {
-  const res = await fetch('https://kitsu.io/api/edge/anime?sort=-averageRating&page[limit]=10');
+  const res = await fetch('https://kitsu.io/api/edge/anime?sort=-averageRating&page[limit]=10', {
+    headers: {
+      "Accept": "application/vnd.api+json",
+      "Content-Type": "application/vnd.api+json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+  });
   const json = await res.json();
   return json.data.map(formatAnimeData);
 });
@@ -71,7 +83,13 @@ function normalizeSearchQuery(query: string): string {
 export const searchAnime = cache(async (query: string, limit: number = 20) => {
   if (!query) return [];
   const normalizedQuery = normalizeSearchQuery(query);
-  const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(normalizedQuery)}&page[limit]=${limit}`);
+  const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(normalizedQuery)}&page[limit]=${limit}`, {
+    headers: {
+      "Accept": "application/vnd.api+json",
+      "Content-Type": "application/vnd.api+json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+  });
   const json = await res.json();
   if (!json.data) return [];
   return json.data.map(formatAnimeData);
@@ -79,7 +97,13 @@ export const searchAnime = cache(async (query: string, limit: number = 20) => {
 
 export const getAnimeData = cache(async (slug: string) => {
   // 1. Fetch live metadata from Kitsu
-  const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${slug}`);
+  const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${slug}`, {
+    headers: {
+      "Accept": "application/vnd.api+json",
+      "Content-Type": "application/vnd.api+json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+  });
   const json = await res.json();
   
   if (!json.data || json.data.length === 0) {
@@ -91,7 +115,13 @@ export const getAnimeData = cache(async (slug: string) => {
   const episodeCount = anime.attributes.episodeCount; // Might be null for airing
 
   // 2. Fetch real episodes from Kitsu (first 20)
-  const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=20`);
+  const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=20`, {
+    headers: {
+      "Accept": "application/vnd.api+json",
+      "Content-Type": "application/vnd.api+json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+  });
   const epJson = await epRes.json();
   
   let fetchedEpisodes: any[] = [];
@@ -216,7 +246,13 @@ export async function getCatalogAnime(filters: CatalogFilters) {
   url += queryParams.toString();
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: {
+        "Accept": "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      }
+    });
     const json = await res.json();
     
     return {

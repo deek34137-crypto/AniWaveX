@@ -53,7 +53,12 @@ export default function SearchBar() {
     async function fetchSearch() {
       setIsSearching(true);
       try {
-        const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(debouncedQuery)}&page[limit]=5`);
+        const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(debouncedQuery)}&page[limit]=5`, {
+          headers: {
+            "Accept": "application/vnd.api+json",
+            "Content-Type": "application/vnd.api+json"
+          }
+        });
         const json = await res.json();
         
         if (json.data) {

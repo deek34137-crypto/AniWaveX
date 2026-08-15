@@ -38,8 +38,16 @@ export async function GET(request: Request) {
       }
     }
 
-    // If ReAnime fails to find it, return an error instead of falling back to FilmU
-    return NextResponse.json({ error: "Stream not found on ReAnime" }, { status: 404 });
+    // 2. Fallback to FilmU
+    const anilistIdStr = await getAnilistId(title);
+    const anilistId = anilistIdStr ? Number(anilistIdStr) : undefined;
+    const fallbackStream = await multiProvider.getStreamInfo(id, parseInt(ep, 10), title, anilistId);
+    
+    if (fallbackStream && fallbackStream.sources && fallbackStream.sources.length > 0) {
+      return NextResponse.json(fallbackStream);
+    }
+
+    return NextResponse.json({ error: "Stream not found" }, { status: 404 });
   } catch (error) {
     console.error("Stream fetch error:", error);
     return NextResponse.json({ error: "Failed to fetch stream" }, { status: 500 });

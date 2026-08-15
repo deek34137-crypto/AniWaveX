@@ -27,5 +27,5 @@ export interface StreamingProviderInterface {
   label: string;
   placement: string;
   getEpisodes: (animeId: string, animeTitle?: string) => Promise<EpisodeItem[]>;
-  getStreamInfo: (animeId: string, episode: number, animeTitle?: string) => Promise<EpisodeStreamInfo>;
+  getStreamInfo: (animeId: string, episode: number, animeTitle?: string, anilistId?: number | null) => Promise<EpisodeStreamInfo>;
 }

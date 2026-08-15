@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Filter } from "lucide-react";
+import { Filter, Loader2 } from "lucide-react";
+import { useTransition } from "react";
 
 const GENRES = ["Action", "Romance", "Comedy", "Fantasy", "Sci-Fi", "Horror", "Sports", "Slice-of-Life", "Isekai", "Drama"];
 const SEASONS = ["Winter", "Spring", "Summer", "Fall"];
@@ -17,6 +18,7 @@ const SORTS = [
 export default function CatalogFilters() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
 
   // Current values
   const currentGenre = searchParams.get("genre") || "";
@@ -39,7 +41,9 @@ export default function CatalogFilters() {
       params.set("page", "1");
     }
 
-    router.push(`/catalog?${params.toString()}`);
+    startTransition(() => {
+      router.push(`/catalog?${params.toString()}`);
+    });
   };
 
   // Generate year options from 1990 to current year + 1
@@ -52,11 +56,15 @@ export default function CatalogFilters() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
           
           <div className="flex items-center gap-2 text-white font-bold text-lg">
-            <Filter className="w-5 h-5 text-blue-500" />
+            {isPending ? (
+              <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+            ) : (
+              <Filter className="w-5 h-5 text-blue-500" />
+            )}
             Discover
           </div>
 
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-3 w-full sm:w-auto">
+          <div className={`grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-3 w-full sm:w-auto transition-opacity ${isPending ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
             {/* Genre Filter */}
             <select 
               value={currentGenre} 
