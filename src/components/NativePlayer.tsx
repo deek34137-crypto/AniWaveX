@@ -25,7 +25,7 @@ export default function NativePlayer({ url, title, poster, subtitles }: NativePl
           
           return (
             <Track
-              key={idx}
+              key={String(idx)}
               src={subUrl}
               kind="subtitles"
               label={subLabel}

@@ -13,10 +13,10 @@ export default async function Navbar() {
     <nav className="fixed top-0 left-0 w-full z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Left Section: Logo & Menu */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <MobileNav />
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-2xl font-black tracking-tighter bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+            <span className="text-lg sm:text-2xl font-black tracking-tighter bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
               AniWaveX
             </span>
           </Link>
@@ -30,7 +30,7 @@ export default async function Navbar() {
         </div>
 
         {/* Right Section: Actions */}
-        <div className="flex items-center gap-4 flex-1 justify-end">
+        <div className="flex items-center gap-2 sm:gap-4 flex-1 justify-end ml-2">
           <SearchBar />
           <NavbarActions user={user} />
         </div>

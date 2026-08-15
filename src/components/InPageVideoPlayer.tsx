@@ -209,8 +209,8 @@ export default function InPageVideoPlayer({
         </div>
 
         {/* Footer Navigation */}
-        <div className="flex items-center justify-between mt-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between mt-4 gap-4">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
             <button
               onClick={handlePrev}
               disabled={!hasPrev}

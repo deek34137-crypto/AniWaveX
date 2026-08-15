@@ -4,11 +4,6 @@ import { useState } from "react";
 import { Play, Bookmark, Share2, MessageSquare, Star, Calendar, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 interface HeroProps {
-  title: string;
-  year: string;
-  rating: number;
-  status: string;
-  tags: string[];
   anime: any;
   initialBookmarked?: boolean;
   user?: any;
@@ -65,7 +60,7 @@ export default function Hero({ anime, initialBookmarked = false, user, lastWatch
   };
 
   return (
-    <div className="relative w-full h-[85vh] min-h-[600px] flex items-end">
+    <div className="relative w-full h-[85vh] min-h-[500px] md:min-h-[600px] flex items-end">
       {/* Background Image */}
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -78,7 +73,7 @@ export default function Hero({ anime, initialBookmarked = false, user, lastWatch
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent h-1/2 bottom-0" />
 
       {/* Content Container */}
-      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 pb-24 z-10 flex flex-col md:flex-row gap-10 items-end">
+      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 pb-12 md:pb-24 z-10 flex flex-col md:flex-row gap-6 md:gap-10 items-end">
         
         {/* Poster (Hidden on mobile, visible on md+) */}
         <div className="hidden md:block w-64 shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative group">
@@ -105,7 +100,7 @@ export default function Hero({ anime, initialBookmarked = false, user, lastWatch
             </div>
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-black text-white tracking-tight drop-shadow-xl">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-white tracking-tight drop-shadow-xl">
             {anime.title}
           </h1>
 

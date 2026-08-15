@@ -1,4 +1,3 @@
-import { reanimeProvider } from "./providers/reanime";
 import { cache } from "react";
 
 // Helper to format Kitsu response

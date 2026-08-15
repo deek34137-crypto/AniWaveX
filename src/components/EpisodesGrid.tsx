@@ -48,7 +48,7 @@ export default function EpisodesGrid({ episodes, onPlay }: EpisodesGridProps) {
       </div>
 
       {/* Episodes Container */}
-      <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-3"}>
+      <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-3"}>
         {visibleEpisodes.map((episode) => (
           <div 
             key={episode.id}
