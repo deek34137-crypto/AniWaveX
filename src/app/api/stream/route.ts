@@ -68,30 +68,43 @@ async function resolveStream(
   // 1. Resolve AniList ID once if not provided by caller
   const resolvedAnilistId = anilistParam ? Number(anilistParam) : await getAnilistId(title);
 
+  const sources: any[] = [];
+
   // 2. Try AnikotoProvider with resolved AniList ID
   const anikotoRes = await getAnikotoStream(title, parsedEp, audio, resolvedAnilistId);
   if (anikotoRes && anikotoRes.streams) {
     const embedSources = anikotoRes.streams
-      .filter((s: any) => s.type === "embed" && s.url)
+      .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top"))
       .map((s: any) => ({
         url: s.url,
-        quality: s.server || "Auto",
+        quality: s.server || "Server 1",
         isM3U8: false
       }));
 
-    if (embedSources.length > 0) {
-      return {
-        sources: embedSources,
-        sub: audio === 'sub' ? embedSources : [],
-        dub: audio === 'dub' ? embedSources : [],
-      };
+    sources.push(...embedSources);
+  }
+
+  // 3. Always append FilmU embed server as backup/guaranteed source
+  const fallbackStream = await multiProvider.getStreamInfo(id, parsedEp, title, resolvedAnilistId);
+  if (fallbackStream) {
+    const fallbackSources = (audio === 'dub' ? fallbackStream.dub : fallbackStream.sub) || fallbackStream.sources || [];
+    for (const src of fallbackSources) {
+      if (src.url && !sources.some(s => s.url === src.url)) {
+        sources.push({
+          url: src.url,
+          quality: src.quality || "Server Backup",
+          isM3U8: false
+        });
+      }
     }
   }
 
-  // 3. Fallback to FilmU/MultiProvider using already-resolved anilistId
-  const fallbackStream = await multiProvider.getStreamInfo(id, parsedEp, title, resolvedAnilistId);
-  if (fallbackStream && fallbackStream.sources && fallbackStream.sources.length > 0) {
-    return fallbackStream;
+  if (sources.length > 0) {
+    return {
+      sources: sources,
+      sub: audio === 'sub' ? sources : [],
+      dub: audio === 'dub' ? sources : [],
+    };
   }
 
   return null;

@@ -388,8 +388,14 @@ export default function InPageVideoPlayer({
               initialTime={initialTime}
               onTimeUpdate={handleTimeUpdate}
               onError={() => {
-                console.warn("Native HLS stream playback failed, falling back to embed player");
-                setFallbackToIframe(true);
+                console.warn("Native HLS stream playback failed, switching to backup embed server");
+                const firstEmbedIdx = activeSources?.findIndex(s => !s.isM3U8 && !s.url.includes('.m3u8') && !s.url.includes('animeapps.top'));
+                if (firstEmbedIdx !== undefined && firstEmbedIdx !== -1) {
+                  setSelectedServerIndex(firstEmbedIdx);
+                  setFallbackToIframe(false);
+                } else {
+                  setFallbackToIframe(true);
+                }
               }}
               onEnded={() => {
                 if (autoplayNext && hasNext) {
@@ -397,18 +403,17 @@ export default function InPageVideoPlayer({
                 }
               }}
             />
-          ) : currentUrl ? (
+          ) : (
             <iframe 
-              key={currentUrl}
-              src={currentUrl}
+              key={currentUrl || 'fallback-embed'}
+              src={(!isM3U8 && currentUrl && !currentUrl.includes('.m3u8') && !currentUrl.includes('animeapps.top'))
+                ? currentUrl
+                : `https://embed.filmu.in/embed/${animeSlug}/ep-${episode.id}${activeTab === 'dub' ? '?lang=dub' : ''}`
+              }
               className="w-full h-full border-0"
               allowFullScreen
               allow="autoplay; fullscreen"
             />
-          ) : (
-            <div className="flex items-center justify-center w-full h-full text-slate-500">
-              Stream not available for this episode
-            </div>
           )}
         </div>
 
