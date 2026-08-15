@@ -116,8 +116,10 @@ export default function InPageVideoPlayer({
 
   const activeSources: StreamSource[] | undefined = activeTab === "sub" ? streams?.sub : streams?.dub;
   // Ensure selectedServerIndex is within bounds
-  const validServerIndex = activeSources ? Math.min(selectedServerIndex, activeSources.length - 1) : 0;
-  const currentUrl = activeSources?.[validServerIndex]?.url;
+  const validServerIndex = activeSources && activeSources.length > 0 ? Math.min(selectedServerIndex, activeSources.length - 1) : 0;
+  const selectedSource = activeSources?.[validServerIndex];
+  const currentUrl = selectedSource?.url;
+  const isM3U8 = Boolean(selectedSource?.isM3U8 || (currentUrl && currentUrl.includes('.m3u8')));
 
   const currentIndex = episodes ? episodes.findIndex((ep) => ep.id === episode.id) : -1;
   const hasNext = episodes && currentIndex !== -1 && currentIndex < episodes.length - 1;
@@ -188,15 +190,17 @@ export default function InPageVideoPlayer({
               <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
               <p className="font-semibold tracking-wide">Resolving Stream Servers...</p>
             </div>
-          ) : streams?.nativeStream ? (
+          ) : isM3U8 && currentUrl ? (
             <NativePlayer 
-              url={streams.nativeStream.url} 
+              key={currentUrl}
+              url={currentUrl} 
               title={`${animeTitle} - Episode ${episode.id}`}
               poster={animePosterImage}
-              subtitles={streams.nativeStream.subtitles}
+              subtitles={streams?.nativeStream?.subtitles}
             />
           ) : currentUrl ? (
             <iframe 
+              key={currentUrl}
               src={currentUrl}
               className="w-full h-full border-0"
               allowFullScreen
