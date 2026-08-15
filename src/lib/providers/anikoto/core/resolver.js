@@ -85,9 +85,16 @@ export async function resolveStream3(anilistId, audio, ep) {
   const audioTypes = audio === "sub" ? ["sub", "s-sub"] : ["dub", "s-dub"];
   const servers = byPrio(links.filter((s) => audioTypes.includes(s.dataType)));
   if (!servers.length) throw Object.assign(new Error(`No ${audio} servers for "${title2}" ep ${ep}`), { status: 404 });
-  const embedRes = await fetch(servers[0].dataLink, { headers: { ...H, Referer: `${BASE}/` } });
-  if (!embedRes.ok) throw Object.assign(new Error(`Embed fetch failed: ${embedRes.status}`), { status: 502 });
-  const stream = await decryptEmbed(await embedRes.text());
+  let stream = { url: null, subtitles: [], thumbnails_vtt: null, video_title: null, intro_chapter: null, outro_chapter: null };
+  try {
+    const embedRes = await fetch(servers[0].dataLink, { headers: { ...H, Referer: `${BASE}/` } });
+    if (embedRes.ok) {
+      stream = await decryptEmbed(await embedRes.text());
+    }
+  } catch (err) {
+    console.warn("Native stream decrypt failed (likely Cloudflare block). Continuing with embeds only.", err.message);
+  }
+  
   return { title: title2, slug, watchData, stream, server: servers[0].serverName, servers };
 }
 __name(resolveStream3, "resolveStream3");

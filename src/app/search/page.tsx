@@ -10,7 +10,7 @@ export default async function SearchPage({
 }) {
   const params = await searchParams;
   const query = params.q || "";
-  const results = query ? await searchAnime(query, 24) : [];
+  const results = query ? await searchAnime(query, 20) : [];
 
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
