@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0b0f19; /* Deep dark blue background */
+  --color-foreground: #f1f5f9; /* Slate 100 for text */
+  --color-primary: #3b82f6; /* Vibrant blue for active states/buttons */
+  --color-primary-hover: #2563eb;
+  --color-card: rgba(30, 41, 59, 0.7); /* Frosted glass card background */
+  --color-card-border: rgba(255, 255, 255, 0.1);
+  --color-muted: #94a3b8; /* Slate 400 for secondary text */
+  
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: var(--color-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-card-border);
+}
