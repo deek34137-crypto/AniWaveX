@@ -69,19 +69,36 @@ async function resolveStream(
   const resolvedAnilistId = anilistParam ? Number(anilistParam) : await getAnilistId(title);
 
   const sources: any[] = [];
+  let subtitles: any[] = [];
 
   // 2. Try AnikotoProvider with resolved AniList ID
   const anikotoRes = await getAnikotoStream(title, parsedEp, audio, resolvedAnilistId);
-  if (anikotoRes && anikotoRes.streams) {
-    const embedSources = anikotoRes.streams
-      .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top"))
-      .map((s: any) => ({
-        url: s.url,
-        quality: s.server || "Server 1",
-        isM3U8: false
-      }));
+  if (anikotoRes) {
+    if (anikotoRes.subtitles) {
+      subtitles = anikotoRes.subtitles;
+    }
 
-    sources.push(...embedSources);
+    // A. If direct HLS stream is available, proxy it to bypass CDN CORS & Referer restrictions
+    if (anikotoRes.stream_url) {
+      sources.push({
+        url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
+        quality: "HD-1 (HLS)",
+        isM3U8: true,
+      });
+    }
+
+    // B. Add embed servers (e.g. Server SB, Server HD-2, etc.)
+    if (anikotoRes.streams) {
+      const embedSources = anikotoRes.streams
+        .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top"))
+        .map((s: any) => ({
+          url: s.url,
+          quality: s.server || "Server Embed",
+          isM3U8: false
+        }));
+
+      sources.push(...embedSources);
+    }
   }
 
   // 3. Always append FilmU embed server as backup/guaranteed source
@@ -104,6 +121,9 @@ async function resolveStream(
       sources: sources,
       sub: audio === 'sub' ? sources : [],
       dub: audio === 'dub' ? sources : [],
+      nativeStream: {
+        subtitles: subtitles
+      }
     };
   }
 

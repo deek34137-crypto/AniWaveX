@@ -410,9 +410,10 @@ export default function InPageVideoPlayer({
                 ? currentUrl
                 : `https://embed.filmu.in/embed/${animeSlug}/ep-${episode.id}${activeTab === 'dub' ? '?lang=dub' : ''}`
               }
-              className="w-full h-full border-0"
+              className="w-full h-full border-0 bg-black"
               allowFullScreen
-              allow="autoplay; fullscreen"
+              allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+              referrerPolicy="no-referrer"
             />
           )}
         </div>
