@@ -34,15 +34,15 @@ export async function getAnilistId(title: string) {
   }
 }
 
-export async function getAnikotoStream(title: string, episode: number, audio: 'sub' | 'dub' = 'sub') {
+export async function getAnikotoStream(title: string, episode: number, audio: 'sub' | 'dub' = 'sub', resolvedAnilistId?: number | null) {
   try {
-    const anilistId = await getAnilistId(title);
+    const anilistId = resolvedAnilistId ?? await getAnilistId(title);
     if (!anilistId) {
       console.warn("Anikoto: No AniList ID found in results for", title);
       return null;
     }
 
-    // 2. Fetch the stream for the specified episode
+    // Fetch the stream for the specified episode
     const streamInfo = await anikoto.getStreams(anilistId, episode, audio);
     
     return streamInfo;

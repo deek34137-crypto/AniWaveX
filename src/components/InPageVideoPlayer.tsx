@@ -86,30 +86,56 @@ export default function InPageVideoPlayer({
     localStorage.setItem("autoplayNext", newVal.toString());
   };
 
+  const requestIdRef = useRef(0);
+
   useEffect(() => {
-    if (episode) {
-      // Fetch stream lazily
-      const fetchStream = async () => {
-        setIsLoading(true);
-        setStreams(null);
-        setSelectedServerIndex(0); // Reset server index
-        try {
-          const typeParam = animeType ? `&type=${encodeURIComponent(animeType)}` : '';
-          const audioParam = `&audio=${activeTab}`;
-          const baseUrl = process.env.NEXT_PUBLIC_STREAM_API_URL || "http://localhost:3001/stream";
-          const res = await fetch(`${baseUrl}?id=${encodeURIComponent(animeSlug)}&ep=${episode.id}&title=${encodeURIComponent(animeTitle)}${typeParam}${audioParam}`);
-          const data = await res.json();
-          if (!data.error) {
-            setStreams(data);
-          }
-        } catch (error) {
+    if (!episode) return;
+
+    const controller = new AbortController();
+    const currentRequestId = ++requestIdRef.current;
+
+    const fetchStream = async () => {
+      setIsLoading(true);
+      setStreams(null);
+      setSelectedServerIndex(0); // Reset server index
+      try {
+        const typeParam = animeType ? `&type=${encodeURIComponent(animeType)}` : '';
+        const audioParam = `&audio=${activeTab}`;
+        const baseUrl = process.env.NEXT_PUBLIC_STREAM_API_URL || "/api/stream";
+        const res = await fetch(
+          `${baseUrl}?id=${encodeURIComponent(animeSlug)}&ep=${episode.id}&title=${encodeURIComponent(animeTitle)}${typeParam}${audioParam}`,
+          { signal: controller.signal }
+        );
+        const data = await res.json();
+
+        // Stale guard: verify request ID is still active and request was not aborted
+        if (requestIdRef.current !== currentRequestId || controller.signal.aborted) {
+          return;
+        }
+
+        if (!data.error) {
+          setStreams(data);
+        }
+      } catch (error: any) {
+        if (error.name === 'AbortError' || controller.signal.aborted) {
+          // Ignored cancelled request
+          return;
+        }
+        if (requestIdRef.current === currentRequestId) {
           console.error("Failed to fetch stream", error);
-        } finally {
+        }
+      } finally {
+        if (requestIdRef.current === currentRequestId && !controller.signal.aborted) {
           setIsLoading(false);
         }
-      };
-      fetchStream();
-    }
+      }
+    };
+
+    fetchStream();
+
+    return () => {
+      controller.abort();
+    };
   }, [episode, animeSlug, animeTitle, animeType, activeTab]);
 
   if (!episode) return null;

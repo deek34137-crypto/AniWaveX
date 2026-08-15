@@ -26,7 +26,8 @@ export const getTrendingAnime = cache(async () => {
       "Accept": "application/vnd.api+json",
       "Content-Type": "application/vnd.api+json",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    },
+    next: { revalidate: 3600 } // 1 hour ISR cache
   });
   const json = await res.json();
   return json.data.map(formatAnimeData);
@@ -38,7 +39,8 @@ export const getTopRatedAnime = cache(async () => {
       "Accept": "application/vnd.api+json",
       "Content-Type": "application/vnd.api+json",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    },
+    next: { revalidate: 3600 } // 1 hour ISR cache
   });
   const json = await res.json();
   return json.data.map(formatAnimeData);
@@ -72,11 +74,9 @@ function normalizeSearchQuery(query: string): string {
   }
 
   // 3. Strip confusing punctuation (dots, hyphens) but keep spaces
-  // e.g. "boku-no-hero" -> "boku no hero"
-  // "s.a.o" -> "s a o" -> actually if it has periods we might want to just strip them
   let normalized = lowerQuery.replace(/[-]/g, ' ').replace(/[._!?,;'"]/g, '');
   
-  // 4. Return normalized (Kitsu natively handles romanji, japanese, and most acronyms if clean)
+  // 4. Return normalized
   return normalized.trim();
 }
 
@@ -97,13 +97,14 @@ export const searchAnime = cache(async (query: string, limit: number = 20) => {
 });
 
 export const getAnimeData = cache(async (slug: string) => {
-  // 1. Fetch live metadata from Kitsu
-  const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${slug}`, {
+  // 1. Fetch live metadata from Kitsu (cached 24h)
+  const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(slug)}`, {
     headers: {
       "Accept": "application/vnd.api+json",
       "Content-Type": "application/vnd.api+json",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    },
+    next: { revalidate: 86400 } // 24 hours ISR cache
   });
   const json = await res.json();
   
@@ -115,13 +116,14 @@ export const getAnimeData = cache(async (slug: string) => {
   const metadata = formatAnimeData(anime);
   const episodeCount = anime.attributes.episodeCount; // Might be null for airing
 
-  // 2. Fetch real episodes from Kitsu (first 20)
+  // 2. Fetch real episodes from Kitsu (first 20, cached 24h)
   const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=20`, {
     headers: {
       "Accept": "application/vnd.api+json",
       "Content-Type": "application/vnd.api+json",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    },
+    next: { revalidate: 86400 } // 24 hours ISR cache
   });
   const epJson = await epRes.json();
   
@@ -154,8 +156,6 @@ export const getAnimeData = cache(async (slug: string) => {
     return {
       id: episodeNum,
       title: realEpData?.attributes?.canonicalTitle || `Episode ${episodeNum}`,
-      // We are NO LONGER eagerly fetching streams here!
-      // Streams will be fetched lazily on the client when clicked.
     };
   });
 
@@ -252,7 +252,8 @@ export async function getCatalogAnime(filters: CatalogFilters) {
         "Accept": "application/vnd.api+json",
         "Content-Type": "application/vnd.api+json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-      }
+      },
+      next: { revalidate: 1800 } // 30 minutes ISR cache
     });
     const json = await res.json();
     
