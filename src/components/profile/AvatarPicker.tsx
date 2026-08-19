@@ -50,7 +50,7 @@ export default function AvatarPicker({ currentAvatarId }: { currentAvatarId?: st
                 : "border-transparent opacity-70 hover:opacity-100"
             }`}
           >
-            <Image src={url} alt={id} fill sizes="80px" className="object-cover bg-slate-800" />
+            <Image src={url} alt={id} fill sizes="80px" unoptimized className="object-cover bg-slate-800" />
             {selected === id && (
               <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
                 <div className="bg-blue-600 rounded-full p-1 shadow-lg">

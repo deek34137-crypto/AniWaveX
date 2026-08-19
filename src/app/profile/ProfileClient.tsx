@@ -20,7 +20,7 @@ export default function ProfileClient({ user, history, bookmarks }: { user: any,
       <div className="flex flex-col md:flex-row items-start md:items-center gap-6 mb-12">
         <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center text-3xl font-bold text-white shadow-xl overflow-hidden border-4 border-slate-800 relative">
           {avatarUrl ? (
-            <Image src={avatarUrl} alt="Avatar" fill sizes="96px" className="object-cover" />
+            <Image src={avatarUrl} alt="Avatar" fill sizes="96px" unoptimized className="object-cover" />
           ) : (
             user.email?.charAt(0).toUpperCase()
           )}

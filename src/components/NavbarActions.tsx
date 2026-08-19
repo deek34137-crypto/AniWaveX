@@ -110,7 +110,7 @@ export default function NavbarActions({ user: initialUser }: { user: any }) {
             className="ml-2 w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center border border-white/20 overflow-hidden hover:scale-105 transition-transform relative"
           >
             {avatarUrl ? (
-              <Image src={avatarUrl} alt="Avatar" fill sizes="36px" className="object-cover" />
+              <Image src={avatarUrl} alt="Avatar" fill sizes="36px" unoptimized className="object-cover" />
             ) : (
               <span className="text-sm font-bold text-white uppercase bg-gradient-to-br from-indigo-500 to-purple-600 w-full h-full flex items-center justify-center">{currentUser.email?.charAt(0) || 'U'}</span>
             )}
