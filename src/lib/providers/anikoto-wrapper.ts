@@ -57,6 +57,45 @@ const CACHE_TTL_MISS_MS = 10 * 60 * 1000;
 // In-flight request deduplication map
 const inFlightSearches = new Map<string, Promise<number | null>>();
 
+function normalizeTitle(str: string | null | undefined): string {
+  return (str || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function pickBestMatch(searchTitle: string, results: any[]): number | null {
+  if (!results || results.length === 0) return null;
+  const targetNorm = normalizeTitle(searchTitle);
+  if (!targetNorm) return results[0]?.id ?? null;
+
+  // 1. Exact match on romaji, english, or native title
+  for (const m of results) {
+    if (!m || !m.id) continue;
+    const romajiNorm = normalizeTitle(m.title?.romaji);
+    const englishNorm = normalizeTitle(m.title?.english);
+    if (romajiNorm === targetNorm || englishNorm === targetNorm) {
+      return m.id;
+    }
+  }
+
+  // 2. High relevance match (contains/prefix) ranked by popularity
+  const matchingCandidates = results.filter(m => {
+    if (!m || !m.id) return false;
+    const romajiNorm = normalizeTitle(m.title?.romaji);
+    const englishNorm = normalizeTitle(m.title?.english);
+    return romajiNorm.includes(targetNorm) || (targetNorm.length > 4 && targetNorm.includes(romajiNorm)) ||
+           englishNorm.includes(targetNorm) || (targetNorm.length > 4 && targetNorm.includes(englishNorm));
+  });
+
+  if (matchingCandidates.length > 0) {
+    matchingCandidates.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    return matchingCandidates[0].id;
+  }
+
+  // 3. Fallback to highest popularity result in top 3
+  const topSlice = results.slice(0, 3).filter(m => m && m.id);
+  topSlice.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+  return topSlice[0]?.id || results[0].id;
+}
+
 export async function getAnilistId(title: string): Promise<number | null> {
   if (!title || typeof title !== 'string') return null;
   const normalizedKey = title.toLowerCase().trim();
@@ -78,18 +117,20 @@ export async function getAnilistId(title: string): Promise<number | null> {
     try {
       // Step 1: Direct title search
       let results = await searchAnilist(title);
-      if (results && results.length > 0 && results[0].id) {
-        anilistIdCache.set(normalizedKey, results[0].id, CACHE_TTL_SUCCESS_MS);
-        return results[0].id;
+      let matchId = pickBestMatch(title, results);
+      if (matchId) {
+        anilistIdCache.set(normalizedKey, matchId, CACHE_TTL_SUCCESS_MS);
+        return matchId;
       }
 
       // Step 2: Cleaned title (replace hyphens, underscores, colons with spaces)
       const cleaned = title.replace(/[-_:]/g, ' ').replace(/\s+/g, ' ').trim();
       if (cleaned.toLowerCase() !== normalizedKey) {
         results = await searchAnilist(cleaned);
-        if (results && results.length > 0 && results[0].id) {
-          anilistIdCache.set(normalizedKey, results[0].id, CACHE_TTL_SUCCESS_MS);
-          return results[0].id;
+        matchId = pickBestMatch(cleaned, results);
+        if (matchId) {
+          anilistIdCache.set(normalizedKey, matchId, CACHE_TTL_SUCCESS_MS);
+          return matchId;
         }
       }
 
@@ -145,9 +186,11 @@ export async function getAnilistId(title: string): Promise<number | null> {
           candidateQueries.map(q => searchAnilist(q).catch(() => []))
         );
 
-        for (const res of batchResults) {
-          if (res && res.length > 0 && res[0].id) {
-            const foundId = res[0].id;
+        for (let i = 0; i < batchResults.length; i++) {
+          const res = batchResults[i];
+          const queryUsed = candidateQueries[i];
+          const foundId = pickBestMatch(queryUsed, res);
+          if (foundId) {
             anilistIdCache.set(normalizedKey, foundId, CACHE_TTL_SUCCESS_MS);
             return foundId;
           }

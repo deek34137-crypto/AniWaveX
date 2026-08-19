@@ -77,7 +77,7 @@ async function searchAnilist(query) {
 
   const fetchPromise = (async () => {
     try {
-      const q = `query($s:String){Page(perPage:20){media(search:$s,type:ANIME){id idMal title{romaji english native}format status startDate{year month day}seasonYear episodes genres averageScore coverImage{large}}}}`;
+      const q = `query($s:String){Page(perPage:20){media(search:$s,type:ANIME,sort:[SEARCH_MATCH,POPULARITY_DESC]){id idMal popularity title{romaji english native}format status startDate{year month day}seasonYear episodes genres averageScore coverImage{large}}}}`;
       const r = await fetch(API, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
