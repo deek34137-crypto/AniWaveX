@@ -77,8 +77,8 @@ async function resolveStream(
     try {
       // Choose providers based on requested audio language
       const providersToTry = audio === 'hindi'
-        ? ['animedunya', 'anibd', 'senshi']
-        : ['reanime', 'anikoto', 'animegg', 'anizone', 'kickassanime', 'anineko', '2dhive'];
+        ? ['hianime', 'animedunya', 'anibd', 'senshi']
+        : ['reanime', 'hianime', 'anikoto', 'animegg', 'anizone', 'kickassanime', 'anineko', '2dhive'];
 
       const workerAudio = audio === 'hindi' ? 'sub' : audio;
 
@@ -92,13 +92,14 @@ async function resolveStream(
             const data = await res.json();
             if (data) {
               const langTag = audio === 'hindi' ? 'Hindi Dub' : (audio === 'dub' ? 'Eng Dub' : 'Sub');
+              const providerLabel = provider === 'hianime' ? 'HiAnime (MegaCloud)' : (provider === 'anikoto' ? 'MegaCloud' : provider.toUpperCase());
 
               // A. Direct HLS Master stream through proxy
               const directHls = data.stream_url || (Array.isArray(data.streams) ? data.streams.find((s: any) => s.type === 'hls')?.url : null);
               if (directHls) {
                 sources.push({
                   url: `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
-                  quality: `HD-1 [${langTag}]`,
+                  quality: `${providerLabel} [${langTag}]`,
                   isM3U8: true,
                 });
               }
@@ -109,7 +110,7 @@ async function resolveStream(
                   if (s.type === 'embed' && s.url && !s.url.includes('animeapps.top')) {
                     sources.push({
                       url: s.url,
-                      quality: `${s.server || provider.toUpperCase()} [${langTag}]`,
+                      quality: `${s.server || providerLabel} [${langTag}]`,
                       isM3U8: false,
                     });
                   }
