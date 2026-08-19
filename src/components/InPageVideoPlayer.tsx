@@ -412,7 +412,7 @@ export default function InPageVideoPlayer({
                 }
               }}
             />
-          ) : currentUrl && !currentUrl.includes('embed.filmu.in') && !currentUrl.includes('animeapps.top') ? (
+          ) : currentUrl && !currentUrl.includes('animeapps.top') ? (
             <iframe 
               key={currentUrl}
               src={currentUrl}
