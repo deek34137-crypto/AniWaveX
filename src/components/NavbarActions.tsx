@@ -8,32 +8,54 @@ import Link from "next/link";
 import { getAvatarUrl } from "@/lib/avatars";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-
 import Image from "next/image";
 
-export default function NavbarActions({ user }: { user: any }) {
+export default function NavbarActions({ user: initialUser }: { user: any }) {
+  const [currentUser, setCurrentUser] = useState<any>(initialUser);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isUsernameModalOpen, setIsUsernameModalOpen] = useState(false);
   
-  useEffect(() => {
-    if (user && !user.user_metadata?.username) {
-      setIsUsernameModalOpen(true);
-    }
-  }, [user]);
   const router = useRouter();
   const supabase = createClient();
 
+  useEffect(() => {
+    setCurrentUser(initialUser);
+  }, [initialUser]);
+
+  useEffect(() => {
+    // 1. Fetch current session user on mount
+    supabase.auth.getUser().then((res: any) => {
+      if (res?.data?.user) setCurrentUser(res.data.user);
+    });
+
+    // 2. Real-time auth state subscription for immediate UI update on login/logout
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      setCurrentUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (currentUser && !currentUser.user_metadata?.username) {
+      setIsUsernameModalOpen(true);
+    }
+  }, [currentUser]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
+    setCurrentUser(null);
     setIsMenuOpen(false);
     router.refresh();
     router.push('/');
   };
 
-  const avatarUrl = getAvatarUrl(user?.user_metadata?.avatar_id);
-  const displayUsername = user?.user_metadata?.username || user?.email?.split('@')[0];
+  const avatarUrl = getAvatarUrl(currentUser?.user_metadata?.avatar_id);
+  const displayUsername = currentUser?.user_metadata?.username || currentUser?.email?.split('@')[0];
 
   return (
     <>
@@ -52,7 +74,7 @@ export default function NavbarActions({ user }: { user: any }) {
               <h3 className="font-semibold text-white">Notifications</h3>
             </div>
             <div className="px-4 py-3 hover:bg-slate-800/50 transition-colors">
-              {!user ? (
+              {!currentUser ? (
                 <div>
                   <p className="text-sm text-slate-200">Welcome to AniWaveX! 🎉</p>
                   <p className="text-sm text-slate-400 mt-1">
@@ -81,7 +103,7 @@ export default function NavbarActions({ user }: { user: any }) {
         )}
       </div>
 
-      {user ? (
+      {currentUser ? (
         <div className="relative">
           <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -90,7 +112,7 @@ export default function NavbarActions({ user }: { user: any }) {
             {avatarUrl ? (
               <Image src={avatarUrl} alt="Avatar" fill sizes="36px" className="object-cover" />
             ) : (
-              <span className="text-sm font-bold text-white uppercase bg-gradient-to-br from-indigo-500 to-purple-600 w-full h-full flex items-center justify-center">{user.email?.charAt(0) || 'U'}</span>
+              <span className="text-sm font-bold text-white uppercase bg-gradient-to-br from-indigo-500 to-purple-600 w-full h-full flex items-center justify-center">{currentUser.email?.charAt(0) || 'U'}</span>
             )}
           </button>
 
@@ -99,7 +121,7 @@ export default function NavbarActions({ user }: { user: any }) {
           >
             <div className="px-4 py-2 border-b border-slate-800 mb-2">
               <p className="text-sm font-bold text-white truncate">{displayUsername}</p>
-              <p className="text-xs text-slate-400 truncate">{user.email}</p>
+              <p className="text-xs text-slate-400 truncate">{currentUser.email}</p>
             </div>
             <Link 
               href="/profile" 

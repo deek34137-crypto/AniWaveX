@@ -19,6 +19,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const isMounted = useSyncExternalStore(subscribe, () => true, () => false);
   const router = useRouter();
   const supabase = createClient();
@@ -29,6 +30,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
       if (isLogin) {
@@ -37,16 +39,24 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           password,
         });
         if (error) throw error;
+
+        router.refresh();
+        onClose();
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
+
+        if (data.session) {
+          router.refresh();
+          onClose();
+        } else if (data.user) {
+          setSuccessMessage("Account created successfully! Please check your email inbox to confirm your account, then sign in.");
+          setIsLogin(true);
+        }
       }
-      
-      router.refresh();
-      onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Authentication failed";
       setError(msg);
@@ -72,6 +82,12 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         {error && (
           <div className="p-3 mb-4 text-sm text-red-400 bg-red-950/50 border border-red-900 rounded-lg">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="p-3 mb-4 text-sm text-emerald-300 bg-emerald-950/50 border border-emerald-900 rounded-lg">
+            {successMessage}
           </div>
         )}
 
@@ -111,9 +127,13 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         </form>
 
         <div className="mt-6 text-center text-sm text-slate-400">
-          {isLogin ? "Don&apos;t have an account?" : "Already have an account?"}{" "}
+          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
           <button 
-            onClick={() => setIsLogin(!isLogin)}
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError(null);
+              setSuccessMessage(null);
+            }}
             className="text-blue-400 hover:text-blue-300 font-semibold"
           >
             {isLogin ? "Sign up" : "Sign in"}
