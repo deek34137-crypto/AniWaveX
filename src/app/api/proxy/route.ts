@@ -60,6 +60,7 @@ function isAllowedHost(hostname: string): boolean {
     "krussdomi.com",
     "akirax.buzz",
     "mikora.top",
+    "shiora.top",
     "anizara.store",
     "otakuhg.site",
     "otakuvid.online",
@@ -126,6 +127,9 @@ function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
   }
   if (host.includes("krussdomi")) {
     return "https://krussdomi.com/";
+  }
+  if (host.includes("vidtube.site") || host.includes("akirax.buzz") || host.includes("shiora.top") || host.includes("mikora.top")) {
+    return "https://vidtube.site/";
   }
   if (host.includes("animeapps.top")) {
     return "https://playeng.animeapps.top/";

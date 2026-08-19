@@ -166,9 +166,9 @@ function extractWorkerSources(
     }
   }
 
-  // Proxy subtitles from referer-restricted hosts
+  // Proxy all external remote subtitles through /api/proxy to guarantee CORS and Referer compliance
   const safeSubtitles = subtitles.map(sub => {
-    if (sub.url && (sub.url.includes('watching.onl') || sub.url.includes('krussdomi'))) {
+    if (sub.url && typeof sub.url === 'string' && sub.url.startsWith('http') && !sub.url.startsWith('/api/proxy')) {
       const ref = getRefererForStream(sub.url, null, data);
       return {
         ...sub,
