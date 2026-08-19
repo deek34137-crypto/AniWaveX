@@ -123,6 +123,22 @@ export async function getAnilistId(title: string): Promise<number | null> {
         }
       }
 
+      // Step 6: Romanization macron/vowel expansion (e.g. Tomei -> Toumei, Sho -> Shou)
+      const ouNormalized = cleaned
+        .replace(/\btomei\b/gi, 'Toumei')
+        .replace(/\bkyoto\b/gi, 'Kyouto')
+        .replace(/\byusha\b/gi, 'Yuusha')
+        .replace(/\bshojo\b/gi, 'Shoujo')
+        .replace(/\bshonen\b/gi, 'Shounen')
+        .replace(/\bkimi\b/gi, 'Kun');
+
+      if (ouNormalized.toLowerCase() !== cleaned.toLowerCase()) {
+        const ouPrefix = ouNormalized.split(' ').slice(0, 4).join(' ');
+        if (!candidateQueries.includes(ouPrefix)) {
+          candidateQueries.push(ouPrefix);
+        }
+      }
+
       // Execute remaining candidates in parallel
       if (candidateQueries.length > 0) {
         const batchResults = await Promise.all(

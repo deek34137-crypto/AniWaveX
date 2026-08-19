@@ -59,7 +59,10 @@ const SEARCH_ALIASES: Record<string, string> = {
   "s.a.o.": "Sword Art Online",
   "fmab": "Fullmetal Alchemist Brotherhood",
   "aot": "Attack on Titan",
-  "snk": "Attack on Titan"
+  "snk": "Attack on Titan",
+  "love unseen beneath the clear night sky": "Tomei na Yoru ni Kakeru-kun to, Menimienai Koi wo Shita",
+  "toumei na yoru ni kakeru": "Tomei na Yoru ni Kakeru-kun to, Menimienai Koi wo Shita",
+  "toumei na yoru": "Tomei na Yoru ni Kakeru-kun to, Menimienai Koi wo Shita"
 };
 
 function normalizeSearchQuery(query: string): string {
