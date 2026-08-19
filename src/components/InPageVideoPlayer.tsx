@@ -403,18 +403,33 @@ export default function InPageVideoPlayer({
                 }
               }}
             />
-          ) : (
+          ) : currentUrl && !currentUrl.includes('embed.filmu.in') && !currentUrl.includes('animeapps.top') ? (
             <iframe 
-              key={currentUrl || 'fallback-embed'}
-              src={(!isM3U8 && currentUrl && !currentUrl.includes('.m3u8') && !currentUrl.includes('animeapps.top'))
-                ? currentUrl
-                : `https://embed.filmu.in/embed/${animeSlug}/ep-${episode.id}${activeTab === 'dub' ? '?lang=dub' : ''}`
-              }
+              key={currentUrl}
+              src={currentUrl}
               className="w-full h-full border-0 bg-black"
               allowFullScreen
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
               referrerPolicy="no-referrer"
             />
+          ) : (
+            <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/80">
+              <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                <Tv className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Stream Not Available Yet</h3>
+              <p className="text-xs text-slate-400 max-w-md">
+                This episode is either an upcoming release or has not been indexed by upstream streaming servers yet.
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={() => setActiveTab(activeTab === 'sub' ? 'dub' : 'sub')}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
+                >
+                  Switch to {activeTab === 'sub' ? 'DUB' : 'SUB'}
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
