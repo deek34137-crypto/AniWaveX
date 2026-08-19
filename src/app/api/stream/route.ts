@@ -85,19 +85,36 @@ async function resolveStream(
           });
           if (res.ok) {
             const data = await res.json();
-            if (data && (data.sources || data.streams)) {
-              const streamList = data.sources || data.streams || [];
-              for (const s of streamList) {
-                if (s.url) {
-                  sources.push({
-                    url: s.url.includes('.m3u8') ? `/api/proxy?url=${encodeURIComponent(s.url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}` : s.url,
-                    quality: s.quality || s.server || `${provider.toUpperCase()} (${s.isM3U8 || s.url.includes('.m3u8') ? 'HLS' : 'Embed'})`,
-                    isM3U8: Boolean(s.isM3U8 || s.url.includes('.m3u8'))
-                  });
+            if (data) {
+              // A. Direct HLS Master stream through proxy
+              const directHls = data.stream_url || (Array.isArray(data.streams) ? data.streams.find((s: any) => s.type === 'hls')?.url : null);
+              if (directHls) {
+                sources.push({
+                  url: `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
+                  quality: "HD-1 (HLS)",
+                  isM3U8: true,
+                });
+              }
+
+              // B. Embed Mirrors (HD-2, HD-1, Server SB, etc.)
+              if (Array.isArray(data.streams)) {
+                for (const s of data.streams) {
+                  if (s.type === 'embed' && s.url && !s.url.includes('animeapps.top')) {
+                    sources.push({
+                      url: s.url,
+                      quality: s.server || `${provider.toUpperCase()} Embed`,
+                      isM3U8: false,
+                    });
+                  }
                 }
               }
-              if (data.subtitles) subtitles.push(...data.subtitles);
-              if (sources.length > 0) break; // Found working provider
+
+              // C. Subtitles
+              if (Array.isArray(data.subtitles)) {
+                subtitles.push(...data.subtitles);
+              }
+
+              if (sources.length > 0) break; // Successfully resolved active provider
             }
           }
         } catch {

@@ -163,7 +163,7 @@ export default function InPageVideoPlayer({
       try {
         const typeParam = animeType ? `&type=${encodeURIComponent(animeType)}` : '';
         const audioParam = `&audio=${activeTab}`;
-        const baseUrl = process.env.NEXT_PUBLIC_STREAM_API_URL || "/api/stream";
+        const baseUrl = "/api/stream";
         const res = await fetch(
           `${baseUrl}?id=${encodeURIComponent(animeSlug)}&ep=${episode.id}&title=${encodeURIComponent(animeTitle)}${typeParam}${audioParam}`,
           { signal: controller.signal }
