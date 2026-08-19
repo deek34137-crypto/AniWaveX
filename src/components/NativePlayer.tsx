@@ -39,6 +39,48 @@ export default function NativePlayer({
     }
   }, [initialTime, player]);
 
+  // Automatically lock screen orientation to horizontal (landscape) on mobile when entering fullscreen
+  useEffect(() => {
+    const handleFullscreenChange = async () => {
+      const isFullscreen = Boolean(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+
+      if (isFullscreen) {
+        try {
+          if (screen.orientation && 'lock' in screen.orientation) {
+            await (screen.orientation as any).lock('landscape').catch(() => {});
+          }
+        } catch {
+          // Ignore orientation lock errors on unsupported devices
+        }
+      } else {
+        try {
+          if (screen.orientation && 'unlock' in screen.orientation) {
+            screen.orientation.unlock();
+          }
+        } catch {
+          // Ignore unlock errors
+        }
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
   return (
     <MediaPlayer 
       ref={player}
@@ -47,6 +89,7 @@ export default function NativePlayer({
       poster={poster} 
       viewType="video" 
       streamType="on-demand" 
+      fullscreenOrientation="landscape"
       crossOrigin
       currentTime={initialTime}
       onTimeUpdate={(detail) => {
