@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Play, Bookmark, Star, Calendar, Clock, ChevronDown, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
@@ -23,14 +23,42 @@ export default function Hero({
   lastWatchedEpisode, 
   onPlayEpisode 
 }: HeroProps) {
+  const [currentUser, setCurrentUser] = useState<any>(user);
   const [isBookmarked, setIsBookmarked] = useState(initialBookmarked);
   const [currentStatus, setCurrentStatus] = useState<WatchlistStatus>(initialBookmarkStatus || 'watching');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const supabase = createClient();
 
+  useEffect(() => {
+    setCurrentUser(user);
+  }, [user]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then((res: any) => {
+      if (res?.data?.user) setCurrentUser(res.data.user);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      setCurrentUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
   const handleSetStatus = async (status: WatchlistStatus) => {
-    if (!user) {
+    let activeUser = currentUser || user;
+    if (!activeUser) {
+      const { data: { user: liveUser } } = await supabase.auth.getUser();
+      if (liveUser) {
+        activeUser = liveUser;
+        setCurrentUser(liveUser);
+      }
+    }
+
+    if (!activeUser) {
       alert("Please log in to save bookmarks!");
       return;
     }
@@ -44,7 +72,7 @@ export default function Hero({
       const { error } = await supabase
         .from('bookmarks')
         .upsert({
-          user_id: user.id, 
+          user_id: activeUser.id, 
           anime_slug: anime.slug,
           anime_title: anime.title,
           poster_image: anime.posterImage,
@@ -64,7 +92,16 @@ export default function Hero({
   };
 
   const handleRemoveBookmark = async () => {
-    if (!user) return;
+    let activeUser = currentUser || user;
+    if (!activeUser) {
+      const { data: { user: liveUser } } = await supabase.auth.getUser();
+      if (liveUser) {
+        activeUser = liveUser;
+        setCurrentUser(liveUser);
+      }
+    }
+
+    if (!activeUser) return;
     setIsSaving(true);
     setIsBookmarked(false);
     setIsDropdownOpen(false);
@@ -73,7 +110,7 @@ export default function Hero({
       const { error } = await supabase
         .from('bookmarks')
         .delete()
-        .eq('user_id', user.id)
+        .eq('user_id', activeUser.id)
         .eq('anime_slug', anime.slug);
         
       if (error) throw error;

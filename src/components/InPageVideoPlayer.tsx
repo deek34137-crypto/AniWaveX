@@ -52,6 +52,7 @@ export default function InPageVideoPlayer({
   const [selectedServerIndex, setSelectedServerIndex] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [initialTime, setInitialTime] = useState(0);
+  const [currentUser, setCurrentUser] = useState<any>(user);
   const [resumedBanner, setResumedBanner] = useState<string | null>(null);
   const [fallbackToIframe, setFallbackToIframe] = useState(false);
   const [playerError, setPlayerError] = useState(false);
@@ -62,14 +63,48 @@ export default function InPageVideoPlayer({
   const lastSupabaseSyncRef = useRef(0);
   const supabase = createClient();
 
+  useEffect(() => {
+    setCurrentUser(user);
+  }, [user]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then((res: any) => {
+      if (res?.data?.user) setCurrentUser(res.data.user);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      setCurrentUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
   // Helper to upsert watch history to Supabase
   const syncToSupabase = useCallback(async (progressSeconds: number) => {
-    if (!episode || !user?.id) return;
+    if (!episode) return;
+
+    let activeUserId = currentUser?.id || user?.id;
+    if (!activeUserId) {
+      try {
+        const { data: { user: liveUser } } = await supabase.auth.getUser();
+        if (liveUser) {
+          activeUserId = liveUser.id;
+          setCurrentUser(liveUser);
+        }
+      } catch {
+        // Ignore session read errors
+      }
+    }
+
+    if (!activeUserId) return;
+
     try {
       const { error } = await supabase
         .from('watch_history')
         .upsert({
-          user_id: user.id,
+          user_id: activeUserId,
           anime_slug: animeSlug,
           anime_title: animeTitle,
           poster_image: animePosterImage,
@@ -84,7 +119,7 @@ export default function InPageVideoPlayer({
     } catch (err) {
       console.error("Failed to sync watch history", err);
     }
-  }, [episode, user, animeSlug, animeTitle, animePosterImage, supabase]);
+  }, [episode, currentUser, user, animeSlug, animeTitle, animePosterImage, supabase]);
 
   // Load initial resume progress from localStorage on episode change
   useEffect(() => {
@@ -149,16 +184,16 @@ export default function InPageVideoPlayer({
       }
     }
 
-    // Sync to Supabase periodically every 15 seconds during playback
-    if (user && Math.abs(currentTime - lastSupabaseSyncRef.current) >= 15) {
+    // Sync to Supabase periodically every 10 seconds during playback
+    if (Math.abs(currentTime - lastSupabaseSyncRef.current) >= 10) {
       lastSupabaseSyncRef.current = currentTime;
       syncToSupabase(floorTime);
     }
-  }, [episode, animeSlug, user, syncToSupabase]);
+  }, [episode, animeSlug, syncToSupabase]);
 
   // Initial watch history sync + flush on unmount / episode change
   useEffect(() => {
-    if (!episode || !user) return;
+    if (!episode) return;
 
     // Initial record after 2s of loading episode
     const timer = setTimeout(() => {
@@ -172,18 +207,18 @@ export default function InPageVideoPlayer({
         syncToSupabase(Math.floor(lastSavedTimeRef.current));
       }
     };
-  }, [episode?.id, user?.id, animeSlug, syncToSupabase, initialTime]);
+  }, [episode?.id, animeSlug, syncToSupabase, initialTime]);
 
   // Window beforeunload listener to flush progress on page close/reload
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (lastSavedTimeRef.current > 0 && user) {
+      if (lastSavedTimeRef.current > 0) {
         syncToSupabase(Math.floor(lastSavedTimeRef.current));
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [user, syncToSupabase]);
+  }, [syncToSupabase]);
 
   // Read autoplay preference from localStorage on mount
   useEffect(() => {

@@ -1,17 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Hero from "@/components/Hero";
 import EpisodesGrid from "@/components/EpisodesGrid";
 import Recommendations from "@/components/Recommendations";
 import InPageVideoPlayer from "@/components/InPageVideoPlayer";
+import { createClient } from "@/lib/supabase/client";
 
 export default function AnimePageClient({ 
   data, 
   recommendations,
   initialBookmarked, 
   initialBookmarkStatus,
-  user, 
+  user: initialUser, 
   lastWatchedEpisode 
 }: { 
   data: any, 
@@ -22,6 +23,28 @@ export default function AnimePageClient({
   lastWatchedEpisode?: number | null 
 }) {
   const [activeEpisode, setActiveEpisode] = useState<any | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(initialUser);
+  const supabase = createClient();
+
+  useEffect(() => {
+    setCurrentUser(initialUser);
+  }, [initialUser]);
+
+  useEffect(() => {
+    // 1. Fetch active session user on mount
+    supabase.auth.getUser().then((res: any) => {
+      if (res?.data?.user) setCurrentUser(res.data.user);
+    });
+
+    // 2. Real-time auth state subscription
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      setCurrentUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   if (!data) return <div className="text-white p-10">Loading...</div>;
 
@@ -39,7 +62,7 @@ export default function AnimePageClient({
             animeTitle={data.title}
             animeType={data.type}
             animePosterImage={data.posterImage}
-            user={user}
+            user={currentUser}
             anilistId={data.anilistId}
           />
         ) : (
@@ -47,7 +70,7 @@ export default function AnimePageClient({
             anime={data}
             initialBookmarked={initialBookmarked}
             initialBookmarkStatus={initialBookmarkStatus}
-            user={user}
+            user={currentUser}
             lastWatchedEpisode={lastWatchedEpisode}
             onPlayEpisode={(ep) => setActiveEpisode(ep)}
           />
