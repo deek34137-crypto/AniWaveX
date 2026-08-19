@@ -1,6 +1,6 @@
 import { Star, Play } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import AnimeImage from "@/components/AnimeImage";
 
 interface RecommendationsProps {
   items: any[];
@@ -21,18 +21,15 @@ export default function Recommendations({ items }: RecommendationsProps) {
               
               {/* Poster Card */}
               <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-900 shadow-lg">
-                {imageUrl ? (
-                  <Image 
-                    src={imageUrl} 
-                    alt={item.title} 
-                    fill
-                    sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                    className="object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                ) : null}
+                <AnimeImage 
+                  src={imageUrl} 
+                  alt={item.title} 
+                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                  className="object-cover transition-transform duration-500 group-hover:scale-110"
+                />
                 
                 {/* Gradient Overlay for Text Readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
               
               {/* Top Badges */}
               <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">

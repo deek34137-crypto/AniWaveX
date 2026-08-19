@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Trash2, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
-import Image from "next/image";
+import AnimeImage from "@/components/AnimeImage";
 
 export default function WatchlistGrid({ initialItems }: { initialItems: any[] }) {
   const [items, setItems] = useState(initialItems);
@@ -166,16 +166,13 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
                 className="group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105 shadow-lg"
               >
                 <div className="aspect-[2/3] relative">
-                  {item.poster_image ? (
-                    <Image 
-                      src={item.poster_image} 
-                      alt={item.anime_title} 
-                      fill
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
-                      className="object-cover"
-                    />
-                  ) : null}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+                  <AnimeImage 
+                    src={item.poster_image} 
+                    alt={item.anime_title} 
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent pointer-events-none" />
                   
                   {/* Status Badge */}
                   <div className="absolute top-2 left-2 z-20">

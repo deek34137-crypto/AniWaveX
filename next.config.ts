@@ -5,11 +5,11 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "media.kitsu.app",
+        hostname: "**.kitsu.app",
       },
       {
         protocol: "https",
-        hostname: "media.kitsu.io",
+        hostname: "**.kitsu.io",
       },
       {
         protocol: "https",
@@ -21,11 +21,59 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
+        hostname: "media.kitsu.app",
+      },
+      {
+        protocol: "https",
+        hostname: "media.kitsu.io",
+      },
+      {
+        protocol: "https",
+        hostname: "**.anilist.co",
+      },
+      {
+        protocol: "https",
         hostname: "s4.anilist.co",
       },
       {
         protocol: "https",
+        hostname: "**.myanimelist.net",
+      },
+      {
+        protocol: "https",
+        hostname: "cdn.myanimelist.net",
+      },
+      {
+        protocol: "https",
+        hostname: "myanimelist.cdn-dena.com",
+      },
+      {
+        protocol: "https",
+        hostname: "images.weserv.nl",
+      },
+      {
+        protocol: "https",
+        hostname: "artworks.thetvdb.com",
+      },
+      {
+        protocol: "https",
+        hostname: "image.tmdb.org",
+      },
+      {
+        protocol: "https",
         hostname: "api.dicebear.com",
+      },
+      {
+        protocol: "https",
+        hostname: "cdn.anime-dunya.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.atomic4cdn.top",
+      },
+      {
+        protocol: "https",
+        hostname: "**.flixcloud.cc",
       },
     ],
   },

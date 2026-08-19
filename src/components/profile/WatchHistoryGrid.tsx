@@ -4,8 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Star, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-
-import Image from "next/image";
+import AnimeImage from "@/components/AnimeImage";
 
 export default function WatchHistoryGrid({ initialItems }: { initialItems: any[] }) {
   const [items, setItems] = useState(initialItems);
@@ -45,16 +44,13 @@ export default function WatchHistoryGrid({ initialItems }: { initialItems: any[]
             className="group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105"
           >
             <div className="aspect-[16/9] relative">
-              {item.poster_image ? (
-                <Image 
-                  src={item.poster_image} 
-                  alt={item.anime_title} 
-                  fill
-                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
-                  className="object-cover"
-                />
-              ) : null}
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent" />
+              <AnimeImage 
+                src={item.poster_image} 
+                alt={item.anime_title} 
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent pointer-events-none" />
               
               {/* Play Overlay */}
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
