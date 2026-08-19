@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, X, Keyboard, Tv } from "lucide-react";
+import { Loader2, X, Keyboard, Tv, AlertCircle } from "lucide-react";
 import NativePlayer from "./NativePlayer";
 import { createClient } from "@/lib/supabase/client";
 import type { MediaPlayerInstance } from "@vidstack/react";
@@ -10,6 +10,14 @@ interface StreamSource {
   url: string;
   quality: string;
   isM3U8: boolean;
+}
+
+function isValidEmbedUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== "string") return false;
+  if (url.startsWith("/api/proxy") || url.includes(".m3u8") || url.includes("animeapps.top")) {
+    return false;
+  }
+  return url.startsWith("http://") || url.startsWith("https://");
 }
 
 interface InPageVideoPlayerProps {
@@ -46,6 +54,7 @@ export default function InPageVideoPlayer({
   const [initialTime, setInitialTime] = useState(0);
   const [resumedBanner, setResumedBanner] = useState<string | null>(null);
   const [fallbackToIframe, setFallbackToIframe] = useState(false);
+  const [playerError, setPlayerError] = useState(false);
   
   const playerRef = useRef<HTMLDivElement>(null);
   const mediaPlayerRef = useRef<MediaPlayerInstance>(null);
@@ -201,6 +210,7 @@ export default function InPageVideoPlayer({
       setStreams(null);
       setSelectedServerIndex(0); // Reset server index
       setFallbackToIframe(false);
+      setPlayerError(false);
       try {
         const typeParam = animeType ? `&type=${encodeURIComponent(animeType)}` : '';
         const audioParam = `&audio=${activeTab}`;
@@ -386,7 +396,8 @@ export default function InPageVideoPlayer({
                     key={idx}
                     onClick={() => {
                       setSelectedServerIndex(idx);
-                      setFallbackToIframe(false);
+                      setPlayerError(false);
+                      setFallbackToIframe(!source.isM3U8);
                     }}
                     className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${validServerIndex === idx ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'}`}
                   >
@@ -399,19 +410,28 @@ export default function InPageVideoPlayer({
             {/* Language Selector: SUB / ENG DUB / HINDI DUB */}
             <div className="flex p-1 bg-white/5 rounded-lg border border-white/10 shrink-0 gap-1">
               <button 
-                onClick={() => setActiveTab("sub")}
+                onClick={() => {
+                  setActiveTab("sub");
+                  setPlayerError(false);
+                }}
                 className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors ${activeTab === 'sub' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
               >
                 SUB (JP)
               </button>
               <button 
-                onClick={() => setActiveTab("dub")}
+                onClick={() => {
+                  setActiveTab("dub");
+                  setPlayerError(false);
+                }}
                 className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors ${activeTab === 'dub' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
               >
                 ENG DUB
               </button>
               <button 
-                onClick={() => setActiveTab("hindi")}
+                onClick={() => {
+                  setActiveTab("hindi");
+                  setPlayerError(false);
+                }}
                 className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 ${activeTab === 'hindi' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-400 hover:text-amber-300'}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${activeTab === 'hindi' ? 'bg-white' : 'bg-amber-400 animate-pulse'}`} />
@@ -428,6 +448,46 @@ export default function InPageVideoPlayer({
               <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
               <p className="font-semibold tracking-wide">Resolving Stream Servers...</p>
             </div>
+          ) : playerError ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/90">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Stream Playback Issue</h3>
+              <p className="text-xs text-slate-400 max-w-md">
+                Unable to load this server feed. Please switch to an alternate server or select another audio track.
+              </p>
+              <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
+                {activeSources && activeSources.length > 1 && (
+                  activeSources.map((source, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setSelectedServerIndex(idx);
+                        setPlayerError(false);
+                        setFallbackToIframe(!source.isM3U8);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                        validServerIndex === idx
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'bg-slate-800 border-white/10 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      }`}
+                    >
+                      Server {source.quality}
+                    </button>
+                  ))
+                )}
+                <button
+                  onClick={() => {
+                    setPlayerError(false);
+                    setFallbackToIframe(false);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-white/10 transition-colors"
+                >
+                  Reload Player
+                </button>
+              </div>
+            </div>
           ) : isM3U8 && currentUrl && !fallbackToIframe ? (
             <NativePlayer 
               key={currentUrl}
@@ -439,14 +499,24 @@ export default function InPageVideoPlayer({
               initialTime={initialTime}
               onTimeUpdate={handleTimeUpdate}
               onError={() => {
-                console.warn("Native HLS stream playback failed, switching to backup embed server");
-                const firstEmbedIdx = activeSources?.findIndex(s => !s.isM3U8 && !s.url.includes('.m3u8') && !s.url.includes('animeapps.top'));
-                if (firstEmbedIdx !== undefined && firstEmbedIdx !== -1) {
-                  setSelectedServerIndex(firstEmbedIdx);
-                  setFallbackToIframe(false);
-                } else {
+                console.warn("Native HLS stream playback failed, looking for alternate server");
+                // 1. Try to find a working embed server
+                const embedIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && !s.isM3U8 && isValidEmbedUrl(s.url));
+                if (embedIdx !== undefined && embedIdx !== -1) {
+                  setSelectedServerIndex(embedIdx);
                   setFallbackToIframe(true);
+                  setPlayerError(false);
+                  return;
                 }
+                // 2. Try another HLS server if available
+                const otherHlsIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && s.isM3U8);
+                if (otherHlsIdx !== undefined && otherHlsIdx !== -1) {
+                  setSelectedServerIndex(otherHlsIdx);
+                  setFallbackToIframe(false);
+                  setPlayerError(false);
+                  return;
+                }
+                setPlayerError(true);
               }}
               onEnded={() => {
                 if (autoplayNext && hasNext) {
@@ -454,14 +524,14 @@ export default function InPageVideoPlayer({
                 }
               }}
             />
-          ) : currentUrl && !currentUrl.includes('animeapps.top') ? (
+          ) : isValidEmbedUrl(currentUrl) ? (
             <iframe 
               key={currentUrl}
               src={currentUrl}
               className="w-full h-full border-0 bg-black"
-              allowFullScreen
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
               referrerPolicy="no-referrer"
+              onError={() => setPlayerError(true)}
             />
           ) : (
             <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/80">

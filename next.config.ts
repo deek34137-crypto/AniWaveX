@@ -29,6 +29,22 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
+        hostname: "**.backblazeb2.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.s3.*.backblazeb2.com",
+      },
+      {
+        protocol: "https",
+        hostname: "kitsu-production-media.s3.us-west-002.backblazeb2.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.amazonaws.com",
+      },
+      {
+        protocol: "https",
         hostname: "**.anilist.co",
       },
       {

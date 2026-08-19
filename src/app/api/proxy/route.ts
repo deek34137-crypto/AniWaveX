@@ -54,6 +54,21 @@ function isAllowedHost(hostname: string): boolean {
     "kitsu.io",
     "kitsu.app",
     "anilist.co",
+    "watching.onl",
+    "megaplay.buzz",
+    "vidtube.site",
+    "krussdomi.com",
+    "akirax.buzz",
+    "mikora.top",
+    "anizara.store",
+    "otakuhg.site",
+    "otakuvid.online",
+    "playmogo.com",
+    "vivibebe.site",
+    "bibiemb.xyz",
+    "vidstream.pro",
+    "backblazeb2.com",
+    "filmu.in",
   ];
 
   return allowedSuffixes.some((suffix) => host === suffix || host.endsWith("." + suffix));
