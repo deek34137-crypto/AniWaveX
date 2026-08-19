@@ -71,8 +71,8 @@ async function resolveStream(
   const sources: any[] = [];
   let subtitles: any[] = [];
 
-  // 1. Try external Cloudflare Worker API (Anivexa-API) if configured
-  const externalApi = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL;
+  // 1. Try external Cloudflare Worker API (Anivexa-API)
+  const externalApi = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL || "https://anivexa-stream-api.deek34137.workers.dev";
   if (externalApi && !externalApi.startsWith('/') && resolvedAnilistId) {
     try {
       // Query Anivexa-API /watch endpoints across key providers
