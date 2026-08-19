@@ -71,33 +71,73 @@ async function resolveStream(
   const sources: any[] = [];
   let subtitles: any[] = [];
 
-  // 2. Try AnikotoProvider with resolved AniList ID
-  const anikotoRes = await getAnikotoStream(title, parsedEp, audio, resolvedAnilistId);
-  if (anikotoRes) {
-    if (anikotoRes.subtitles) {
-      subtitles = anikotoRes.subtitles;
+  // 1. Try external Cloudflare Worker API (Anivexa-API) if configured
+  const externalApi = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL;
+  if (externalApi && !externalApi.startsWith('/') && resolvedAnilistId) {
+    try {
+      // Query Anivexa-API /watch endpoints across key providers
+      const providersToTry = ['reanime', 'anikoto', 'animegg', 'anizone', 'kickassanime'];
+      for (const provider of providersToTry) {
+        try {
+          const res = await fetch(`${externalApi}/watch/${provider}/${resolvedAnilistId}/${audio}/${provider}-${parsedEp}`, {
+            headers: { Accept: 'application/json' },
+            next: { revalidate: 180 }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && (data.sources || data.streams)) {
+              const streamList = data.sources || data.streams || [];
+              for (const s of streamList) {
+                if (s.url) {
+                  sources.push({
+                    url: s.url.includes('.m3u8') ? `/api/proxy?url=${encodeURIComponent(s.url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}` : s.url,
+                    quality: s.quality || s.server || `${provider.toUpperCase()} (${s.isM3U8 || s.url.includes('.m3u8') ? 'HLS' : 'Embed'})`,
+                    isM3U8: Boolean(s.isM3U8 || s.url.includes('.m3u8'))
+                  });
+                }
+              }
+              if (data.subtitles) subtitles.push(...data.subtitles);
+              if (sources.length > 0) break; // Found working provider
+            }
+          }
+        } catch {
+          // Try next provider
+        }
+      }
+    } catch (err) {
+      console.warn("External worker stream fetch error, falling back to local resolver:", err);
     }
+  }
 
-    // A. If direct HLS stream is available, proxy it to bypass CDN CORS & Referer restrictions
-    if (anikotoRes.stream_url) {
-      sources.push({
-        url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
-        quality: "HD-1 (HLS)",
-        isM3U8: true,
-      });
-    }
+  // 2. Local Resolver: Try AnikotoProvider with resolved AniList ID
+  if (sources.length === 0) {
+    const anikotoRes = await getAnikotoStream(title, parsedEp, audio, resolvedAnilistId);
+    if (anikotoRes) {
+      if (anikotoRes.subtitles) {
+        subtitles = anikotoRes.subtitles;
+      }
 
-    // B. Add embed servers (e.g. Server SB, Server HD-2, etc.)
-    if (anikotoRes.streams) {
-      const embedSources = anikotoRes.streams
-        .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top"))
-        .map((s: any) => ({
-          url: s.url,
-          quality: s.server || "Server Embed",
-          isM3U8: false
-        }));
+      // A. If direct HLS stream is available, proxy it to bypass CDN CORS & Referer restrictions
+      if (anikotoRes.stream_url) {
+        sources.push({
+          url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
+          quality: "HD-1 (HLS)",
+          isM3U8: true,
+        });
+      }
 
-      sources.push(...embedSources);
+      // B. Add embed servers (e.g. Server SB, Server HD-2, etc.)
+      if (anikotoRes.streams) {
+        const embedSources = anikotoRes.streams
+          .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top"))
+          .map((s: any) => ({
+            url: s.url,
+            quality: s.server || "Server Embed",
+            isM3U8: false
+          }));
+
+        sources.push(...embedSources);
+      }
     }
   }
 
