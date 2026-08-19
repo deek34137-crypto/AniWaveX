@@ -119,10 +119,32 @@ function rewriteM3U8Content(
   }).join("\n");
 }
 
+function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
+  const host = targetUrl.hostname.toLowerCase();
+  if (host.includes("watching.onl") || host.includes("megaplay.buzz")) {
+    return "https://megaplay.buzz/";
+  }
+  if (host.includes("krussdomi")) {
+    return "https://krussdomi.com/";
+  }
+  if (host.includes("animeapps.top")) {
+    return "https://playeng.animeapps.top/";
+  }
+  if (host.includes("bibiemb.xyz") || host.includes("vibevibe.workers.dev")) {
+    return "https://bibiemb.xyz/";
+  }
+  if (host.includes("anime-dunya.com")) {
+    return "https://anime-dunya.com/";
+  }
+  if (refererParam && refererParam !== "https://flixcloud.cc/") {
+    return refererParam;
+  }
+  return refererParam || "https://flixcloud.cc/";
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const target = searchParams.get("url");
-  const referer = searchParams.get("referer") || "https://flixcloud.cc/";
 
   if (!target) {
     return NextResponse.json({ error: "Missing required ?url= parameter" }, { status: 400, headers: CORS_HEADERS });
@@ -145,7 +167,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Host not permitted by proxy policy" }, { status: 403, headers: CORS_HEADERS });
   }
 
-  // 3. Safe Origin Resolution
+  // 3. Resolve required Referer and Origin for target CDN
+  const rawReferer = searchParams.get("referer");
+  const referer = resolveReferer(targetUrl, rawReferer);
+
   let refererOrigin = "https://flixcloud.cc";
   try {
     refererOrigin = new URL(referer).origin;

@@ -60,6 +60,37 @@ interface ExtractedStreamResult {
   subtitles: any[];
 }
 
+function getRefererForStream(url: string, streamObj?: any, data?: any): string {
+  if (streamObj?.referer) return streamObj.referer;
+  if (streamObj?.headers?.Referer) return streamObj.headers.Referer;
+  if (data?.referer) return data.referer;
+  if (data?.headers?.Referer) return data.headers.Referer;
+
+  const lower = url.toLowerCase();
+  if (lower.includes("watching.onl") || lower.includes("megaplay.buzz")) {
+    return "https://megaplay.buzz/";
+  }
+  if (lower.includes("krussdomi")) {
+    return "https://krussdomi.com/";
+  }
+  if (lower.includes("vidtube.site") || lower.includes("akirax.buzz")) {
+    return "https://vidtube.site/";
+  }
+  if (lower.includes("bibiemb.xyz") || lower.includes("vibevibe.workers.dev")) {
+    return "https://bibiemb.xyz/";
+  }
+  if (lower.includes("vivibebe.site")) {
+    return "https://vivibebe.site/";
+  }
+  if (lower.includes("animeapps.top")) {
+    return "https://playeng.animeapps.top/";
+  }
+  if (lower.includes("anime-dunya.com")) {
+    return "https://anime-dunya.com/";
+  }
+  return "https://flixcloud.cc/";
+}
+
 function extractWorkerSources(
   data: any,
   provider: string,
@@ -72,42 +103,82 @@ function extractWorkerSources(
 
   const langTag = audio === 'hindi' ? 'Hindi Dub' : (audio === 'dub' ? 'Eng Dub' : 'Sub');
   const providerLabel = provider === 'hianime' 
-    ? 'HiAnime (MegaCloud)' 
+    ? 'HiAnime' 
     : provider === 'anikoto' 
     ? 'MegaCloud' 
     : provider === 'kaa' 
     ? 'KickAssAnime' 
     : provider.toUpperCase();
 
-  // A. Direct HLS Master stream through proxy
-  const directHls = data.stream_url || (Array.isArray(data.streams) ? data.streams.find((s: any) => s.type === 'hls')?.url : null);
-  if (directHls) {
-    sources.push({
-      url: `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
-      quality: `${providerLabel} [${langTag}]`,
-      isM3U8: true,
-    });
-  }
-
-  // B. Embed Mirrors (HD-2, HD-1, Server SB, etc.)
+  // 1. Process all streams from data.streams array
   if (Array.isArray(data.streams)) {
     for (const s of data.streams) {
-      if (s.type === 'embed' && s.url && !s.url.includes('animeapps.top')) {
+      if (!s.url) continue;
+
+      if (s.type === 'hls' || s.url.includes('.m3u8')) {
+        const ref = getRefererForStream(s.url, s, data);
+        const serverName = s.server ? `${providerLabel} (${s.server})` : providerLabel;
+        sources.push({
+          url: `/api/proxy?url=${encodeURIComponent(s.url)}&referer=${encodeURIComponent(ref)}`,
+          quality: `${serverName} [${langTag}]`,
+          isM3U8: true,
+        });
+
+        // Collect subtitles attached to this stream
+        if (Array.isArray(s.subtitles)) {
+          for (const sub of s.subtitles) {
+            if (sub && sub.url && !subtitles.some(existing => existing.url === sub.url)) {
+              subtitles.push(sub);
+            }
+          }
+        }
+      } else if (s.type === 'embed' && !s.url.includes('animeapps.top')) {
+        const serverName = s.server ? `${providerLabel} (${s.server})` : `${providerLabel} Embed`;
         sources.push({
           url: s.url,
-          quality: `${s.server || providerLabel} [${langTag}]`,
+          quality: `${serverName} [${langTag}]`,
           isM3U8: false,
         });
       }
     }
   }
 
-  // C. Subtitles
-  if (Array.isArray(data.subtitles)) {
-    subtitles.push(...data.subtitles);
+  // 2. Direct HLS stream if not already added
+  const directHls = data.stream_url;
+  if (directHls && typeof directHls === 'string') {
+    const ref = getRefererForStream(directHls, null, data);
+    const proxyUrl = `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent(ref)}`;
+    if (!sources.some(s => s.url === proxyUrl)) {
+      sources.unshift({
+        url: proxyUrl,
+        quality: `${providerLabel} [${langTag}]`,
+        isM3U8: true,
+      });
+    }
   }
 
-  return { sources, subtitles };
+  // 3. Top-level subtitles
+  if (Array.isArray(data.subtitles)) {
+    for (const sub of data.subtitles) {
+      if (sub && sub.url && !subtitles.some(existing => existing.url === sub.url)) {
+        subtitles.push(sub);
+      }
+    }
+  }
+
+  // Proxy subtitles from referer-restricted hosts
+  const safeSubtitles = subtitles.map(sub => {
+    if (sub.url && (sub.url.includes('watching.onl') || sub.url.includes('krussdomi'))) {
+      const ref = getRefererForStream(sub.url, null, data);
+      return {
+        ...sub,
+        url: `/api/proxy?url=${encodeURIComponent(sub.url)}&referer=${encodeURIComponent(ref)}`
+      };
+    }
+    return sub;
+  });
+
+  return { sources, subtitles: safeSubtitles };
 }
 
 async function fetchWorkerProvider(
