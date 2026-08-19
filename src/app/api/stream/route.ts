@@ -60,7 +60,7 @@ async function resolveStream(
   ep: string,
   title: string,
   type: string | null,
-  audio: 'sub' | 'dub',
+  audio: 'sub' | 'dub' | 'hindi',
   anilistParam?: string | null
 ) {
   const parsedEp = parseInt(ep, 10);
@@ -75,23 +75,30 @@ async function resolveStream(
   const externalApi = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL || "https://anivexa-stream-api.deek34137.workers.dev";
   if (externalApi && !externalApi.startsWith('/') && resolvedAnilistId) {
     try {
-      // Query Anivexa-API /watch endpoints across key providers
-      const providersToTry = ['reanime', 'anikoto', 'animegg', 'anizone', 'kickassanime'];
+      // Choose providers based on requested audio language
+      const providersToTry = audio === 'hindi'
+        ? ['animedunya', 'anibd', 'senshi']
+        : ['reanime', 'anikoto', 'animegg', 'anizone', 'kickassanime', 'anineko', '2dhive'];
+
+      const workerAudio = audio === 'hindi' ? 'sub' : audio;
+
       for (const provider of providersToTry) {
         try {
-          const res = await fetch(`${externalApi}/watch/${provider}/${resolvedAnilistId}/${audio}/${provider}-${parsedEp}`, {
+          const res = await fetch(`${externalApi}/watch/${provider}/${resolvedAnilistId}/${workerAudio}/${provider}-${parsedEp}`, {
             headers: { Accept: 'application/json' },
             next: { revalidate: 180 }
           });
           if (res.ok) {
             const data = await res.json();
             if (data) {
+              const langTag = audio === 'hindi' ? 'Hindi Dub' : (audio === 'dub' ? 'Eng Dub' : 'Sub');
+
               // A. Direct HLS Master stream through proxy
               const directHls = data.stream_url || (Array.isArray(data.streams) ? data.streams.find((s: any) => s.type === 'hls')?.url : null);
               if (directHls) {
                 sources.push({
                   url: `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
-                  quality: "HD-1 (HLS)",
+                  quality: `HD-1 [${langTag}]`,
                   isM3U8: true,
                 });
               }
@@ -102,7 +109,7 @@ async function resolveStream(
                   if (s.type === 'embed' && s.url && !s.url.includes('animeapps.top')) {
                     sources.push({
                       url: s.url,
-                      quality: s.server || `${provider.toUpperCase()} Embed`,
+                      quality: `${s.server || provider.toUpperCase()} [${langTag}]`,
                       isM3U8: false,
                     });
                   }
@@ -126,8 +133,8 @@ async function resolveStream(
     }
   }
 
-  // 2. Local Resolver: Try AnikotoProvider with resolved AniList ID
-  if (sources.length === 0) {
+  // 2. Local Resolver: Try AnikotoProvider with resolved AniList ID (for sub / eng dub)
+  if (sources.length === 0 && audio !== 'hindi') {
     const anikotoRes = await getAnikotoStream(title, parsedEp, audio, resolvedAnilistId);
     if (anikotoRes) {
       if (anikotoRes.subtitles) {
@@ -158,17 +165,19 @@ async function resolveStream(
     }
   }
 
-  // 3. Always append FilmU embed server as backup/guaranteed source
-  const fallbackStream = await multiProvider.getStreamInfo(id, parsedEp, title, resolvedAnilistId);
-  if (fallbackStream) {
-    const fallbackSources = (audio === 'dub' ? fallbackStream.dub : fallbackStream.sub) || fallbackStream.sources || [];
-    for (const src of fallbackSources) {
-      if (src.url && !sources.some(s => s.url === src.url)) {
-        sources.push({
-          url: src.url,
-          quality: src.quality || "Server Backup",
-          isM3U8: false
-        });
+  // 3. Always append FilmU embed server as backup/guaranteed source (for sub/dub)
+  if (audio !== 'hindi') {
+    const fallbackStream = await multiProvider.getStreamInfo(id, parsedEp, title, resolvedAnilistId);
+    if (fallbackStream) {
+      const fallbackSources = (audio === 'dub' ? fallbackStream.dub : fallbackStream.sub) || fallbackStream.sources || [];
+      for (const src of fallbackSources) {
+        if (src.url && !sources.some(s => s.url === src.url)) {
+          sources.push({
+            url: src.url,
+            quality: src.quality || "Server Backup",
+            isM3U8: false
+          });
+        }
       }
     }
   }
@@ -178,6 +187,8 @@ async function resolveStream(
       sources: sources,
       sub: audio === 'sub' ? sources : [],
       dub: audio === 'dub' ? sources : [],
+      hindi: audio === 'hindi' ? sources : [],
+      audio: audio,
       nativeStream: {
         subtitles: subtitles
       }
@@ -193,7 +204,7 @@ export async function GET(request: Request) {
   const ep = searchParams.get("ep");
   const title = searchParams.get("title");
   const type = searchParams.get("type"); // e.g., 'movie', 'TV'
-  const audio = (searchParams.get("audio") || 'sub') as 'sub' | 'dub';
+  const audio = (searchParams.get("audio") || 'sub') as 'sub' | 'dub' | 'hindi';
   const anilistParam = searchParams.get("anilistId");
 
   if (!id || !ep || !title) {

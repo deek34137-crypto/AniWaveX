@@ -35,8 +35,8 @@ export default function InPageVideoPlayer({
   onClose,
   user
 }: InPageVideoPlayerProps) {
-  const [activeTab, setActiveTab] = useState<"sub" | "dub">("sub");
-  const [streams, setStreams] = useState<{ sub: StreamSource[], dub: StreamSource[], nativeStream?: any } | null>(null);
+  const [activeTab, setActiveTab] = useState<"sub" | "dub" | "hindi">("sub");
+  const [streams, setStreams] = useState<{ sub: StreamSource[], dub: StreamSource[], hindi?: StreamSource[], nativeStream?: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [autoplayNext, setAutoplayNext] = useState(false);
   const [selectedServerIndex, setSelectedServerIndex] = useState(0);
@@ -298,7 +298,9 @@ export default function InPageVideoPlayer({
 
   if (!episode) return null;
 
-  const activeSources: StreamSource[] | undefined = activeTab === "sub" ? streams?.sub : streams?.dub;
+  const activeSources: StreamSource[] | undefined = activeTab === "hindi" 
+    ? streams?.hindi 
+    : (activeTab === "sub" ? streams?.sub : streams?.dub);
   // Ensure selectedServerIndex is within bounds
   const validServerIndex = activeSources && activeSources.length > 0 ? Math.min(selectedServerIndex, activeSources.length - 1) : 0;
   const selectedSource = activeSources?.[validServerIndex];
@@ -352,19 +354,26 @@ export default function InPageVideoPlayer({
               </div>
             )}
 
-            {/* Sub / Dub Toggle */}
-            <div className="flex p-1 bg-white/5 rounded-lg border border-white/10 shrink-0">
+            {/* Language Selector: SUB / ENG DUB / HINDI DUB */}
+            <div className="flex p-1 bg-white/5 rounded-lg border border-white/10 shrink-0 gap-1">
               <button 
                 onClick={() => setActiveTab("sub")}
-                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'sub' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors ${activeTab === 'sub' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
               >
-                SUB
+                SUB (JP)
               </button>
               <button 
                 onClick={() => setActiveTab("dub")}
-                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'dub' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors ${activeTab === 'dub' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
               >
-                DUB
+                ENG DUB
+              </button>
+              <button 
+                onClick={() => setActiveTab("hindi")}
+                className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 ${activeTab === 'hindi' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-400 hover:text-amber-300'}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${activeTab === 'hindi' ? 'bg-white' : 'bg-amber-400 animate-pulse'}`} />
+                HINDI DUB
               </button>
             </div>
           </div>
@@ -421,13 +430,31 @@ export default function InPageVideoPlayer({
               <p className="text-xs text-slate-400 max-w-md">
                 This episode is either an upcoming release or has not been indexed by upstream streaming servers yet.
               </p>
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  onClick={() => setActiveTab(activeTab === 'sub' ? 'dub' : 'sub')}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
-                >
-                  Switch to {activeTab === 'sub' ? 'DUB' : 'SUB'}
-                </button>
+              <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
+                {activeTab !== 'sub' && (
+                  <button
+                    onClick={() => setActiveTab('sub')}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
+                  >
+                    Switch to SUB (JP)
+                  </button>
+                )}
+                {activeTab !== 'dub' && (
+                  <button
+                    onClick={() => setActiveTab('dub')}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
+                  >
+                    Switch to ENG DUB
+                  </button>
+                )}
+                {activeTab !== 'hindi' && (
+                  <button
+                    onClick={() => setActiveTab('hindi')}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-300 border border-amber-500/20 transition-colors"
+                  >
+                    Try HINDI DUB
+                  </button>
+                )}
               </div>
             </div>
           )}
