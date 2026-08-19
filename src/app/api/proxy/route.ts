@@ -182,21 +182,28 @@ export async function GET(request: NextRequest) {
     refererOrigin = "https://flixcloud.cc";
   }
 
+  const rangeHeader = request.headers.get("range");
+  const upstreamHeaders: Record<string, string> = {
+    "User-Agent": UA,
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": referer,
+    "Origin": refererOrigin,
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "cross-site",
+  };
+
+  if (rangeHeader) {
+    upstreamHeaders["Range"] = rangeHeader;
+  }
+
   try {
     const upstreamRes = await fetch(target, {
-      headers: {
-        "User-Agent": UA,
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": referer,
-        "Origin": refererOrigin,
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "cross-site",
-      },
+      headers: upstreamHeaders,
     });
 
-    if (!upstreamRes.ok) {
+    if (!upstreamRes.ok && upstreamRes.status !== 206) {
       return new NextResponse(await upstreamRes.text(), {
         status: upstreamRes.status,
         headers: {
@@ -232,6 +239,7 @@ export async function GET(request: NextRequest) {
     // For media segments (.ts, .m4s, etc.), stream response with immutable edge cache headers
     const body = upstreamRes.body;
     const contentLength = upstreamRes.headers.get("Content-Length");
+    const contentRange = upstreamRes.headers.get("Content-Range");
 
     const responseHeaders: Record<string, string> = {
       ...CORS_HEADERS,
@@ -243,9 +251,12 @@ export async function GET(request: NextRequest) {
     if (contentLength) {
       responseHeaders["Content-Length"] = contentLength;
     }
+    if (contentRange) {
+      responseHeaders["Content-Range"] = contentRange;
+    }
 
     return new NextResponse(body, {
-      status: 200,
+      status: upstreamRes.status, // Preserve 206 Partial Content or 200 OK
       headers: responseHeaders,
     });
   } catch (error: any) {

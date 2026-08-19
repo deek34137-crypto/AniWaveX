@@ -153,7 +153,7 @@ export default function InPageVideoPlayer({
     }
     setInitialTime(0);
     setResumedBanner(null);
-  }, [episode?.id, animeSlug]);
+  }, [episode, animeSlug]);
 
   // Scroll to player when episode changes
   useEffect(() => {
@@ -207,7 +207,7 @@ export default function InPageVideoPlayer({
         syncToSupabase(Math.floor(lastSavedTimeRef.current));
       }
     };
-  }, [episode?.id, animeSlug, syncToSupabase, initialTime]);
+  }, [episode, animeSlug, syncToSupabase, initialTime]);
 
   // Window beforeunload listener to flush progress on page close/reload
   useEffect(() => {
