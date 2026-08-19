@@ -1,30 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
+const subscribe = () => () => {};
+
 interface UsernameModalProps {
   isOpen: boolean;
   onClose: () => void;
-  user: any;
 }
 
-export default function UsernameModal({ isOpen, onClose, user }: UsernameModalProps) {
+export default function UsernameModal({ isOpen, onClose }: UsernameModalProps) {
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const isMounted = useSyncExternalStore(subscribe, () => true, () => false);
   const router = useRouter();
   const supabase = createClient();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!isOpen || !mounted) return null;
+  if (!isOpen || !isMounted) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,8 +39,9 @@ export default function UsernameModal({ isOpen, onClose, user }: UsernameModalPr
       
       router.refresh();
       onClose();
-    } catch (err: any) {
-      setError(err.message || "Failed to set username");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to set username";
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +54,7 @@ export default function UsernameModal({ isOpen, onClose, user }: UsernameModalPr
           Choose a Username
         </h2>
         <p className="text-slate-400 mb-6 text-sm">
-          Please set a username to complete your profile. This is how you'll be known in the community.
+          Please set a username to complete your profile. This is how you will be known in the community.
         </p>
 
         {error && (

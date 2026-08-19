@@ -18,6 +18,15 @@ interface NativePlayerProps {
   playerRef?: React.RefObject<MediaPlayerInstance | null>;
 }
 
+function isValidVttSubtitle(url: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const lower = url.toLowerCase().split('?')[0];
+  // Filter out .ass and .ssa files which standard HTML5 <track> cannot parse
+  if (lower.endsWith('.ass') || lower.endsWith('.ssa')) return false;
+  // Accept standard WebVTT tracks
+  return lower.endsWith('.vtt') || lower.includes('.vtt') || lower.includes('/vtt/');
+}
+
 export default function NativePlayer({ 
   url, 
   title, 
@@ -81,6 +90,20 @@ export default function NativePlayer({
     };
   }, []);
 
+  // Filter and sanitize subtitles to ensure WebVTT compatibility
+  const validTracks = subtitles
+    ?.filter((sub: any) => {
+      const subUrl = sub?.url || sub?.file || sub?.src;
+      return subUrl && isValidVttSubtitle(subUrl);
+    }) || [];
+
+  // Find index of preferred English track for default selection
+  const defaultTrackIndex = validTracks.findIndex((sub: any) => {
+    const subLabel = (sub.label || sub.language || '').toLowerCase();
+    const subLang = (sub.lang || sub.srclang || sub.language || '').toLowerCase();
+    return sub.default || subLabel.includes('english') || subLang === 'en';
+  });
+
   return (
     <MediaPlayer 
       ref={player}
@@ -101,21 +124,20 @@ export default function NativePlayer({
       onError={onError}
     >
       <MediaProvider>
-        {subtitles?.map((sub: any, idx: number) => {
-          const subUrl = sub.url || sub.file;
-          const subLabel = sub.label || sub.language || 'Subtitle';
-          const subLang = sub.lang || sub.language || 'en';
-          
-          if (!subUrl) return null;
+        {validTracks.map((sub: any, idx: number) => {
+          const subUrl = sub.url || sub.file || sub.src;
+          const subLabel = sub.label || sub.language || `Subtitle ${idx + 1}`;
+          const subLang = sub.lang || sub.srclang || sub.language || 'en';
+          const isDefault = defaultTrackIndex === -1 ? idx === 0 : idx === defaultTrackIndex;
           
           return (
             <Track
-              key={String(idx)}
+              key={`${subUrl}-${idx}`}
               src={subUrl}
               kind="subtitles"
               label={subLabel}
               lang={subLang}
-              default={subLabel.toLowerCase().includes('english')}
+              default={isDefault}
             />
           );
         })}

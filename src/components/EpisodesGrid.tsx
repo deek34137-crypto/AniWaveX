@@ -1,7 +1,7 @@
 "use client";
 
 import { LayoutGrid, List, Play, Search, X } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 interface Episode {
   id: number;
@@ -34,8 +34,8 @@ export default function EpisodesGrid({ episodes, activeEpisodeId, onPlay }: Epis
     return chunks;
   }, [episodes]);
 
-  // If active episode changes and is outside current range, optionally select its range
-  useMemo(() => {
+  // If active episode changes and is outside current range, select its range
+  useEffect(() => {
     if (activeEpisodeId && rangeChunks.length > 0) {
       const chunkIdx = Math.floor((activeEpisodeId - 1) / CHUNK_SIZE);
       if (chunkIdx >= 0 && chunkIdx < rangeChunks.length) {

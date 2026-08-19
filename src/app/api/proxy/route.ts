@@ -14,10 +14,66 @@ export async function OPTIONS() {
   });
 }
 
-function rewriteM3U8Content(text: string, baseUrl: string, proxyOrigin: string, referer: string): string {
+/**
+ * Domain allowlist to prevent SSRF and proxy abuse.
+ * Rejects private subnets, loopbacks, and unapproved external hosts.
+ */
+function isAllowedHost(hostname: string): boolean {
+  if (!hostname) return false;
+  const host = hostname.toLowerCase();
+
+  // Reject local/private IPs and loopbacks
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    host.startsWith("172.16.") ||
+    host.startsWith("169.254.")
+  ) {
+    return false;
+  }
+
+  const allowedSuffixes = [
+    "flixcloud.cc",
+    "megacloud.tv",
+    "rabbitstream.net",
+    "atomic4cdn.top",
+    "anime-dunya.com",
+    "animeapps.top",
+    "reanime.to",
+    "akamaized.net",
+    "vidcloud.co",
+    "vidcloud.fun",
+    "mcloud.to",
+    "dokicloud.one",
+    "workers.dev",
+    "streamtape.com",
+    "mp4upload.com",
+    "kitsu.io",
+    "kitsu.app",
+    "anilist.co",
+  ];
+
+  return allowedSuffixes.some((suffix) => host === suffix || host.endsWith("." + suffix));
+}
+
+function rewriteM3U8Content(
+  text: string, 
+  baseUrl: string, 
+  proxyOrigin: string, 
+  referer: string,
+  externalWorkerProxy?: string | null
+): string {
   const base = new URL(baseUrl);
   const basePath = base.origin + base.pathname.substring(0, base.pathname.lastIndexOf("/") + 1);
   const lines = text.split("\n");
+
+  // Route through Cloudflare Worker edge proxy if available to offload segment bandwidth
+  const proxyBase = externalWorkerProxy && !externalWorkerProxy.startsWith('/')
+    ? `${externalWorkerProxy}/proxy`
+    : `${proxyOrigin}/api/proxy`;
 
   return lines.map((line) => {
     const t = line.trim();
@@ -32,11 +88,11 @@ function rewriteM3U8Content(text: string, baseUrl: string, proxyOrigin: string, 
         } catch {
           absUri = new URL(uri, basePath).href;
         }
-        return `URI="${proxyOrigin}/api/proxy?url=${encodeURIComponent(absUri)}&referer=${encodeURIComponent(referer)}"`;
+        return `URI="${proxyBase}?url=${encodeURIComponent(absUri)}&referer=${encodeURIComponent(referer)}"`;
       });
     }
 
-    // Handle segment / child playlist URLs
+    // Handle child playlist / segment URLs
     let absUrl = t;
     try {
       new URL(t);
@@ -44,7 +100,7 @@ function rewriteM3U8Content(text: string, baseUrl: string, proxyOrigin: string, 
       absUrl = new URL(t, basePath).href;
     }
 
-    return `${proxyOrigin}/api/proxy?url=${encodeURIComponent(absUrl)}&referer=${encodeURIComponent(referer)}`;
+    return `${proxyBase}?url=${encodeURIComponent(absUrl)}&referer=${encodeURIComponent(referer)}`;
   }).join("\n");
 }
 
@@ -64,6 +120,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid target URL" }, { status: 400, headers: CORS_HEADERS });
   }
 
+  // 1. Protocol Validation
+  if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
+    return NextResponse.json({ error: "Invalid protocol: only http and https allowed" }, { status: 400, headers: CORS_HEADERS });
+  }
+
+  // 2. SSRF Host Validation
+  if (!isAllowedHost(targetUrl.hostname)) {
+    return NextResponse.json({ error: "Host not permitted by proxy policy" }, { status: 403, headers: CORS_HEADERS });
+  }
+
+  // 3. Safe Origin Resolution
+  let refererOrigin = "https://flixcloud.cc";
+  try {
+    refererOrigin = new URL(referer).origin;
+  } catch {
+    refererOrigin = "https://flixcloud.cc";
+  }
+
   try {
     const upstreamRes = await fetch(target, {
       headers: {
@@ -71,7 +145,7 @@ export async function GET(request: NextRequest) {
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
         "Referer": referer,
-        "Origin": new URL(referer).origin,
+        "Origin": refererOrigin,
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "cross-site",
@@ -98,27 +172,37 @@ export async function GET(request: NextRequest) {
     if (isM3U8) {
       const text = await upstreamRes.text();
       const origin = new URL(request.url).origin;
-      const rewritten = rewriteM3U8Content(text, target, origin, referer);
+      const externalWorker = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL || null;
+      const rewritten = rewriteM3U8Content(text, target, origin, referer, externalWorker);
 
       return new NextResponse(rewritten, {
         status: 200,
         headers: {
           ...CORS_HEADERS,
           "Content-Type": "application/vnd.apple.mpegurl",
-          "Cache-Control": "public, max-age=60",
+          "Cache-Control": "public, max-age=60, s-maxage=60",
         },
       });
     }
 
-    // For video segments (.ts, .m4s, etc.), stream body directly
+    // For media segments (.ts, .m4s, etc.), stream response with immutable edge cache headers
     const body = upstreamRes.body;
+    const contentLength = upstreamRes.headers.get("Content-Length");
+
+    const responseHeaders: Record<string, string> = {
+      ...CORS_HEADERS,
+      "Content-Type": contentType || "video/MP2T",
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "Accept-Ranges": "bytes",
+    };
+
+    if (contentLength) {
+      responseHeaders["Content-Length"] = contentLength;
+    }
+
     return new NextResponse(body, {
       status: 200,
-      headers: {
-        ...CORS_HEADERS,
-        "Content-Type": contentType || "video/MP2T",
-        "Cache-Control": "public, max-age=86400",
-      },
+      headers: responseHeaders,
     });
   } catch (error: any) {
     console.error("Stream proxy error:", error);

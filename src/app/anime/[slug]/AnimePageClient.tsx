@@ -40,6 +40,7 @@ export default function AnimePageClient({
             animeType={data.type}
             animePosterImage={data.posterImage}
             user={user}
+            anilistId={data.anilistId}
           />
         ) : (
           <Hero 

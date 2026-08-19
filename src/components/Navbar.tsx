@@ -1,4 +1,3 @@
-import { Bell, User } from "lucide-react";
 import SearchBar from "./SearchBar";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";

@@ -55,6 +55,96 @@ const STREAM_CACHE_TTL_MS = 3 * 60 * 1000;
 // In-flight request deduplication Map
 const inFlightRequests = new Map<string, Promise<any>>();
 
+interface ExtractedStreamResult {
+  sources: any[];
+  subtitles: any[];
+}
+
+function extractWorkerSources(
+  data: any,
+  provider: string,
+  audio: 'sub' | 'dub' | 'hindi'
+): ExtractedStreamResult {
+  const sources: any[] = [];
+  const subtitles: any[] = [];
+
+  if (!data) return { sources, subtitles };
+
+  const langTag = audio === 'hindi' ? 'Hindi Dub' : (audio === 'dub' ? 'Eng Dub' : 'Sub');
+  const providerLabel = provider === 'hianime' 
+    ? 'HiAnime (MegaCloud)' 
+    : provider === 'anikoto' 
+    ? 'MegaCloud' 
+    : provider === 'kaa' 
+    ? 'KickAssAnime' 
+    : provider.toUpperCase();
+
+  // A. Direct HLS Master stream through proxy
+  const directHls = data.stream_url || (Array.isArray(data.streams) ? data.streams.find((s: any) => s.type === 'hls')?.url : null);
+  if (directHls) {
+    sources.push({
+      url: `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
+      quality: `${providerLabel} [${langTag}]`,
+      isM3U8: true,
+    });
+  }
+
+  // B. Embed Mirrors (HD-2, HD-1, Server SB, etc.)
+  if (Array.isArray(data.streams)) {
+    for (const s of data.streams) {
+      if (s.type === 'embed' && s.url && !s.url.includes('animeapps.top')) {
+        sources.push({
+          url: s.url,
+          quality: `${s.server || providerLabel} [${langTag}]`,
+          isM3U8: false,
+        });
+      }
+    }
+  }
+
+  // C. Subtitles
+  if (Array.isArray(data.subtitles)) {
+    subtitles.push(...data.subtitles);
+  }
+
+  return { sources, subtitles };
+}
+
+async function fetchWorkerProvider(
+  externalApi: string,
+  provider: string,
+  anilistId: number,
+  ep: number,
+  audio: 'sub' | 'dub' | 'hindi',
+  timeoutMs = 2500
+): Promise<ExtractedStreamResult | null> {
+  const workerAudio = audio === 'hindi' 
+    ? (provider === 'animedunya' ? 'sub' : 'dub') 
+    : audio;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(
+      `${externalApi}/watch/${provider}/${anilistId}/${workerAudio}/${provider}-${ep}`,
+      {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+        next: { revalidate: 180 }
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const extracted = extractWorkerSources(data, provider, audio);
+    return extracted.sources.length > 0 ? extracted : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function resolveStream(
   id: string,
   ep: string,
@@ -65,108 +155,75 @@ async function resolveStream(
 ) {
   const parsedEp = parseInt(ep, 10);
 
-  // 1. Resolve AniList ID once if not provided by caller
+  // 1. Resolve AniList ID once if not provided by caller (uses bounded LRU cache)
   const resolvedAnilistId = anilistParam ? Number(anilistParam) : await getAnilistId(title);
 
   const sources: any[] = [];
   let subtitles: any[] = [];
 
-  // 1. Try external Cloudflare Worker API (Anivexa-API)
+  // 1. Try external Cloudflare Worker API (Anivexa-API) using bounded parallel probing
   const externalApi = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL || "https://anivexa-stream-api.deek34137.workers.dev";
   if (externalApi && !externalApi.startsWith('/') && resolvedAnilistId) {
     try {
-      // Choose providers based on requested audio language
-      const providersToTry = audio === 'hindi'
-        ? ['hianime', 'animedunya', 'anibd', 'senshi']
-        : ['reanime', 'hianime', 'anikoto', 'animegg', 'anizone', 'kickassanime', 'anineko', '2dhive'];
+      if (audio === 'hindi') {
+        // Probe all 3 Hindi providers in parallel
+        const hindiProviders = ['animedunya', 'anibd', 'senshi'];
+        const results = await Promise.allSettled(
+          hindiProviders.map(p => fetchWorkerProvider(externalApi, p, resolvedAnilistId, parsedEp, 'hindi', 2500))
+        );
 
-      const workerAudio = audio === 'hindi' ? 'sub' : audio;
+        for (const res of results) {
+          if (res.status === 'fulfilled' && res.value && res.value.sources.length > 0) {
+            sources.push(...res.value.sources);
+            subtitles.push(...res.value.subtitles);
+            break;
+          }
+        }
 
-      for (const provider of providersToTry) {
-        try {
-          const res = await fetch(`${externalApi}/watch/${provider}/${resolvedAnilistId}/${workerAudio}/${provider}-${parsedEp}`, {
-            headers: { Accept: 'application/json' },
-            next: { revalidate: 180 }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data) {
-              const langTag = audio === 'hindi' ? 'Hindi Dub' : (audio === 'dub' ? 'Eng Dub' : 'Sub');
-              const providerLabel = provider === 'hianime' ? 'HiAnime (MegaCloud)' : (provider === 'anikoto' ? 'MegaCloud' : provider.toUpperCase());
+        // If no Hindi streams found, probe fallback English dub providers in parallel
+        if (sources.length === 0) {
+          const fallbackProviders = ['reanime', 'anikoto', 'animegg', 'kaa'];
+          const fbResults = await Promise.allSettled(
+            fallbackProviders.map(p => fetchWorkerProvider(externalApi, p, resolvedAnilistId, parsedEp, 'dub', 2500))
+          );
 
-              // A. Direct HLS Master stream through proxy
-              const directHls = data.stream_url || (Array.isArray(data.streams) ? data.streams.find((s: any) => s.type === 'hls')?.url : null);
-              if (directHls) {
-                sources.push({
-                  url: `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
-                  quality: `${providerLabel} [${langTag}]`,
-                  isM3U8: true,
-                });
-              }
-
-              // B. Embed Mirrors (HD-2, HD-1, Server SB, etc.)
-              if (Array.isArray(data.streams)) {
-                for (const s of data.streams) {
-                  if (s.type === 'embed' && s.url && !s.url.includes('animeapps.top')) {
-                    sources.push({
-                      url: s.url,
-                      quality: `${s.server || providerLabel} [${langTag}]`,
-                      isM3U8: false,
-                    });
-                  }
-                }
-              }
-
-              // C. Subtitles
-              if (Array.isArray(data.subtitles)) {
-                subtitles.push(...data.subtitles);
-              }
-
-              if (sources.length > 0) break; // Successfully resolved active provider
+          for (const res of fbResults) {
+            if (res.status === 'fulfilled' && res.value && res.value.sources.length > 0) {
+              sources.push(...res.value.sources);
+              subtitles.push(...res.value.subtitles);
+              break;
             }
           }
-        } catch {
-          // Try next provider
         }
-      }
+      } else {
+        // Probe Tier 1 high-speed providers in parallel (3 concurrent)
+        const tier1Providers = ['reanime', 'hianime', 'anikoto'];
+        const tier1Results = await Promise.allSettled(
+          tier1Providers.map(p => fetchWorkerProvider(externalApi, p, resolvedAnilistId, parsedEp, audio, 2500))
+        );
 
-      // If Hindi was requested and no Hindi streams were found, automatically fall back to Eng Dub / Sub
-      if (audio === 'hindi' && sources.length === 0) {
-        for (const provider of ['reanime', 'anikoto', 'animegg', 'kickassanime']) {
-          try {
-            const res = await fetch(`${externalApi}/watch/${provider}/${resolvedAnilistId}/dub/${provider}-${parsedEp}`, {
-              headers: { Accept: 'application/json' },
-              next: { revalidate: 180 }
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data) {
-                const directHls = data.stream_url || (Array.isArray(data.streams) ? data.streams.find((s: any) => s.type === 'hls')?.url : null);
-                if (directHls) {
-                  sources.push({
-                    url: `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
-                    quality: "HD-1 [Eng Dub (No Hindi Dub)]",
-                    isM3U8: true,
-                  });
-                }
-                if (Array.isArray(data.streams)) {
-                  for (const s of data.streams) {
-                    if (s.type === 'embed' && s.url && !s.url.includes('animeapps.top')) {
-                      sources.push({
-                        url: s.url,
-                        quality: `${s.server || provider.toUpperCase()} [Eng Dub]`,
-                        isM3U8: false,
-                      });
-                    }
-                  }
-                }
-                if (Array.isArray(data.subtitles)) {
-                  subtitles.push(...data.subtitles);
-                }
-                if (sources.length > 0) break;
-              }
+        for (const res of tier1Results) {
+          if (res.status === 'fulfilled' && res.value && res.value.sources.length > 0) {
+            sources.push(...res.value.sources);
+            subtitles.push(...res.value.subtitles);
+            break;
+          }
+        }
+
+        // If Tier 1 produced no sources, probe Tier 2 providers in parallel
+        if (sources.length === 0) {
+          const tier2Providers = ['animegg', 'anizone', 'kaa', 'anineko', '2dhive'];
+          const tier2Results = await Promise.allSettled(
+            tier2Providers.map(p => fetchWorkerProvider(externalApi, p, resolvedAnilistId, parsedEp, audio, 3000))
+          );
+
+          for (const res of tier2Results) {
+            if (res.status === 'fulfilled' && res.value && res.value.sources.length > 0) {
+              sources.push(...res.value.sources);
+              subtitles.push(...res.value.subtitles);
+              break;
             }
-          } catch {}
+          }
         }
       }
     } catch (err) {
@@ -174,15 +231,20 @@ async function resolveStream(
     }
   }
 
-  // 2. Local Resolver: Try AnikotoProvider with resolved AniList ID (for sub / eng dub)
+  // 2. Local Resolver & Guaranteed Backups (Parallel Resolution)
   if (sources.length === 0 && audio !== 'hindi') {
-    const anikotoRes = await getAnikotoStream(title, parsedEp, audio, resolvedAnilistId);
-    if (anikotoRes) {
+    const [anikotoResult, fallbackResult] = await Promise.allSettled([
+      getAnikotoStream(title, parsedEp, audio, resolvedAnilistId),
+      multiProvider.getStreamInfo(id, parsedEp, title, resolvedAnilistId)
+    ]);
+
+    if (anikotoResult.status === 'fulfilled' && anikotoResult.value) {
+      const anikotoRes = anikotoResult.value;
       if (anikotoRes.subtitles) {
         subtitles = anikotoRes.subtitles;
       }
 
-      // A. If direct HLS stream is available, proxy it to bypass CDN CORS & Referer restrictions
+      // A. If direct HLS stream is available, proxy it
       if (anikotoRes.stream_url) {
         sources.push({
           url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
@@ -204,12 +266,9 @@ async function resolveStream(
         sources.push(...embedSources);
       }
     }
-  }
 
-  // 3. Always append FilmU embed server as backup/guaranteed source (for sub/dub)
-  if (audio !== 'hindi') {
-    const fallbackStream = await multiProvider.getStreamInfo(id, parsedEp, title, resolvedAnilistId);
-    if (fallbackStream) {
+    if (fallbackResult.status === 'fulfilled' && fallbackResult.value) {
+      const fallbackStream = fallbackResult.value;
       const fallbackSources = (audio === 'dub' ? fallbackStream.dub : fallbackStream.sub) || fallbackStream.sources || [];
       for (const src of fallbackSources) {
         if (src.url && !sources.some(s => s.url === src.url)) {

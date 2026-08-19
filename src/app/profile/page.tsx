@@ -1,8 +1,6 @@
 import Navbar from "@/components/Navbar";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Star } from "lucide-react";
 import ProfileClient from "./ProfileClient";
 
 export default async function ProfilePage() {

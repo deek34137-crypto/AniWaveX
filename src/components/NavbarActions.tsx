@@ -126,7 +126,7 @@ export default function NavbarActions({ user }: { user: any }) {
       )}
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-      <UsernameModal isOpen={isUsernameModalOpen} onClose={() => setIsUsernameModalOpen(false)} user={user} />
+      <UsernameModal isOpen={isUsernameModalOpen} onClose={() => setIsUsernameModalOpen(false)} />
     </>
   );
 }

@@ -4,7 +4,6 @@ import CatalogGrid from "@/components/CatalogGrid";
 import Pagination from "@/components/Pagination";
 import { getCatalogAnime, CatalogFilters as ApiFilters } from "@/lib/api";
 import { Suspense } from "react";
-import { Loader2 } from "lucide-react";
 
 export default async function CatalogPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
