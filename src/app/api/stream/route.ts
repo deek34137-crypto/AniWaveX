@@ -128,6 +128,46 @@ async function resolveStream(
           // Try next provider
         }
       }
+
+      // If Hindi was requested and no Hindi streams were found, automatically fall back to Eng Dub / Sub
+      if (audio === 'hindi' && sources.length === 0) {
+        for (const provider of ['reanime', 'anikoto', 'animegg', 'kickassanime']) {
+          try {
+            const res = await fetch(`${externalApi}/watch/${provider}/${resolvedAnilistId}/dub/${provider}-${parsedEp}`, {
+              headers: { Accept: 'application/json' },
+              next: { revalidate: 180 }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data) {
+                const directHls = data.stream_url || (Array.isArray(data.streams) ? data.streams.find((s: any) => s.type === 'hls')?.url : null);
+                if (directHls) {
+                  sources.push({
+                    url: `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
+                    quality: "HD-1 [Eng Dub (No Hindi Dub)]",
+                    isM3U8: true,
+                  });
+                }
+                if (Array.isArray(data.streams)) {
+                  for (const s of data.streams) {
+                    if (s.type === 'embed' && s.url && !s.url.includes('animeapps.top')) {
+                      sources.push({
+                        url: s.url,
+                        quality: `${s.server || provider.toUpperCase()} [Eng Dub]`,
+                        isM3U8: false,
+                      });
+                    }
+                  }
+                }
+                if (Array.isArray(data.subtitles)) {
+                  subtitles.push(...data.subtitles);
+                }
+                if (sources.length > 0) break;
+              }
+            }
+          } catch {}
+        }
+      }
     } catch (err) {
       console.warn("External worker stream fetch error, falling back to local resolver:", err);
     }
