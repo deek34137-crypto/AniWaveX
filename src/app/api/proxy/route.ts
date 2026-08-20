@@ -135,7 +135,6 @@ function isAllowedHost(hostname: string): boolean {
     "bibiemb.xyz",
     "vidstream.pro",
     "backblazeb2.com",
-    "filmu.in",
   ];
 
   return allowedSuffixes.some((suffix) => host === suffix || host.endsWith("." + suffix));

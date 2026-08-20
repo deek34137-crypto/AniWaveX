@@ -151,23 +151,23 @@ export async function getAnilistId(title: string): Promise<number | null> {
         candidateQueries.push(noSeason);
       }
 
-      // Step 4: Significant word prefix or romanization vowel expansion
-      if (words.length > 3) {
+      // Step 4: Romanization vowel expansion (e.g. Tomei -> Toumei, Shojo -> Shoujo, etc.)
+      const ouNormalized = cleaned
+        .replace(/\btomei\b/gi, 'Toumei')
+        .replace(/\bkyoto\b/gi, 'Kyouto')
+        .replace(/\byusha\b/gi, 'Yuusha')
+        .replace(/\bshojo\b/gi, 'Shoujo')
+        .replace(/\bshonen\b/gi, 'Shounen');
+
+      if (ouNormalized.toLowerCase() !== cleaned.toLowerCase() && !candidateQueries.includes(ouNormalized)) {
+        candidateQueries.push(ouNormalized);
+      }
+
+      // Step 5: Significant word prefix
+      if (words.length > 3 && candidateQueries.length < 2) {
         const prefix = words.slice(0, 3).join(' ');
         if (!candidateQueries.includes(prefix)) {
           candidateQueries.push(prefix);
-        }
-      } else {
-        const ouNormalized = cleaned
-          .replace(/\btomei\b/gi, 'Toumei')
-          .replace(/\bkyoto\b/gi, 'Kyouto')
-          .replace(/\byusha\b/gi, 'Yuusha')
-          .replace(/\bshojo\b/gi, 'Shoujo')
-          .replace(/\bshonen\b/gi, 'Shounen')
-          .replace(/\bkimi\b/gi, 'Kun');
-
-        if (ouNormalized.toLowerCase() !== cleaned.toLowerCase() && !candidateQueries.includes(ouNormalized)) {
-          candidateQueries.push(ouNormalized);
         }
       }
 

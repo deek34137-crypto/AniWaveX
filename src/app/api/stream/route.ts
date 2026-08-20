@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { multiProvider } from "@/lib/providers/reanime";
 import { getAnikotoStream, getAnilistId } from "@/lib/providers/anikoto-wrapper";
 
 interface CacheEntry {
@@ -302,54 +301,40 @@ async function resolveStream(
     }
   }
 
-  // 2. Local Resolver & Guaranteed Backups (Parallel Resolution)
+  // 2. Local Resolver (Anikoto Stream Resolution)
   if (sources.length === 0 && audio !== 'hindi') {
-    const [anikotoResult, fallbackResult] = await Promise.allSettled([
-      getAnikotoStream(title, parsedEp, audio, resolvedAnilistId),
-      multiProvider.getStreamInfo(id, parsedEp, title, resolvedAnilistId)
-    ]);
+    try {
+      const anikotoRes = await getAnikotoStream(title, parsedEp, audio, resolvedAnilistId);
 
-    if (anikotoResult.status === 'fulfilled' && anikotoResult.value) {
-      const anikotoRes = anikotoResult.value;
-      if (anikotoRes.subtitles) {
-        subtitles = anikotoRes.subtitles;
-      }
+      if (anikotoRes) {
+        if (anikotoRes.subtitles) {
+          subtitles = anikotoRes.subtitles;
+        }
 
-      // A. If direct HLS stream is available, proxy it
-      if (anikotoRes.stream_url) {
-        sources.push({
-          url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
-          quality: "HD-1 (HLS)",
-          isM3U8: true,
-        });
-      }
-
-      // B. Add embed servers (e.g. Server SB, Server HD-2, etc.)
-      if (anikotoRes.streams) {
-        const embedSources = anikotoRes.streams
-          .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top"))
-          .map((s: any) => ({
-            url: s.url,
-            quality: s.server || "Server Embed",
-            isM3U8: false
-          }));
-
-        sources.push(...embedSources);
-      }
-    }
-
-    if (fallbackResult.status === 'fulfilled' && fallbackResult.value) {
-      const fallbackStream = fallbackResult.value;
-      const fallbackSources = (audio === 'dub' ? fallbackStream.dub : fallbackStream.sub) || fallbackStream.sources || [];
-      for (const src of fallbackSources) {
-        if (src.url && !sources.some(s => s.url === src.url)) {
+        // A. If direct HLS stream is available, proxy it
+        if (anikotoRes.stream_url) {
           sources.push({
-            url: src.url,
-            quality: src.quality || "Server Backup",
-            isM3U8: false
+            url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
+            quality: "HD-1 (HLS)",
+            isM3U8: true,
           });
         }
+
+        // B. Add embed servers (e.g. Server SB, Server HD-2, etc.)
+        if (anikotoRes.streams) {
+          const embedSources = anikotoRes.streams
+            .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top") && !s.url.includes("filmu.in"))
+            .map((s: any) => ({
+              url: s.url,
+              quality: s.server || "Server Embed",
+              isM3U8: false
+            }));
+
+          sources.push(...embedSources);
+        }
       }
+    } catch (err) {
+      console.warn("Local anikoto stream resolution error:", err);
     }
   }
 
