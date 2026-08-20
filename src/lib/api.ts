@@ -1,9 +1,21 @@
 import { cache } from "react";
 
+function extractCategories(anime: any, included?: any[]): string[] {
+  if (!included || !Array.isArray(included) || included.length === 0) {
+    return ["Animation", "Anime"];
+  }
+  const catNames = included
+    .filter((inc: any) => inc.type === "categories" && inc.attributes?.title)
+    .map((inc: any) => inc.attributes.title)
+    .slice(0, 5);
+  return catNames.length > 0 ? catNames : ["Animation", "Anime"];
+}
+
 // Helper to format Kitsu response
-function formatAnimeData(anime: any) {
+function formatAnimeData(anime: any, included?: any[]) {
   const attr = anime.attributes;
   const duration = attr.episodeLength || 24;
+  const tags = extractCategories(anime, included);
   return {
     id: anime.id,
     slug: attr.slug,
@@ -12,7 +24,7 @@ function formatAnimeData(anime: any) {
     rating: attr.averageRating ? (parseFloat(attr.averageRating) / 10).toFixed(1) : "N/A",
     status: attr.status === "current" ? "Ongoing" : "Completed",
     type: attr.subtype,
-    tags: ["Animation", "Anime"],
+    tags,
     description: attr.synopsis,
     duration: duration > 60 ? `${Math.floor(duration / 60)}h ${duration % 60}m` : `${duration}m`,
     posterImage: attr.posterImage?.original || "",
@@ -186,21 +198,21 @@ export const getAnimeData = cache(async (slug: string) => {
 
   try {
     // 1. Fetch live metadata from Kitsu using exact slug first (cached 24h)
-    let res = await fetch(`https://kitsu.io/api/edge/anime?filter[slug]=${encodeURIComponent(slug)}`, {
+    let res = await fetch(`https://kitsu.io/api/edge/anime?filter[slug]=${encodeURIComponent(slug)}&include=categories`, {
       headers,
       signal: AbortSignal.timeout(8000),
       next: { revalidate: 86400 } // 24 hours ISR cache
     });
-    let json = res.ok ? await res.json() : { data: [] };
+    let json = res.ok ? await res.json() : { data: [], included: [] };
     
     // Fallback to text search if exact slug match is not found
     if (!json.data || json.data.length === 0) {
-      res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(slug)}`, {
+      res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(slug)}&include=categories`, {
         headers,
         signal: AbortSignal.timeout(8000),
         next: { revalidate: 86400 }
       });
-      json = res.ok ? await res.json() : { data: [] };
+      json = res.ok ? await res.json() : { data: [], included: [] };
     }
 
     if (!json.data || json.data.length === 0) {
@@ -208,7 +220,7 @@ export const getAnimeData = cache(async (slug: string) => {
     }
 
     const anime = json.data[0];
-    const metadata = formatAnimeData(anime);
+    const metadata = formatAnimeData(anime, json.included);
     const episodeCount = anime.attributes.episodeCount; // Might be null for airing
 
     // 2. Fetch initial episodes from Kitsu (up to 100 episodes, cached 24h)
@@ -266,6 +278,52 @@ export const getAnimeData = cache(async (slug: string) => {
   } catch (error) {
     console.error(`Failed to fetch anime data for slug "${slug}":`, error);
     return null;
+  }
+});
+
+export const getRecommendedAnime = cache(async (slug: string, genres?: string[]) => {
+  // 1. Find the primary meaningful genre (skipping generic labels)
+  const primaryGenre = (genres || [])
+    .map(g => g.trim().toLowerCase())
+    .find(g => g !== "animation" && g !== "anime" && g.length > 2);
+
+  if (primaryGenre) {
+    try {
+      const categorySlug = GENRE_MAP[primaryGenre] || primaryGenre.replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const res = await fetch(
+        `https://kitsu.io/api/edge/anime?filter[categories]=${encodeURIComponent(categorySlug)}&sort=-userCount&page[limit]=12`,
+        {
+          headers: {
+            "Accept": "application/vnd.api+json",
+            "Content-Type": "application/vnd.api+json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          },
+          signal: AbortSignal.timeout(8000),
+          next: { revalidate: 86400 } // 24 hours ISR cache
+        }
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const results = (json.data || [])
+          .map((a: any) => formatAnimeData(a))
+          .filter((a: any) => a.slug !== slug)
+          .slice(0, 5);
+
+        if (results.length >= 3) {
+          return results;
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to fetch genre recommendations for ${primaryGenre}:`, err);
+    }
+  }
+
+  // Fallback to top-rated / trending anime excluding current slug
+  try {
+    const trending = await getTrendingAnime();
+    return trending.filter((a: any) => a.slug !== slug).slice(0, 5);
+  } catch {
+    return [];
   }
 });
 

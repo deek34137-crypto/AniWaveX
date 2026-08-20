@@ -1,4 +1,4 @@
-import { getAnimeData, getTrendingAnime } from "@/lib/api";
+import { getAnimeData, getRecommendedAnime } from "@/lib/api";
 import AnimePageClient from "./AnimePageClient";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -46,14 +46,13 @@ export default async function AnimePage({
   params: Promise<{ slug: string }>;
 }) {
   const p = await params;
-  const [data, recommendations] = await Promise.all([
-    getAnimeData(p.slug),
-    getTrendingAnime().then(res => res.filter((a: any) => a.slug !== p.slug).slice(0, 5))
-  ]);
+  const data = await getAnimeData(p.slug);
   
   if (!data) {
     notFound();
   }
+
+  const recommendations = await getRecommendedAnime(data.slug, data.tags);
 
   // Check bookmark and watch history status if user is logged in
   const supabase = await createClient();
