@@ -158,7 +158,6 @@ export default function Hero({
               alt={anime.title} 
               fill
               sizes="256px"
-              priority
               className="object-cover transform transition-transform duration-500 group-hover:scale-105"
             />
           </div>
