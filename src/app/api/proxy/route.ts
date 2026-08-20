@@ -1,16 +1,81 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "*",
-};
 
-export async function OPTIONS() {
+function getCorsHeaders(request: NextRequest): Record<string, string> {
+  const origin = request.headers.get("origin");
+  const host = request.headers.get("host");
+
+  let allowOrigin = "*";
+  if (origin) {
+    try {
+      const originHost = new URL(origin).host.toLowerCase();
+      if (host && originHost === host.toLowerCase()) {
+        allowOrigin = origin;
+      } else if (
+        originHost.includes("localhost") ||
+        originHost.includes("127.0.0.1") ||
+        originHost.endsWith("aniwavex.com") ||
+        originHost.endsWith("vercel.app")
+      ) {
+        allowOrigin = origin;
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": "*",
+  };
+}
+
+function isCallerAllowed(request: NextRequest): boolean {
+  const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
+  const host = request.headers.get("host");
+
+  // Media requests (e.g. video elements or HLS segment loads) might not include Origin or Referer
+  if (!origin && !referer) {
+    return true;
+  }
+
+  const isApproved = (urlString: string) => {
+    try {
+      const parsedHost = new URL(urlString).host.toLowerCase();
+      if (host && parsedHost === host.toLowerCase()) return true;
+      if (
+        parsedHost.includes("localhost") ||
+        parsedHost.includes("127.0.0.1") ||
+        parsedHost.endsWith("aniwavex.com") ||
+        parsedHost.endsWith("vercel.app")
+      ) {
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  if (origin && !isApproved(origin)) {
+    return false;
+  }
+
+  if (referer && !isApproved(referer)) {
+    return false;
+  }
+
+  return true;
+}
+
+export async function OPTIONS(request: NextRequest) {
+  const corsHeaders = getCorsHeaders(request);
   return new NextResponse(null, {
     status: 204,
-    headers: CORS_HEADERS,
+    headers: corsHeaders,
   });
 }
 
@@ -48,7 +113,8 @@ function isAllowedHost(hostname: string): boolean {
     "vidcloud.fun",
     "mcloud.to",
     "dokicloud.one",
-    "workers.dev",
+    "deek34137.workers.dev",
+    "vibevibe.workers.dev",
     "streamtape.com",
     "mp4upload.com",
     "kitsu.io",
@@ -147,28 +213,35 @@ function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
 }
 
 export async function GET(request: NextRequest) {
+  const corsHeaders = getCorsHeaders(request);
+
+  // Validate caller origin to prevent open proxy relay abuse
+  if (!isCallerAllowed(request)) {
+    return NextResponse.json({ error: "Access denied from this origin" }, { status: 403, headers: corsHeaders });
+  }
+
   const { searchParams } = new URL(request.url);
   const target = searchParams.get("url");
 
   if (!target) {
-    return NextResponse.json({ error: "Missing required ?url= parameter" }, { status: 400, headers: CORS_HEADERS });
+    return NextResponse.json({ error: "Missing required ?url= parameter" }, { status: 400, headers: corsHeaders });
   }
 
   let targetUrl: URL;
   try {
     targetUrl = new URL(target);
   } catch {
-    return NextResponse.json({ error: "Invalid target URL" }, { status: 400, headers: CORS_HEADERS });
+    return NextResponse.json({ error: "Invalid target URL" }, { status: 400, headers: corsHeaders });
   }
 
   // 1. Protocol Validation
   if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
-    return NextResponse.json({ error: "Invalid protocol: only http and https allowed" }, { status: 400, headers: CORS_HEADERS });
+    return NextResponse.json({ error: "Invalid protocol: only http and https allowed" }, { status: 400, headers: corsHeaders });
   }
 
   // 2. SSRF Host Validation
   if (!isAllowedHost(targetUrl.hostname)) {
-    return NextResponse.json({ error: "Host not permitted by proxy policy" }, { status: 403, headers: CORS_HEADERS });
+    return NextResponse.json({ error: "Host not permitted by proxy policy" }, { status: 403, headers: corsHeaders });
   }
 
   // 3. Resolve required Referer and Origin for target CDN
@@ -207,7 +280,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(await upstreamRes.text(), {
         status: upstreamRes.status,
         headers: {
-          ...CORS_HEADERS,
+          ...corsHeaders,
           "Content-Type": upstreamRes.headers.get("Content-Type") || "text/plain",
         },
       });
@@ -229,7 +302,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(rewritten, {
         status: 200,
         headers: {
-          ...CORS_HEADERS,
+          ...corsHeaders,
           "Content-Type": "application/vnd.apple.mpegurl",
           "Cache-Control": "public, max-age=60, s-maxage=60",
         },
@@ -242,7 +315,7 @@ export async function GET(request: NextRequest) {
     const contentRange = upstreamRes.headers.get("Content-Range");
 
     const responseHeaders: Record<string, string> = {
-      ...CORS_HEADERS,
+      ...corsHeaders,
       "Content-Type": contentType || "video/MP2T",
       "Cache-Control": "public, max-age=31536000, immutable",
       "Accept-Ranges": "bytes",
@@ -261,6 +334,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("Stream proxy error:", error);
-    return NextResponse.json({ error: error.message || "Proxy request failed" }, { status: 502, headers: CORS_HEADERS });
+    return NextResponse.json({ error: error.message || "Proxy request failed" }, { status: 502, headers: corsHeaders });
   }
 }
+

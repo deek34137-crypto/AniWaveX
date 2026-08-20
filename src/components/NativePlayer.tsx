@@ -20,7 +20,19 @@ interface NativePlayerProps {
 
 function isValidVttSubtitle(url: string): boolean {
   if (!url || typeof url !== 'string') return false;
-  const lower = url.toLowerCase().split('?')[0];
+
+  let target = url;
+  if (url.startsWith('/api/proxy')) {
+    try {
+      const parsed = new URL(url, 'http://localhost');
+      const paramUrl = parsed.searchParams.get('url');
+      if (paramUrl) target = paramUrl;
+    } catch {
+      target = decodeURIComponent(url);
+    }
+  }
+
+  const lower = target.toLowerCase().split('?')[0];
   // Filter out .ass and .ssa files which standard HTML5 <track> cannot parse
   if (lower.endsWith('.ass') || lower.endsWith('.ssa')) return false;
   // Accept standard WebVTT tracks

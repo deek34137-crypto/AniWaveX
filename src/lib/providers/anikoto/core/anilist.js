@@ -44,7 +44,8 @@ async function getMedia(id) {
       const r = await fetch(API, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ query: q, variables: { id } })
+        body: JSON.stringify({ query: q, variables: { id } }),
+        signal: AbortSignal.timeout(6000)
       });
       if (!r.ok) return null;
       const j = await r.json();
@@ -81,7 +82,8 @@ async function searchAnilist(query) {
       const r = await fetch(API, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ query: q, variables: { s: query } })
+        body: JSON.stringify({ query: q, variables: { s: query } }),
+        signal: AbortSignal.timeout(6000)
       });
       if (!r.ok) return [];
       const j = await r.json();

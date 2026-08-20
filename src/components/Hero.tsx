@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Play, Bookmark, Star, Calendar, Clock, ChevronDown, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
-import Image from "next/image";
+import AnimeImage from "@/components/AnimeImage";
 
 interface HeroProps {
   anime: any;
@@ -131,7 +131,7 @@ export default function Hero({
       {/* Background Image */}
       {bgImage ? (
         <div className="absolute inset-0">
-          <Image
+          <AnimeImage
             src={bgImage}
             alt={anime.title}
             fill
@@ -153,7 +153,7 @@ export default function Hero({
         {/* Poster (Hidden on mobile, visible on md+) */}
         {anime.posterImage ? (
           <div className="hidden md:block w-64 aspect-[2/3] shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative group bg-slate-900">
-            <Image 
+            <AnimeImage 
               src={anime.posterImage} 
               alt={anime.title} 
               fill

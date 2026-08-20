@@ -49,10 +49,10 @@ class BoundedLRU<K, V> {
 }
 
 // Bounded LRU cache: 500 entries
-// 24h TTL for successful hits, 10m TTL for null hits (prevent flooding)
+// 24h TTL for successful hits, 1h TTL for null hits (prevent flooding)
 const anilistIdCache = new BoundedLRU<string, number | null>(500);
 const CACHE_TTL_SUCCESS_MS = 24 * 60 * 60 * 1000;
-const CACHE_TTL_MISS_MS = 10 * 60 * 1000;
+const CACHE_TTL_MISS_MS = 60 * 60 * 1000;
 
 // In-flight request deduplication map
 const inFlightSearches = new Map<string, Promise<number | null>>();
@@ -134,61 +134,53 @@ export async function getAnilistId(title: string): Promise<number | null> {
         }
       }
 
-      // Candidate search queries for parallel fallback
+      // High-confidence fallback candidates (capped to at most 2 queries to prevent rate-limiting)
       const candidateQueries: string[] = [];
       const words = cleaned.split(' ').filter(w => w.length > 1);
 
-      // Step 3: Significant word prefix
-      if (words.length > 3) {
-        candidateQueries.push(words.slice(0, 3).join(' '));
-        if (words.length > 4) candidateQueries.push(words.slice(0, 4).join(' '));
-      }
-
-      // Step 4: Remove season / part numbers
+      // Step 3: Remove season / part numbers (highest confidence)
       const noSeason = cleaned
         .replace(/season \d+/i, '')
         .replace(/\d+(nd|rd|th|st) season/i, '')
         .replace(/part \d+/i, '')
         .replace(/\b(tv|movie|ova|ona|special)\b/i, '')
+        .replace(/\s+/g, ' ')
         .trim();
 
       if (noSeason.length > 2 && noSeason.toLowerCase() !== cleaned.toLowerCase()) {
         candidateQueries.push(noSeason);
       }
 
-      // Step 5: First 2 words fallback
-      if (words.length >= 2) {
-        const firstTwo = words.slice(0, 2).join(' ');
-        if (!candidateQueries.includes(firstTwo)) {
-          candidateQueries.push(firstTwo);
+      // Step 4: Significant word prefix or romanization vowel expansion
+      if (words.length > 3) {
+        const prefix = words.slice(0, 3).join(' ');
+        if (!candidateQueries.includes(prefix)) {
+          candidateQueries.push(prefix);
+        }
+      } else {
+        const ouNormalized = cleaned
+          .replace(/\btomei\b/gi, 'Toumei')
+          .replace(/\bkyoto\b/gi, 'Kyouto')
+          .replace(/\byusha\b/gi, 'Yuusha')
+          .replace(/\bshojo\b/gi, 'Shoujo')
+          .replace(/\bshonen\b/gi, 'Shounen')
+          .replace(/\bkimi\b/gi, 'Kun');
+
+        if (ouNormalized.toLowerCase() !== cleaned.toLowerCase() && !candidateQueries.includes(ouNormalized)) {
+          candidateQueries.push(ouNormalized);
         }
       }
 
-      // Step 6: Romanization macron/vowel expansion (e.g. Tomei -> Toumei, Sho -> Shou)
-      const ouNormalized = cleaned
-        .replace(/\btomei\b/gi, 'Toumei')
-        .replace(/\bkyoto\b/gi, 'Kyouto')
-        .replace(/\byusha\b/gi, 'Yuusha')
-        .replace(/\bshojo\b/gi, 'Shoujo')
-        .replace(/\bshonen\b/gi, 'Shounen')
-        .replace(/\bkimi\b/gi, 'Kun');
-
-      if (ouNormalized.toLowerCase() !== cleaned.toLowerCase()) {
-        const ouPrefix = ouNormalized.split(' ').slice(0, 4).join(' ');
-        if (!candidateQueries.includes(ouPrefix)) {
-          candidateQueries.push(ouPrefix);
-        }
-      }
-
-      // Execute remaining candidates in parallel
-      if (candidateQueries.length > 0) {
+      // Execute at most 2 fallback candidates in parallel
+      const limitedCandidates = candidateQueries.slice(0, 2);
+      if (limitedCandidates.length > 0) {
         const batchResults = await Promise.all(
-          candidateQueries.map(q => searchAnilist(q).catch(() => []))
+          limitedCandidates.map(q => searchAnilist(q).catch(() => []))
         );
 
         for (let i = 0; i < batchResults.length; i++) {
           const res = batchResults[i];
-          const queryUsed = candidateQueries[i];
+          const queryUsed = limitedCandidates[i];
           const foundId = pickBestMatch(queryUsed, res);
           if (foundId) {
             anilistIdCache.set(normalizedKey, foundId, CACHE_TTL_SUCCESS_MS);
@@ -197,7 +189,7 @@ export async function getAnilistId(title: string): Promise<number | null> {
         }
       }
 
-      // Cache negative lookup for 10 minutes to prevent repeat hammering
+      // Cache negative lookup for 1 hour to prevent repeat hammering
       anilistIdCache.set(normalizedKey, null, CACHE_TTL_MISS_MS);
       return null;
     } catch (error) {

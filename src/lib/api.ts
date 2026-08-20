@@ -21,29 +21,43 @@ function formatAnimeData(anime: any) {
 }
 
 export const getTrendingAnime = cache(async () => {
-  const res = await fetch('https://kitsu.io/api/edge/trending/anime', {
-    headers: {
-      "Accept": "application/vnd.api+json",
-      "Content-Type": "application/vnd.api+json",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    },
-    next: { revalidate: 3600 } // 1 hour ISR cache
-  });
-  const json = await res.json();
-  return json.data.map(formatAnimeData);
+  try {
+    const res = await fetch('https://kitsu.io/api/edge/trending/anime', {
+      headers: {
+        "Accept": "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      },
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 } // 1 hour ISR cache
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.data || []).map(formatAnimeData);
+  } catch (error) {
+    console.error("Failed to fetch trending anime:", error);
+    return [];
+  }
 });
 
 export const getTopRatedAnime = cache(async () => {
-  const res = await fetch('https://kitsu.io/api/edge/anime?sort=-averageRating&page[limit]=10', {
-    headers: {
-      "Accept": "application/vnd.api+json",
-      "Content-Type": "application/vnd.api+json",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    },
-    next: { revalidate: 3600 } // 1 hour ISR cache
-  });
-  const json = await res.json();
-  return json.data.map(formatAnimeData);
+  try {
+    const res = await fetch('https://kitsu.io/api/edge/anime?sort=-averageRating&page[limit]=10', {
+      headers: {
+        "Accept": "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      },
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 } // 1 hour ISR cache
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.data || []).map(formatAnimeData);
+  } catch (error) {
+    console.error("Failed to fetch top rated anime:", error);
+    return [];
+  }
 });
 
 // Alias map for common titles that might fail normal search
@@ -86,17 +100,24 @@ function normalizeSearchQuery(query: string): string {
 export const searchAnime = cache(async (query: string, limit: number = 20) => {
   if (!query) return [];
   const normalizedQuery = normalizeSearchQuery(query);
-  const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(normalizedQuery)}&page[limit]=${limit}`, {
-    headers: {
-      "Accept": "application/vnd.api+json",
-      "Content-Type": "application/vnd.api+json",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    },
-    next: { revalidate: 300 } // 5 minutes cache
-  });
-  const json = await res.json();
-  if (!json.data) return [];
-  return json.data.map(formatAnimeData);
+  try {
+    const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(normalizedQuery)}&page[limit]=${limit}`, {
+      headers: {
+        "Accept": "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      },
+      signal: AbortSignal.timeout(6000),
+      next: { revalidate: 300 } // 5 minutes cache
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    if (!json.data) return [];
+    return json.data.map(formatAnimeData);
+  } catch (error) {
+    console.error("Failed to search anime:", error);
+    return [];
+  }
 });
 
 async function fetchAllKitsuEpisodes(animeId: string, initialEpJson: any): Promise<any[]> {
@@ -135,6 +156,7 @@ async function fetchAllKitsuEpisodes(animeId: string, initialEpJson: any): Promi
             `https://kitsu.io/api/edge/anime/${animeId}/episodes?page[limit]=${pageSize}&page[offset]=${offset}`,
             {
               headers,
+              signal: AbortSignal.timeout(8000),
               next: { revalidate: 86400 } // 24h ISR cache
             }
           );
@@ -156,72 +178,95 @@ async function fetchAllKitsuEpisodes(animeId: string, initialEpJson: any): Promi
 }
 
 export const getAnimeData = cache(async (slug: string) => {
-  // 1. Fetch live metadata from Kitsu (cached 24h)
-  const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(slug)}`, {
-    headers: {
-      "Accept": "application/vnd.api+json",
-      "Content-Type": "application/vnd.api+json",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    },
-    next: { revalidate: 86400 } // 24 hours ISR cache
-  });
-  const json = await res.json();
-  
-  if (!json.data || json.data.length === 0) {
+  const headers = {
+    "Accept": "application/vnd.api+json",
+    "Content-Type": "application/vnd.api+json",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  };
+
+  try {
+    // 1. Fetch live metadata from Kitsu using exact slug first (cached 24h)
+    let res = await fetch(`https://kitsu.io/api/edge/anime?filter[slug]=${encodeURIComponent(slug)}`, {
+      headers,
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 86400 } // 24 hours ISR cache
+    });
+    let json = res.ok ? await res.json() : { data: [] };
+    
+    // Fallback to text search if exact slug match is not found
+    if (!json.data || json.data.length === 0) {
+      res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(slug)}`, {
+        headers,
+        signal: AbortSignal.timeout(8000),
+        next: { revalidate: 86400 }
+      });
+      json = res.ok ? await res.json() : { data: [] };
+    }
+
+    if (!json.data || json.data.length === 0) {
+      return null;
+    }
+
+    const anime = json.data[0];
+    const metadata = formatAnimeData(anime);
+    const episodeCount = anime.attributes.episodeCount; // Might be null for airing
+
+    // 2. Fetch initial episodes from Kitsu (up to 100 episodes, cached 24h)
+    const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=100`, {
+      headers,
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 86400 } // 24 hours ISR cache
+    });
+    const epJson = epRes.ok ? await epRes.json() : { data: [], meta: { count: 0 } };
+    
+    // 3. Fetch all remaining episode pages if anime has > 100 episodes
+    const rawEpisodes = await fetchAllKitsuEpisodes(anime.id, epJson);
+
+    let fetchedEpisodes: any[] = [];
+    if (rawEpisodes.length > 0) {
+      fetchedEpisodes = rawEpisodes
+        .filter((ep: any) => ep.attributes?.number !== null && ep.attributes?.number !== undefined)
+        .sort((a: any, b: any) => a.attributes.number - b.attributes.number);
+    }
+
+    // 4. Determine the total count to render
+    let totalCount = episodeCount;
+    
+    // Kitsu's episodes endpoint returns the actual total count of released episodes in meta
+    const metaCount = epJson.meta?.count || 0;
+    if (metaCount > (totalCount || 0)) {
+      totalCount = metaCount;
+    }
+
+    if (!totalCount) {
+      // If unknown total or currently airing, default to the fetched number
+      totalCount = fetchedEpisodes.length > 0 ? fetchedEpisodes[fetchedEpisodes.length - 1].attributes.number : 12;
+    }
+
+    // 5. Build the normalized episodes array in O(N) linear time using a Map lookup
+    const epMap = new Map<number, any>();
+    for (const ep of fetchedEpisodes) {
+      const num = ep.attributes?.number;
+      if (num !== undefined && num !== null) {
+        epMap.set(num, ep);
+      }
+    }
+
+    const episodes = Array.from({ length: totalCount }, (_, i) => {
+      const episodeNum = i + 1;
+      const realEpData = epMap.get(episodeNum);
+      
+      return {
+        id: episodeNum,
+        title: realEpData?.attributes?.canonicalTitle || `Episode ${episodeNum}`,
+      };
+    });
+
+    return { ...metadata, episodes };
+  } catch (error) {
+    console.error(`Failed to fetch anime data for slug "${slug}":`, error);
     return null;
   }
-
-  const anime = json.data[0];
-  const metadata = formatAnimeData(anime);
-  const episodeCount = anime.attributes.episodeCount; // Might be null for airing
-
-  // 2. Fetch initial episodes from Kitsu (up to 100 episodes, cached 24h)
-  const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=100`, {
-    headers: {
-      "Accept": "application/vnd.api+json",
-      "Content-Type": "application/vnd.api+json",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    },
-    next: { revalidate: 86400 } // 24 hours ISR cache
-  });
-  const epJson = await epRes.json();
-  
-  // 3. Fetch all remaining episode pages if anime has > 100 episodes
-  const rawEpisodes = await fetchAllKitsuEpisodes(anime.id, epJson);
-
-  let fetchedEpisodes: any[] = [];
-  if (rawEpisodes.length > 0) {
-    fetchedEpisodes = rawEpisodes
-      .filter((ep: any) => ep.attributes?.number !== null && ep.attributes?.number !== undefined)
-      .sort((a: any, b: any) => a.attributes.number - b.attributes.number);
-  }
-
-  // 4. Determine the total count to render
-  let totalCount = episodeCount;
-  
-  // Kitsu's episodes endpoint returns the actual total count of released episodes in meta
-  const metaCount = epJson.meta?.count || 0;
-  if (metaCount > (totalCount || 0)) {
-    totalCount = metaCount;
-  }
-
-  if (!totalCount) {
-    // If unknown total or currently airing, default to the fetched number
-    totalCount = fetchedEpisodes.length > 0 ? fetchedEpisodes[fetchedEpisodes.length - 1].attributes.number : 12;
-  }
-
-  // 5. Build the normalized episodes array
-  const episodes = Array.from({ length: totalCount }).map((_, i) => {
-    const episodeNum = i + 1;
-    const realEpData = fetchedEpisodes.find((ep) => ep.attributes?.number === episodeNum);
-    
-    return {
-      id: episodeNum,
-      title: realEpData?.attributes?.canonicalTitle || `Episode ${episodeNum}`,
-    };
-  });
-
-  return { ...metadata, episodes };
 });
 
 export interface CatalogFilters {
@@ -315,6 +360,7 @@ export async function getCatalogAnime(filters: CatalogFilters) {
         "Content-Type": "application/vnd.api+json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       },
+      signal: AbortSignal.timeout(8000),
       next: { revalidate: 1800 } // 30 minutes ISR cache
     });
     const json = await res.json();

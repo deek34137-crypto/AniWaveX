@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { Play, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
-
-import Image from "next/image";
+import AnimeImage from "@/components/AnimeImage";
 
 interface HeroSliderProps {
   animeList: any[];
@@ -47,7 +46,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
             {/* Optimized Background Image */}
             {imageUrl ? (
               <div className={`absolute inset-0 transition-transform duration-[10000ms] ${isActive ? 'scale-105' : 'scale-100'}`}>
-                <Image
+                <AnimeImage
                   src={imageUrl}
                   alt={anime.title}
                   fill

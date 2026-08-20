@@ -57,6 +57,7 @@ export default function InPageVideoPlayer({
   const [fallbackToIframe, setFallbackToIframe] = useState(false);
   const [playerError, setPlayerError] = useState(false);
   
+  const currentUserRef = useRef(user);
   const playerRef = useRef<HTMLDivElement>(null);
   const mediaPlayerRef = useRef<MediaPlayerInstance>(null);
   const lastSavedTimeRef = useRef(0);
@@ -65,15 +66,21 @@ export default function InPageVideoPlayer({
 
   useEffect(() => {
     setCurrentUser(user);
+    currentUserRef.current = user;
   }, [user]);
 
   useEffect(() => {
     supabase.auth.getUser().then((res: any) => {
-      if (res?.data?.user) setCurrentUser(res.data.user);
+      if (res?.data?.user) {
+        setCurrentUser(res.data.user);
+        currentUserRef.current = res.data.user;
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      setCurrentUser(session?.user ?? null);
+      const liveUser = session?.user ?? null;
+      setCurrentUser(liveUser);
+      currentUserRef.current = liveUser;
     });
 
     return () => {
@@ -85,12 +92,13 @@ export default function InPageVideoPlayer({
   const syncToSupabase = useCallback(async (progressSeconds: number) => {
     if (!episode) return;
 
-    let activeUserId = currentUser?.id || user?.id;
+    let activeUserId = currentUserRef.current?.id;
     if (!activeUserId) {
       try {
         const { data: { user: liveUser } } = await supabase.auth.getUser();
         if (liveUser) {
           activeUserId = liveUser.id;
+          currentUserRef.current = liveUser;
           setCurrentUser(liveUser);
         }
       } catch {
@@ -101,17 +109,22 @@ export default function InPageVideoPlayer({
     if (!activeUserId) return;
 
     try {
+      const payload: any = {
+        user_id: activeUserId,
+        anime_slug: animeSlug,
+        anime_title: animeTitle,
+        poster_image: animePosterImage,
+        last_episode_watched: episode.id,
+        updated_at: new Date().toISOString()
+      };
+
+      if (progressSeconds > 0) {
+        payload.progress_seconds = Math.floor(progressSeconds);
+      }
+
       const { error } = await supabase
         .from('watch_history')
-        .upsert({
-          user_id: activeUserId,
-          anime_slug: animeSlug,
-          anime_title: animeTitle,
-          poster_image: animePosterImage,
-          last_episode_watched: episode.id,
-          progress_seconds: progressSeconds > 0 ? progressSeconds : null,
-          updated_at: new Date().toISOString()
-        }, {
+        .upsert(payload, {
           onConflict: 'user_id, anime_slug'
         });
 
@@ -119,7 +132,7 @@ export default function InPageVideoPlayer({
     } catch (err) {
       console.error("Failed to sync watch history", err);
     }
-  }, [episode, currentUser, user, animeSlug, animeTitle, animePosterImage, supabase]);
+  }, [episode?.id, animeSlug, animeTitle, animePosterImage, supabase]);
 
   // Load initial resume progress from localStorage on episode change
   useEffect(() => {
@@ -185,11 +198,11 @@ export default function InPageVideoPlayer({
     }
 
     // Sync to Supabase periodically every 10 seconds during playback
-    if (Math.abs(currentTime - lastSupabaseSyncRef.current) >= 10) {
+    if (Math.abs(currentTime - lastSupabaseSyncRef.current) >= 10 && floorTime > 0) {
       lastSupabaseSyncRef.current = currentTime;
       syncToSupabase(floorTime);
     }
-  }, [episode, animeSlug, syncToSupabase]);
+  }, [episode?.id, animeSlug, syncToSupabase]);
 
   // Initial watch history sync + flush on unmount / episode change
   useEffect(() => {
@@ -197,22 +210,23 @@ export default function InPageVideoPlayer({
 
     // Initial record after 2s of loading episode
     const timer = setTimeout(() => {
-      syncToSupabase(Math.floor(lastSavedTimeRef.current || initialTime || 0));
+      const initialProgress = lastSavedTimeRef.current || initialTime || 0;
+      syncToSupabase(Math.floor(initialProgress));
     }, 2000);
 
     return () => {
       clearTimeout(timer);
-      // Flush latest playback progress on unmount or episode switch
-      if (lastSavedTimeRef.current > 0) {
+      // Flush latest playback progress on unmount or episode switch only if user has active progress
+      if (lastSavedTimeRef.current > 5) {
         syncToSupabase(Math.floor(lastSavedTimeRef.current));
       }
     };
-  }, [episode, animeSlug, syncToSupabase, initialTime]);
+  }, [episode?.id, animeSlug, syncToSupabase, initialTime]);
 
   // Window beforeunload listener to flush progress on page close/reload
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (lastSavedTimeRef.current > 0) {
+      if (lastSavedTimeRef.current > 5) {
         syncToSupabase(Math.floor(lastSavedTimeRef.current));
       }
     };
@@ -393,6 +407,8 @@ export default function InPageVideoPlayer({
   const selectedSource = activeSources?.[validServerIndex];
   const currentUrl = selectedSource?.url;
   const isM3U8 = Boolean(selectedSource?.isM3U8 || (currentUrl && currentUrl.includes('.m3u8')));
+  const availableEmbedIndex = activeSources?.findIndex((s) => !s.isM3U8 && isValidEmbedUrl(s.url)) ?? -1;
+  const hasEmbedOption = availableEmbedIndex !== -1;
 
   return (
     <div ref={playerRef} className="w-full flex flex-col gap-4 bg-slate-950 py-8 scroll-mt-20">
@@ -447,7 +463,9 @@ export default function InPageVideoPlayer({
               <button 
                 onClick={() => {
                   setActiveTab("sub");
+                  setSelectedServerIndex(0);
                   setPlayerError(false);
+                  setFallbackToIframe(false);
                 }}
                 className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors ${activeTab === 'sub' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
               >
@@ -456,7 +474,9 @@ export default function InPageVideoPlayer({
               <button 
                 onClick={() => {
                   setActiveTab("dub");
+                  setSelectedServerIndex(0);
                   setPlayerError(false);
+                  setFallbackToIframe(false);
                 }}
                 className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors ${activeTab === 'dub' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
               >
@@ -465,7 +485,9 @@ export default function InPageVideoPlayer({
               <button 
                 onClick={() => {
                   setActiveTab("hindi");
+                  setSelectedServerIndex(0);
                   setPlayerError(false);
+                  setFallbackToIframe(false);
                 }}
                 className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 ${activeTab === 'hindi' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-400 hover:text-amber-300'}`}
               >
@@ -523,7 +545,7 @@ export default function InPageVideoPlayer({
                 </button>
               </div>
             </div>
-          ) : isM3U8 && currentUrl && !fallbackToIframe ? (
+          ) : !fallbackToIframe && isM3U8 && currentUrl ? (
             <NativePlayer 
               key={currentUrl}
               playerRef={mediaPlayerRef}
@@ -567,6 +589,23 @@ export default function InPageVideoPlayer({
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
               referrerPolicy="no-referrer"
               onError={() => setPlayerError(true)}
+            />
+          ) : isM3U8 && currentUrl ? (
+            <NativePlayer 
+              key={currentUrl}
+              playerRef={mediaPlayerRef}
+              url={currentUrl} 
+              title={`${animeTitle} - Episode ${episode.id}`}
+              poster={animePosterImage}
+              subtitles={streams?.nativeStream?.subtitles}
+              initialTime={initialTime}
+              onTimeUpdate={handleTimeUpdate}
+              onError={() => setPlayerError(true)}
+              onEnded={() => {
+                if (autoplayNext && hasNext) {
+                  handleNext();
+                }
+              }}
             />
           ) : (
             <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/80">
@@ -635,10 +674,20 @@ export default function InPageVideoPlayer({
           </div>
 
           <div className="flex items-center gap-4 flex-wrap">
-            {/* Manual Player Mode Switcher (if m3u8) */}
-            {isM3U8 && currentUrl && (
+            {/* Manual Player Mode Switcher (only shown if both HLS and Embed servers exist) */}
+            {hasEmbedOption && (
               <button
-                onClick={() => setFallbackToIframe(!fallbackToIframe)}
+                onClick={() => {
+                  if (fallbackToIframe) {
+                    const firstHlsIdx = activeSources?.findIndex((s) => s.isM3U8) ?? 0;
+                    setSelectedServerIndex(firstHlsIdx >= 0 ? firstHlsIdx : 0);
+                    setFallbackToIframe(false);
+                  } else {
+                    setSelectedServerIndex(availableEmbedIndex);
+                    setFallbackToIframe(true);
+                  }
+                  setPlayerError(false);
+                }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
                   fallbackToIframe
                     ? "bg-amber-600/20 text-amber-300 border-amber-500/30"
@@ -647,7 +696,7 @@ export default function InPageVideoPlayer({
                 title={fallbackToIframe ? "Switch to Native Player" : "Switch to Embed Player"}
               >
                 <Tv className="w-3.5 h-3.5" />
-                <span>{fallbackToIframe ? "Embed Mode" : "Native Mode"}</span>
+                <span>{fallbackToIframe ? "Embed Server" : "Native Player"}</span>
               </button>
             )}
 

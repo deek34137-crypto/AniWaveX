@@ -1,11 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import Link from "next/link";
 
 export default function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Lock body scroll
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    // Handle Escape key to close drawer
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
 
   return (
     <>
