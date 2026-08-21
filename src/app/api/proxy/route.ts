@@ -116,6 +116,8 @@ function isAllowedHost(hostname: string): boolean {
     "deek34137.workers.dev",
     "vibevibe.workers.dev",
     "streamtape.com",
+    "streamtape.net",
+    "streamtape.site",
     "mp4upload.com",
     "kitsu.io",
     "kitsu.app",
@@ -135,6 +137,16 @@ function isAllowedHost(hostname: string): boolean {
     "bibiemb.xyz",
     "vidstream.pro",
     "backblazeb2.com",
+    "streamwish.to",
+    "streamwish.com",
+    "filemoon.sx",
+    "filemoon.to",
+    "filemoon.in",
+    "doodstream.com",
+    "dood.to",
+    "dood.so",
+    "dood.wf",
+    "dood.ws",
   ];
 
   return allowedSuffixes.some((suffix) => host === suffix || host.endsWith("." + suffix));
@@ -204,6 +216,24 @@ function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
   }
   if (host.includes("anime-dunya.com")) {
     return "https://anime-dunya.com/";
+  }
+  if (host.includes("megacloud.tv") || host.includes("atomic4cdn.top")) {
+    return "https://megacloud.tv/";
+  }
+  if (host.includes("rabbitstream.net")) {
+    return "https://rabbitstream.net/";
+  }
+  if (host.includes("dokicloud.one")) {
+    return "https://dokicloud.one/";
+  }
+  if (host.includes("mcloud.to")) {
+    return "https://mcloud.to/";
+  }
+  if (host.includes("vidcloud.co") || host.includes("vidcloud.fun")) {
+    return "https://vidcloud.co/";
+  }
+  if (host.includes("vidstream.pro")) {
+    return "https://vidstream.pro/";
   }
   if (refererParam && refererParam !== "https://flixcloud.cc/") {
     return refererParam;

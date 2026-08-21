@@ -129,7 +129,8 @@ export default function NativePlayer({
       currentTime={initialTime}
       onTimeUpdate={(detail) => {
         if (onTimeUpdate && typeof detail.currentTime === 'number') {
-          onTimeUpdate(detail.currentTime, player.current?.duration || 0);
+          const dur = player.current?.duration;
+          onTimeUpdate(detail.currentTime, typeof dur === 'number' && !isNaN(dur) && dur > 0 ? dur : 0);
         }
       }}
       onEnd={onEnded}

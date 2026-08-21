@@ -72,7 +72,7 @@ function getRefererForStream(url: string, streamObj?: any, data?: any): string {
   if (lower.includes("krussdomi")) {
     return "https://krussdomi.com/";
   }
-  if (lower.includes("vidtube.site") || lower.includes("akirax.buzz")) {
+  if (lower.includes("vidtube.site") || lower.includes("akirax.buzz") || lower.includes("shiora.top") || lower.includes("mikora.top")) {
     return "https://vidtube.site/";
   }
   if (lower.includes("bibiemb.xyz") || lower.includes("vibevibe.workers.dev")) {
@@ -86,6 +86,24 @@ function getRefererForStream(url: string, streamObj?: any, data?: any): string {
   }
   if (lower.includes("anime-dunya.com")) {
     return "https://anime-dunya.com/";
+  }
+  if (lower.includes("megacloud.tv") || lower.includes("atomic4cdn.top")) {
+    return "https://megacloud.tv/";
+  }
+  if (lower.includes("rabbitstream.net")) {
+    return "https://rabbitstream.net/";
+  }
+  if (lower.includes("dokicloud.one")) {
+    return "https://dokicloud.one/";
+  }
+  if (lower.includes("mcloud.to")) {
+    return "https://mcloud.to/";
+  }
+  if (lower.includes("vidcloud.co") || lower.includes("vidcloud.fun")) {
+    return "https://vidcloud.co/";
+  }
+  if (lower.includes("vidstream.pro")) {
+    return "https://vidstream.pro/";
   }
   return "https://flixcloud.cc/";
 }
@@ -155,6 +173,13 @@ function extractWorkerSources(
       });
     }
   }
+
+  // Ensure HLS native streams are prioritized first before embed iframe fallbacks
+  sources.sort((a, b) => {
+    if (a.isM3U8 && !b.isM3U8) return -1;
+    if (!a.isM3U8 && b.isM3U8) return 1;
+    return 0;
+  });
 
   // 3. Top-level subtitles
   if (Array.isArray(data.subtitles)) {
@@ -339,11 +364,17 @@ async function resolveStream(
   }
 
   if (sources.length > 0) {
+    const sortedSources = [...sources].sort((a, b) => {
+      if (a.isM3U8 && !b.isM3U8) return -1;
+      if (!a.isM3U8 && b.isM3U8) return 1;
+      return 0;
+    });
+
     return {
-      sources: sources,
-      sub: audio === 'sub' ? sources : [],
-      dub: audio === 'dub' ? sources : [],
-      hindi: audio === 'hindi' ? sources : [],
+      sources: sortedSources,
+      sub: audio === 'sub' ? sortedSources : [],
+      dub: audio === 'dub' ? sortedSources : [],
+      hindi: audio === 'hindi' ? sortedSources : [],
       audio: audio,
       nativeStream: {
         subtitles: subtitles

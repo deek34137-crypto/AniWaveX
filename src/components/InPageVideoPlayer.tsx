@@ -362,13 +362,16 @@ export default function InPageVideoPlayer({
         case 'ArrowLeft':
           if (player) {
             e.preventDefault();
-            player.currentTime = Math.max(0, player.currentTime - 5);
+            const cur = player.currentTime || 0;
+            player.currentTime = Math.max(0, cur - 5);
           }
           break;
         case 'ArrowRight':
           if (player) {
             e.preventDefault();
-            player.currentTime = Math.min(player.duration || player.currentTime + 5, player.currentTime + 5);
+            const dur = player.duration;
+            const cur = player.currentTime || 0;
+            player.currentTime = (dur && !isNaN(dur) && dur > 0) ? Math.min(dur, cur + 5) : cur + 5;
           }
           break;
         case 'n':
@@ -557,19 +560,19 @@ export default function InPageVideoPlayer({
               onTimeUpdate={handleTimeUpdate}
               onError={() => {
                 console.warn("Native HLS stream playback failed, looking for alternate server");
-                // 1. Try to find a working embed server
-                const embedIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && !s.isM3U8 && isValidEmbedUrl(s.url));
-                if (embedIdx !== undefined && embedIdx !== -1) {
-                  setSelectedServerIndex(embedIdx);
-                  setFallbackToIframe(true);
-                  setPlayerError(false);
-                  return;
-                }
-                // 2. Try another HLS server if available
+                // 1. Try another HLS server first
                 const otherHlsIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && s.isM3U8);
                 if (otherHlsIdx !== undefined && otherHlsIdx !== -1) {
                   setSelectedServerIndex(otherHlsIdx);
                   setFallbackToIframe(false);
+                  setPlayerError(false);
+                  return;
+                }
+                // 2. Only if no HLS servers remain, fallback to a working embed server
+                const embedIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && !s.isM3U8 && isValidEmbedUrl(s.url));
+                if (embedIdx !== undefined && embedIdx !== -1) {
+                  setSelectedServerIndex(embedIdx);
+                  setFallbackToIframe(true);
                   setPlayerError(false);
                   return;
                 }
@@ -586,8 +589,8 @@ export default function InPageVideoPlayer({
               key={currentUrl}
               src={currentUrl}
               className="w-full h-full border-0 bg-black"
-              allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-              referrerPolicy="no-referrer"
+              allow="autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write"
+              referrerPolicy="no-referrer-when-downgrade"
               onError={() => setPlayerError(true)}
             />
           ) : isM3U8 && currentUrl ? (
