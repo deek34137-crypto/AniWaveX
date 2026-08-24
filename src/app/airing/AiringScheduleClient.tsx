@@ -10,9 +10,7 @@ import {
   Sparkles, 
   Search, 
   Tv, 
-  Filter, 
-  ExternalLink,
-  Flame
+  Filter
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import type { AiringAnimeScheduleItem } from "@/lib/schedule";
@@ -31,7 +29,7 @@ const DAYS_OF_WEEK = [
 function formatCountdown(targetEpochSeconds: number, nowEpochMs: number) {
   const diffSeconds = targetEpochSeconds - Math.floor(nowEpochMs / 1000);
   if (diffSeconds <= 0) {
-    return { text: "Aired / Available", isLive: true };
+    return { text: "Aired", isLive: true };
   }
 
   const days = Math.floor(diffSeconds / 86400);
@@ -40,10 +38,10 @@ function formatCountdown(targetEpochSeconds: number, nowEpochMs: number) {
   const secs = diffSeconds % 60;
 
   if (days > 0) {
-    return { text: `${days}d ${hours}h ${mins}m`, isLive: false };
+    return { text: `${days}d ${hours}h`, isLive: false };
   }
   if (hours > 0) {
-    return { text: `${hours}h ${mins}m ${secs}s`, isLive: false };
+    return { text: `${hours}h ${mins}m`, isLive: false };
   }
   return { text: `${mins}m ${secs}s`, isLive: false };
 }
@@ -183,7 +181,7 @@ export default function AiringScheduleClient({ animeList }: { animeList: AiringA
         })}
       </div>
 
-      {/* Airing Shows Grid */}
+      {/* Airing Shows Grid with Vertical Rectangle Cards (aspect-[2/3]) */}
       {filteredAnime.length === 0 ? (
         <div className="w-full text-center py-24 bg-slate-900/30 border border-slate-800 rounded-3xl text-slate-400">
           <Clock className="w-12 h-12 mx-auto text-slate-600 mb-3" />
@@ -195,123 +193,92 @@ export default function AiringScheduleClient({ animeList }: { animeList: AiringA
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
           {filteredAnime.map((anime) => {
             const countdown = formatCountdown(anime.airingAt, now);
 
             return (
-              <div
+              <Link
                 key={anime.id}
-                className="group relative rounded-3xl overflow-hidden bg-slate-900/90 border border-white/10 hover:border-blue-500/50 transition-all duration-300 shadow-xl hover:shadow-[0_0_30px_rgba(37,99,235,0.2)] flex flex-col"
+                href={`/anime/${anime.slug}`}
+                className="group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] hover:scale-[1.02] flex flex-col"
               >
-                {/* Poster & Countdown Aspect */}
-                <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-950">
+                {/* Vertical Poster Aspect Container (aspect-[2/3]) */}
+                <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950">
                   <AnimeImage
                     src={anime.posterImage}
                     alt={anime.title}
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
 
                   {/* Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent pointer-events-none" />
 
                   {/* Top Badges */}
-                  <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
-                    <span className="px-2.5 py-1 bg-blue-600/90 text-white text-[11px] font-extrabold uppercase tracking-wider rounded-xl backdrop-blur-md shadow-md">
+                  <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+                    <span className="px-2 py-0.5 bg-blue-600/90 text-white text-[10px] font-extrabold uppercase tracking-wider rounded-md backdrop-blur-md shadow-sm">
                       EP {anime.nextEpisodeNumber}
                     </span>
 
                     {anime.rating && anime.rating !== "N/A" && (
-                      <div className="flex items-center gap-1 px-2 py-1 bg-black/60 backdrop-blur-md rounded-xl text-yellow-400 text-xs font-bold border border-white/10">
-                        <Star className="w-3 h-3 fill-current" />
-                        {anime.rating}
+                      <div className="flex items-center gap-1 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/10 shadow-sm">
+                        <Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />
+                        <span className="text-[11px] font-bold text-white">{anime.rating}</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Live Countdown Ribbon */}
-                  <div className="absolute bottom-3 left-3 right-3 z-10">
-                    <div
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-xl backdrop-blur-md border text-xs font-bold shadow-lg ${
-                        countdown.isLive
-                          ? "bg-emerald-600/90 border-emerald-400/50 text-white"
-                          : "bg-slate-950/85 border-blue-500/30 text-blue-300"
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5" />
+                  {/* Play Overlay Icon (Visible on hover) */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                    <div className="w-12 h-12 bg-blue-600/90 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                      <Play className="w-5 h-5 fill-current ml-0.5" />
+                    </div>
+                  </div>
+
+                  {/* Bottom Info Overlay */}
+                  <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent">
+                    {/* Live Countdown Badge */}
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-blue-400">
+                        <Clock className="w-3 h-3" />
                         {anime.airTimeStr}
                       </span>
-                      <span className={countdown.isLive ? "animate-pulse" : "text-white font-mono"}>
+                      <span
+                        className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
+                          countdown.isLive
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse"
+                            : "bg-blue-600/20 text-blue-300 border border-blue-500/30 font-mono"
+                        }`}
+                      >
                         {countdown.text}
                       </span>
                     </div>
-                  </div>
-                </div>
 
-                {/* Content Section */}
-                <div className="p-4 flex-1 flex flex-col justify-between gap-3">
-                  <div>
+                    {/* Anime Title */}
                     <h3
-                      className="text-white font-bold text-base line-clamp-1 group-hover:text-blue-400 transition-colors"
+                      className="text-white font-bold text-xs sm:text-sm line-clamp-1 group-hover:text-blue-400 transition-colors drop-shadow-md"
                       title={anime.title}
                     >
                       {anime.title}
                     </h3>
-                    {anime.romajiTitle && anime.romajiTitle !== anime.title && (
-                      <p className="text-slate-400 text-xs line-clamp-1 italic mt-0.5">
-                        {anime.romajiTitle}
-                      </p>
-                    )}
 
-                    {/* Genres */}
-                    {anime.genres && anime.genres.length > 0 && (
-                      <div className="flex items-center gap-1.5 flex-wrap mt-2">
-                        {anime.genres.slice(0, 3).map((g) => (
-                          <span
-                            key={g}
-                            className="px-2 py-0.5 bg-white/5 border border-white/10 text-[10px] font-semibold text-slate-300 rounded-md"
-                          >
-                            {g}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action & Streaming Links */}
-                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                    {/* Streaming Platforms */}
-                    <div className="flex items-center gap-1.5 overflow-hidden">
+                    {/* Genre / Streaming Tag */}
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                      <span className="truncate max-w-[90px]">
+                        {anime.genres && anime.genres.length > 0 ? anime.genres[0] : "Anime"}
+                      </span>
                       {anime.streamingPlatforms && anime.streamingPlatforms.length > 0 ? (
-                        anime.streamingPlatforms.slice(0, 2).map((st) => (
-                          <span
-                            key={st.site}
-                            className="text-[10px] font-bold text-slate-400 bg-white/5 px-2 py-0.5 rounded-md truncate max-w-[90px]"
-                            title={st.site}
-                          >
-                            {st.site}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[11px] text-slate-500 font-medium">
-                          {anime.format || "TV Series"}
+                        <span className="text-slate-300 font-semibold truncate max-w-[70px]">
+                          {anime.streamingPlatforms[0].site}
                         </span>
+                      ) : (
+                        <span className="text-slate-500">{anime.format || "TV"}</span>
                       )}
                     </div>
-
-                    {/* Watch Now Button */}
-                    <Link
-                      href={`/anime/${anime.slug}`}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105 shrink-0"
-                    >
-                      <Play className="w-3 h-3 fill-current ml-0.5" />
-                      Watch Now
-                    </Link>
                   </div>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
