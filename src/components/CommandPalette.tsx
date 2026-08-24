@@ -14,6 +14,7 @@ import {
   Flame, 
   Star, 
   Dices,
+  Layers,
   X,
   Loader2,
   ArrowRight
