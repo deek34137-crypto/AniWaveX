@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import { getTrendingAnime, getTopRatedAnime } from "@/lib/api";
@@ -22,7 +23,9 @@ export default async function TierListPage() {
       <div className="h-20" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <TierListClient initialPresetAnime={presetAnime} />
+        <Suspense fallback={<div className="text-white py-12 text-center text-sm font-bold">Loading Tier Maker...</div>}>
+          <TierListClient initialPresetAnime={presetAnime} />
+        </Suspense>
       </div>
     </main>
   );

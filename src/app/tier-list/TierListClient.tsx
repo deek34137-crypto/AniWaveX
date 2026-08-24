@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { 
   Download, 
   Plus, 
@@ -117,6 +118,45 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
   // Activate auto scroll
   useAutoScrollOnDrag();
+
+  // Read ?id= query param for "View & Clone" from profile
+  const searchParams = useSearchParams();
+  const listId = searchParams.get("id");
+
+  useEffect(() => {
+    if (!listId) return;
+    try {
+      let foundList: any = null;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("aniwavex_tierlists_")) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              const match = parsed.find((tl: any) => tl.id === listId);
+              if (match) {
+                foundList = match;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (foundList) {
+        if (foundList.title) setTitle(foundList.title);
+        if (foundList.rows && Array.isArray(foundList.rows) && foundList.rows.length > 0) {
+          setRows(foundList.rows);
+        }
+        if (foundList.unrankedPool && Array.isArray(foundList.unrankedPool)) {
+          setPool(foundList.unrankedPool);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load saved tier list by id:", err);
+    }
+  }, [listId]);
 
   // Search anime with debounce
   useEffect(() => {
@@ -384,20 +424,46 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     }
   };
 
-  // Helper to load image for canvas export
-  const loadCanvasImage = (src: string): Promise<HTMLImageElement | null> => {
+  // Helper to load image for canvas export using blob proxy to NEVER taint canvas
+  const loadCanvasImage = async (src: string): Promise<HTMLImageElement | null> => {
+    if (!src) return null;
+
+    // 1. Try to fetch as Blob via /api/proxy or direct CORS
+    let objectUrl: string | null = null;
+    try {
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(src)}`;
+      const res = await fetch(proxyUrl);
+      if (res.ok) {
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+      }
+    } catch {}
+
+    if (!objectUrl) {
+      try {
+        const res = await fetch(src, { mode: "cors" });
+        if (res.ok) {
+          const blob = await res.blob();
+          objectUrl = URL.createObjectURL(blob);
+        }
+      } catch {}
+    }
+
+    if (objectUrl) {
+      return new Promise((resolve) => {
+        const img = new window.Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = objectUrl!;
+      });
+    }
+
+    // 2. Safe fallback: crossOrigin anonymous only (never fallback to regular non-CORS image!)
     return new Promise((resolve) => {
-      if (!src) return resolve(null);
       const img = new window.Image();
       img.crossOrigin = "anonymous";
       img.onload = () => resolve(img);
-      img.onerror = () => {
-        // Retry without crossOrigin or resolve null
-        const fallback = new window.Image();
-        fallback.onload = () => resolve(fallback);
-        fallback.onerror = () => resolve(null);
-        fallback.src = src;
-      };
+      img.onerror = () => resolve(null);
       img.src = src;
     });
   };
