@@ -468,7 +468,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     });
   };
 
-  // Export as Image
+  // Export as High-Resolution Image (Ultra HD 2400px Width)
   const handleExportImage = async () => {
     setIsExporting(true);
     try {
@@ -476,21 +476,22 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas 2D context not available");
 
-      const width = 1200;
-      const headerHeight = 90;
-      const footerHeight = 45;
-      const cardW = 68;
-      const cardH = 96;
-      const cardGap = 8;
-      const tierLabelW = 110;
-      const itemsStartX = 20 + tierLabelW + 12;
-      const availableItemsW = width - itemsStartX - 20;
+      // Ultra HD Resolution Settings (2400px width for razor-sharp zoom)
+      const width = 2400;
+      const headerHeight = 150;
+      const footerHeight = 70;
+      const cardW = 126;
+      const cardH = 186;
+      const cardGap = 16;
+      const tierLabelW = 190;
+      const itemsStartX = 36 + tierLabelW + 24;
+      const availableItemsW = width - itemsStartX - 36;
       const maxCols = Math.max(1, Math.floor(availableItemsW / (cardW + cardGap)));
 
-      // Calculate dynamic row heights based on item count
+      // Dynamic row heights based on item count
       const rowLayouts = rows.map((row) => {
         const numRows = Math.max(1, Math.ceil((row.items?.length || 0) / maxCols));
-        const height = Math.max(110, numRows * (cardH + cardGap) + 16);
+        const height = Math.max(200, numRows * (cardH + cardGap) + 24);
         return { row, height, numRows };
       });
 
@@ -499,18 +500,22 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       canvas.width = width;
       canvas.height = totalHeight;
 
-      // 1. Draw dark background
+      // Enable maximum image smoothing
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      // 1. Draw rich dark background
       ctx.fillStyle = "#090d16";
       ctx.fillRect(0, 0, width, totalHeight);
 
       // 2. Draw Title Header
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 26px sans-serif";
-      ctx.fillText(title || "AniWaveX Tier List", 30, 52);
+      ctx.font = "900 46px system-ui, -apple-system, sans-serif";
+      ctx.fillText(title || "AniWaveX Tier List", 40, 92);
 
       ctx.fillStyle = "#3b82f6";
-      ctx.font = "bold 14px sans-serif";
-      ctx.fillText("AniWaveX • aniwavex.bond", width - 230, 52);
+      ctx.font = "bold 26px system-ui, -apple-system, sans-serif";
+      ctx.fillText("AniWaveX • aniwavex.bond", width - 420, 92);
 
       // Preload all images across all rows
       const allItemsToLoad = rows.flatMap((r) => r.items || []);
@@ -528,24 +533,36 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       let currentY = headerHeight;
       for (const { row, height } of rowLayouts) {
         const rowBgY = currentY;
-        const rowH = height - 6;
+        const rowH = height - 10;
 
-        // Row background
-        ctx.fillStyle = "#111827";
-        ctx.fillRect(20, rowBgY, width - 40, rowH);
+        // Row background with subtle rounded border
+        ctx.fillStyle = "#101726";
+        if (typeof ctx.roundRect === "function") {
+          ctx.beginPath();
+          ctx.roundRect(36, rowBgY, width - 72, rowH, 16);
+          ctx.fill();
+        } else {
+          ctx.fillRect(36, rowBgY, width - 72, rowH);
+        }
 
         // Tier Label Box
+        ctx.save();
         ctx.fillStyle = row.color || "#ef4444";
-        ctx.fillRect(20, rowBgY, tierLabelW, rowH);
+        if (typeof ctx.roundRect === "function") {
+          ctx.beginPath();
+          ctx.roundRect(36, rowBgY, tierLabelW, rowH, [16, 0, 0, 16]);
+          ctx.fill();
+        } else {
+          ctx.fillRect(36, rowBgY, tierLabelW, rowH);
+        }
 
         // Tier Label Text
         ctx.fillStyle = "#ffffff";
-        ctx.font = "900 32px sans-serif";
+        ctx.font = "900 58px system-ui, -apple-system, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(row.label, 20 + tierLabelW / 2, rowBgY + rowH / 2);
-        ctx.textAlign = "left";
-        ctx.textBaseline = "alphabetic";
+        ctx.fillText(row.label, 36 + tierLabelW / 2, rowBgY + rowH / 2);
+        ctx.restore();
 
         // Draw items in this tier
         if (row.items && row.items.length > 0) {
@@ -553,7 +570,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
             const col = idx % maxCols;
             const rowIdx = Math.floor(idx / maxCols);
             const x = itemsStartX + col * (cardW + cardGap);
-            const y = rowBgY + 8 + rowIdx * (cardH + cardGap);
+            const y = rowBgY + 12 + rowIdx * (cardH + cardGap);
 
             const img = item.posterImage ? loadedImageMap.get(item.posterImage) : null;
             if (img) {
@@ -561,7 +578,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               ctx.save();
               ctx.beginPath();
               if (typeof ctx.roundRect === "function") {
-                ctx.roundRect(x, y, cardW, cardH, 8);
+                ctx.roundRect(x, y, cardW, cardH, 12);
               } else {
                 ctx.rect(x, y, cardW, cardH);
               }
@@ -569,25 +586,25 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               ctx.drawImage(img, x, y, cardW, cardH);
 
               // Dark bottom gradient for readability
-              const grad = ctx.createLinearGradient(x, y + cardH - 24, x, y + cardH);
+              const grad = ctx.createLinearGradient(x, y + cardH - 42, x, y + cardH);
               grad.addColorStop(0, "rgba(9,13,22,0)");
               grad.addColorStop(1, "rgba(9,13,22,0.95)");
               ctx.fillStyle = grad;
-              ctx.fillRect(x, y + cardH - 24, cardW, 24);
+              ctx.fillRect(x, y + cardH - 42, cardW, 42);
 
-              // Title snippet
+              // Title text
               ctx.fillStyle = "#ffffff";
-              ctx.font = "bold 9px sans-serif";
-              const titleText = item.title.length > 10 ? item.title.slice(0, 9) + "…" : item.title;
-              ctx.fillText(titleText, x + 4, y + cardH - 6);
+              ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
+              const titleText = item.title.length > 13 ? item.title.slice(0, 12) + "…" : item.title;
+              ctx.fillText(titleText, x + 8, y + cardH - 10);
               ctx.restore();
             } else {
-              // Fallback placeholder card
+              // Fallback card
               ctx.fillStyle = "#1e293b";
               ctx.fillRect(x, y, cardW, cardH);
               ctx.fillStyle = "#94a3b8";
-              ctx.font = "bold 10px sans-serif";
-              ctx.fillText(item.title.slice(0, 8), x + 4, y + cardH / 2);
+              ctx.font = "bold 14px system-ui, -apple-system, sans-serif";
+              ctx.fillText(item.title.slice(0, 10), x + 8, y + cardH / 2);
             }
           });
         }
@@ -597,8 +614,8 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
       // 4. Draw Footer
       ctx.fillStyle = "#64748b";
-      ctx.font = "12px sans-serif";
-      ctx.fillText("Generated on AniWaveX - The Ultimate Anime Experience", 30, totalHeight - 18);
+      ctx.font = "20px system-ui, -apple-system, sans-serif";
+      ctx.fillText("Generated on AniWaveX - The Ultimate Anime Experience", 40, totalHeight - 26);
 
       const dataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
