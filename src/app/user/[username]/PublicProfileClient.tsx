@@ -18,7 +18,8 @@ import {
   Layers, 
   Calendar,
   ExternalLink,
-  Trash2
+  Trash2,
+  Settings
 } from "lucide-react";
 import AnimeCard from "@/components/AnimeCard";
 import AnimeImage from "@/components/AnimeImage";
@@ -124,7 +125,17 @@ export default function PublicProfileClient({
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent z-0" />
 
         {/* Top Right Share & Tier List Actions */}
-        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2 z-10">
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2 z-10 flex-wrap justify-end">
+          {isOwner && (
+            <Link
+              href="/profile"
+              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold transition-all border border-white/10 backdrop-blur-md shadow-lg hover:scale-105"
+            >
+              <Settings className="w-3.5 h-3.5 text-blue-400" />
+              <span>Edit Profile</span>
+            </Link>
+          )}
+
           <Link
             href="/tier-list"
             className="flex items-center gap-1.5 px-4 py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold transition-all border border-white/10 backdrop-blur-md shadow-lg hover:scale-105"

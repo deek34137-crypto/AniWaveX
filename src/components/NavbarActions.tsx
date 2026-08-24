@@ -96,22 +96,29 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
           </button>
 
           <div 
-            className={`absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-2 flex flex-col z-[100] transition-all duration-200 origin-top-right ${isMenuOpen ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}
+            className={`absolute right-0 top-full mt-2 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-2 flex flex-col z-[100] transition-all duration-200 origin-top-right ${isMenuOpen ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}
           >
             <div className="px-4 py-2 border-b border-slate-800 mb-2">
               <p className="text-sm font-bold text-white truncate">{displayUsername}</p>
               <p className="text-xs text-slate-400 truncate">{currentUser.email}</p>
             </div>
             <Link 
+              href={displayUsername ? `/user/${encodeURIComponent(displayUsername)}` : "/profile"} 
+              onClick={() => setIsMenuOpen(false)}
+              className="px-4 py-2 text-sm text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
+            >
+              <User className="w-4 h-4 text-blue-400" /> My Profile
+            </Link>
+            <Link 
               href="/profile" 
               onClick={() => setIsMenuOpen(false)}
-              className="px-4 py-2 text-sm text-white hover:bg-slate-800 flex items-center gap-2 transition-colors"
+              className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
             >
-              <User className="w-4 h-4" /> Profile
+              <span className="text-xs">⚙️</span> Edit Profile &amp; Settings
             </Link>
             <button 
               onClick={handleSignOut}
-              className="px-4 py-2 text-sm text-red-400 hover:bg-slate-800 flex items-center gap-2 text-left w-full transition-colors"
+              className="px-4 py-2 text-sm text-red-400 hover:bg-slate-800 flex items-center gap-2 text-left w-full transition-colors border-t border-white/5 mt-1 pt-2"
             >
               <LogOut className="w-4 h-4" /> Sign Out
             </button>
