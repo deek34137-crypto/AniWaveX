@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import Image from "next/image";
-import Link from "next/link";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { 
   Trophy, 
   Download, 
@@ -18,33 +16,82 @@ import {
   MoveUp, 
   MoveDown,
   Layers,
-  Settings2,
   X,
-  Share2
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import { DEFAULT_TIER_ROWS, TierRow, TierItem, AnimeTierList } from "@/lib/tierlist";
 import { useAuth } from "@/providers/AuthProvider";
 
+// ── Auto-scroll while dragging ───────────────────────────────────────────────
+// Scrolls the page when the drag ghost is within EDGE_PX pixels of the top/bottom viewport
+const EDGE_PX = 80;    // zone height in px
+const SCROLL_SPEED = 12; // px per animation frame
+
+function useAutoScrollOnDrag() {
+  const rafRef = useRef<number | null>(null);
+  const mouseYRef = useRef<number | null>(null);
+  const isDraggingRef = useRef(false);
+
+  const scroll = useCallback(() => {
+    const y = mouseYRef.current;
+    if (y === null || !isDraggingRef.current) return;
+
+    const vh = window.innerHeight;
+    if (y < EDGE_PX) {
+      window.scrollBy(0, -SCROLL_SPEED * (1 - y / EDGE_PX));
+    } else if (y > vh - EDGE_PX) {
+      window.scrollBy(0, SCROLL_SPEED * ((y - (vh - EDGE_PX)) / EDGE_PX));
+    }
+    rafRef.current = requestAnimationFrame(scroll);
+  }, []);
+
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => {
+      mouseYRef.current = e.clientY;
+    };
+    const onDragStart = () => {
+      isDraggingRef.current = true;
+      rafRef.current = requestAnimationFrame(scroll);
+    };
+    const onDragEnd = () => {
+      isDraggingRef.current = false;
+      mouseYRef.current = null;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragstart", onDragStart);
+    window.addEventListener("dragend", onDragEnd);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragstart", onDragStart);
+      window.removeEventListener("dragend", onDragEnd);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [scroll]);
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
+
 export default function TierListClient({ initialPresetAnime = [] }: { initialPresetAnime?: any[] }) {
   const [rows, setRows] = useState<TierRow[]>(DEFAULT_TIER_ROWS);
-  const [pool, setPool] = useState<TierItem[]>(() => {
-    return initialPresetAnime.map((a: any) => ({
+  const [pool, setPool] = useState<TierItem[]>(() =>
+    initialPresetAnime.map((a: any) => ({
       id: a.id,
       slug: a.slug,
       title: a.title,
       posterImage: a.posterImage || a.backgroundImage || "",
       rating: a.rating,
       year: a.year,
-    }));
-  });
+    }))
+  );
 
   const [title, setTitle] = useState("Seasonal Anime Tier List");
   const [description, setDescription] = useState("");
-  
+
   // Drag & drop state
   const [draggedItem, setDraggedItem] = useState<{ item: TierItem; sourceRowId: string | "pool" } | null>(null);
-  
+
   // Click-to-place selected item for mobile tap interactions
   const [selectedItem, setSelectedItem] = useState<{ item: TierItem; sourceRowId: string | "pool" } | null>(null);
 
@@ -60,7 +107,10 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
   const { user, supabase } = useAuth();
   const tierGridRef = useRef<HTMLDivElement>(null);
 
-  // Debounced search for adding new anime
+  // Enable auto-scroll while dragging
+  useAutoScrollOnDrag();
+
+  // Debounced search — fix: API returns array directly, not { anime: [] }
   useEffect(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) {
       setSearchResults([]);
@@ -70,10 +120,11 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=20`);
         if (res.ok) {
           const data = await res.json();
-          setSearchResults(data.anime || []);
+          // API returns the array directly (not wrapped in { anime: [] })
+          setSearchResults(Array.isArray(data) ? data : data.anime || []);
         }
       } catch (err) {
         console.error("Search failed:", err);
@@ -108,7 +159,6 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       }
 
       if (imported.length === 0) {
-        // Fallback to recent watches
         const raw = localStorage.getItem("aniwavex_recent_watches");
         if (raw) {
           const list = JSON.parse(raw);
@@ -124,7 +174,6 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       }
 
       if (imported.length > 0) {
-        // Deduplicate
         const existingSlugs = new Set([
           ...pool.map((it) => it.slug),
           ...rows.flatMap((r) => r.items.map((it) => it.slug)),
@@ -140,11 +189,10 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     }
   };
 
-  // Move item logic
+  // Move item between rows / pool
   const moveItem = (item: TierItem, sourceRowId: string | "pool", targetRowId: string | "pool") => {
     if (sourceRowId === targetRowId) return;
 
-    // 1. Remove from source
     if (sourceRowId === "pool") {
       setPool((prev) => prev.filter((it) => it.slug !== item.slug));
     } else {
@@ -155,7 +203,6 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       );
     }
 
-    // 2. Add to target
     if (targetRowId === "pool") {
       setPool((prev) => [...prev, item]);
     } else {
@@ -172,10 +219,12 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
   const handleDragStart = (e: React.DragEvent, item: TierItem, sourceRowId: string | "pool") => {
     setDraggedItem({ item, sourceRowId });
     e.dataTransfer.setData("text/plain", item.slug);
+    e.dataTransfer.effectAllowed = "move";
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
   };
 
   const handleDrop = (e: React.DragEvent, targetRowId: string | "pool") => {
@@ -185,7 +234,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     }
   };
 
-  // Add custom anime to pool
+  // Add anime from search modal
   const handleAddCustomAnime = (anime: any) => {
     const newItem: TierItem = {
       id: anime.id,
@@ -206,8 +255,9 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     }
 
     setPool((prev) => [newItem, ...prev]);
-    setShowSearchModal(false);
+    // Keep modal open so the user can keep adding
     setSearchQuery("");
+    setSearchResults([]);
   };
 
   // Row controls
@@ -215,9 +265,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     const targetIdx = direction === "up" ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= rows.length) return;
     const newRows = [...rows];
-    const temp = newRows[index];
-    newRows[index] = newRows[targetIdx];
-    newRows[targetIdx] = temp;
+    [newRows[index], newRows[targetIdx]] = [newRows[targetIdx], newRows[index]];
     setRows(newRows);
   };
 
@@ -301,11 +349,9 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       canvas.width = width;
       canvas.height = totalHeight;
 
-      // Draw dark backdrop
       ctx.fillStyle = "#090d16";
       ctx.fillRect(0, 0, width, totalHeight);
 
-      // Draw Title Header
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 26px sans-serif";
       ctx.fillText(title || "AniWaveX Tier List", 40, 50);
@@ -314,18 +360,14 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       ctx.font = "bold 14px sans-serif";
       ctx.fillText("AniWaveX • aniwavex.bond", width - 240, 50);
 
-      // Draw Rows
       let currentY = headerHeight;
       for (const row of rows) {
-        // Row background
         ctx.fillStyle = "#111827";
         ctx.fillRect(20, currentY, width - 40, rowHeight - 6);
 
-        // Tier Label Box
         ctx.fillStyle = row.color || "#ef4444";
         ctx.fillRect(20, currentY, 100, rowHeight - 6);
 
-        // Tier Label Text
         ctx.fillStyle = "#ffffff";
         ctx.font = "black 32px sans-serif";
         ctx.textAlign = "center";
@@ -335,12 +377,10 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
         currentY += rowHeight;
       }
 
-      // Draw Footer
       ctx.fillStyle = "#64748b";
       ctx.font = "12px sans-serif";
       ctx.fillText("Generated on AniWaveX - The Ultimate Anime Experience", 40, totalHeight - 15);
 
-      // Convert to downloadable image
       const dataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-tierlist.png`;
@@ -372,11 +412,11 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               placeholder="Enter Tier List Title..."
             />
             <p className="text-slate-300 text-xs sm:text-sm">
-              Drag & drop anime into tiers, customize rows, or click to place. Export as a high-res image for Discord & Twitter.
+              Drag & drop anime into tiers, customize rows, or click to place. Export as a high-res image.
             </p>
           </div>
 
-          {/* Action Buttons Toolbar */}
+          {/* Action Buttons */}
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
               onClick={() => setShowSearchModal(true)}
@@ -443,7 +483,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
         </div>
       )}
 
-      {/* 2. Interactive Tier Rows Grid */}
+      {/* Interactive Tier Rows */}
       <div ref={tierGridRef} className="space-y-3 bg-slate-950/80 p-3 sm:p-5 rounded-3xl border border-white/10 shadow-2xl">
         {rows.map((row, index) => (
           <div
@@ -453,7 +493,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
             onClick={() => selectedItem && moveItem(selectedItem.item, selectedItem.sourceRowId, row.id)}
             className="group relative flex flex-col sm:flex-row items-stretch rounded-2xl overflow-hidden bg-slate-900/90 border border-white/10 hover:border-white/20 transition-all min-h-[110px]"
           >
-            {/* Left Tier Header */}
+            {/* Tier Label */}
             <div
               className="sm:w-28 flex items-center justify-center p-3 text-white font-black text-2xl sm:text-3xl shrink-0 shadow-lg select-none"
               style={{ backgroundColor: row.color }}
@@ -461,22 +501,21 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               <input
                 type="text"
                 value={row.label}
-                onChange={(e) => {
-                  const newLabel = e.target.value;
+                onChange={(e) =>
                   setRows((prev) =>
-                    prev.map((r) => (r.id === row.id ? { ...r, label: newLabel } : r))
-                  );
-                }}
+                    prev.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r))
+                  )
+                }
                 className="bg-transparent text-center font-black outline-none w-full cursor-text"
                 title="Click to rename tier"
               />
             </div>
 
-            {/* Anime Items Row Container */}
+            {/* Items Row */}
             <div className="flex-1 flex items-center flex-wrap gap-2.5 p-3 min-h-[90px] overflow-x-auto">
               {row.items.length === 0 ? (
                 <div className="text-xs text-slate-600 font-medium italic pl-2 pointer-events-none select-none">
-                  Drag anime here or click to assign...
+                  Drag anime here or click to assign…
                 </div>
               ) : (
                 row.items.map((item) => (
@@ -500,8 +539,6 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
                       sizes="80px"
                       className="object-cover pointer-events-none"
                     />
-
-                    {/* Quick Move to Pool Button */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -512,8 +549,6 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
                     >
                       <X className="w-2.5 h-2.5" />
                     </button>
-
-                    {/* Title tooltip overlay */}
                     <div className="absolute bottom-0 left-0 right-0 p-1 bg-slate-950/90 text-[9px] text-white font-bold truncate opacity-0 group-hover/card:opacity-100 transition-opacity">
                       {item.title}
                     </div>
@@ -524,44 +559,23 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
             {/* Row Controls */}
             <div className="flex sm:flex-col items-center justify-center gap-1 p-2 bg-slate-950/80 border-t sm:border-t-0 sm:border-l border-white/5 shrink-0 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => handleMoveRow(index, "up")}
-                disabled={index === 0}
-                className="p-1 text-slate-400 hover:text-white disabled:opacity-20"
-                title="Move Row Up"
-              >
+              <button onClick={() => handleMoveRow(index, "up")} disabled={index === 0} className="p-1 text-slate-400 hover:text-white disabled:opacity-20" title="Move Row Up">
                 <MoveUp className="w-3.5 h-3.5" />
               </button>
-
-              <button
-                onClick={() => handleMoveRow(index, "down")}
-                disabled={index === rows.length - 1}
-                className="p-1 text-slate-400 hover:text-white disabled:opacity-20"
-                title="Move Row Down"
-              >
+              <button onClick={() => handleMoveRow(index, "down")} disabled={index === rows.length - 1} className="p-1 text-slate-400 hover:text-white disabled:opacity-20" title="Move Row Down">
                 <MoveDown className="w-3.5 h-3.5" />
               </button>
-
-              <button
-                onClick={() => handleClearRow(row.id)}
-                className="p-1 text-slate-400 hover:text-amber-400"
-                title="Clear Row items back to pool"
-              >
+              <button onClick={() => handleClearRow(row.id)} className="p-1 text-slate-400 hover:text-amber-400" title="Clear Row">
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
-
-              <button
-                onClick={() => handleDeleteRow(row.id)}
-                className="p-1 text-slate-400 hover:text-red-400"
-                title="Delete Row"
-              >
+              <button onClick={() => handleDeleteRow(row.id)} className="p-1 text-slate-400 hover:text-red-400" title="Delete Row">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         ))}
 
-        {/* Add Tier Row Button */}
+        {/* Add Tier Row */}
         <button
           onClick={handleAddRow}
           className="w-full py-3 rounded-2xl border-2 border-dashed border-white/10 hover:border-blue-500/50 flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-900/40 transition-all"
@@ -571,7 +585,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
         </button>
       </div>
 
-      {/* 3. Unranked Anime Pool */}
+      {/* Unranked Pool */}
       <div
         onDragOver={handleDragOver}
         onDrop={(e) => handleDrop(e, "pool")}
@@ -585,7 +599,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               Unranked Anime Pool ({pool.length})
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Drag any anime card onto a tier above, or click on it to select and place.
+              Drag any card onto a tier above, or click to select and tap a row to place.
             </p>
           </div>
 
@@ -600,7 +614,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
         {pool.length === 0 ? (
           <div className="py-12 text-center text-slate-500 text-xs border border-dashed border-white/5 rounded-2xl">
-            All anime have been placed in tiers! Click &quot;Add More Anime&quot; or import from your watchlist.
+            All anime placed in tiers! Click &quot;Add More Anime&quot; or import from your watchlist.
           </div>
         ) : (
           <div className="flex flex-wrap gap-3 max-h-96 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-slate-800">
@@ -625,8 +639,6 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
                   sizes="96px"
                   className="object-cover pointer-events-none"
                 />
-
-                {/* Delete from pool */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -637,7 +649,6 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
                 >
                   <X className="w-2.5 h-2.5" />
                 </button>
-
                 <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent text-[10px] text-white font-bold truncate">
                   {item.title}
                 </div>
@@ -647,51 +658,51 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
         )}
       </div>
 
-      {/* 4. Anime Live Search Modal */}
+      {/* Search Modal */}
       {showSearchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 flex flex-col gap-4 animate-in zoom-in-95 max-h-[80vh]">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Search className="w-4 h-4 text-blue-400" />
-                Add Anime to Tier Maker
+                Add Anime to Tier List
               </h3>
               <button
                 onClick={() => {
                   setShowSearchModal(false);
                   setSearchQuery("");
+                  setSearchResults([]);
                 }}
-                className="text-slate-400 hover:text-white text-xs font-bold"
+                className="p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
               >
-                Close
+                <X className="w-4 h-4" />
               </button>
             </div>
 
+            {/* Search Input */}
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              {isSearching && (
+                <Loader2 className="w-4 h-4 text-blue-400 animate-spin absolute right-3.5 top-1/2 -translate-y-1/2" />
+              )}
               <input
                 type="text"
                 autoFocus
-                placeholder="Search anime title..."
+                placeholder="Search anime title…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-950 border border-white/15 rounded-2xl pl-10 pr-4 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 transition-all"
+                className="w-full bg-slate-950 border border-white/15 rounded-2xl pl-10 pr-10 py-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 transition-all"
               />
             </div>
 
-            {/* Search Results */}
-            <div className="flex-1 overflow-y-auto space-y-2 max-h-80 pr-1 scrollbar-thin scrollbar-thumb-slate-800">
-              {isSearching ? (
-                <div className="py-12 flex items-center justify-center text-slate-400 text-xs">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  Searching...
-                </div>
-              ) : searchResults.length > 0 ? (
+            {/* Results */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-800" style={{ maxHeight: "55vh" }}>
+              {searchResults.length > 0 ? (
                 searchResults.map((anime) => (
                   <div
-                    key={anime.id}
+                    key={anime.id || anime.slug}
                     onClick={() => handleAddCustomAnime(anime)}
-                    className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/30 cursor-pointer transition-all group"
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/30 cursor-pointer transition-all group"
                   >
                     <div className="flex items-center gap-3">
                       <div className="relative w-10 h-14 rounded-lg overflow-hidden bg-slate-800 shrink-0">
@@ -707,23 +718,22 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
                           {anime.title}
                         </h4>
                         <div className="text-[11px] text-slate-400 mt-0.5">
-                          {anime.year || "Anime"}
+                          {anime.year || "Anime"}{anime.rating ? ` · ★ ${anime.rating}` : ""}
                         </div>
                       </div>
                     </div>
-
-                    <button className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shrink-0">
-                      Add
+                    <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shrink-0">
+                      + Add
                     </button>
                   </div>
                 ))
-              ) : searchQuery.length >= 2 ? (
+              ) : searchQuery.length >= 2 && !isSearching ? (
                 <div className="py-12 text-center text-slate-500 text-xs">
                   No anime found matching &quot;{searchQuery}&quot;
                 </div>
               ) : (
                 <div className="py-12 text-center text-slate-500 text-xs">
-                  Type at least 2 characters to search...
+                  Type at least 2 characters to search…
                 </div>
               )}
             </div>
