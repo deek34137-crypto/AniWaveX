@@ -37,42 +37,122 @@ export default function AnimeCard({
   const [isBookmarking, setIsBookmarking] = useState(false);
   const { user, supabase } = useAuth();
 
+  // Check initial bookmark status from localStorage & Supabase
+  useEffect(() => {
+    try {
+      const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+      if (localWatchlist.some((it: any) => it.anime_slug === anime.slug)) {
+        setIsBookmarked(true);
+      }
+    } catch {}
+
+    if (user && anime.slug) {
+      supabase
+        .from("bookmarks")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("anime_slug", anime.slug)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setIsBookmarked(true);
+        });
+    }
+  }, [user, anime.slug, supabase]);
+
   const handleQuickBookmark = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!user) {
+    let activeUser = user;
+    if (!activeUser) {
+      const { data: { user: liveUser } } = await supabase.auth.getUser();
+      if (liveUser) activeUser = liveUser;
+    }
+
+    if (!activeUser) {
       alert("Please sign in to save anime to your watchlist.");
       return;
     }
 
     setIsBookmarking(true);
-    try {
-      const nextState = !isBookmarked;
-      setIsBookmarked(nextState);
+    const nextState = !isBookmarked;
+    setIsBookmarked(nextState);
 
+    try {
       if (nextState) {
-        await supabase.from("bookmarks").upsert(
-          {
-            user_id: user.id,
+        // 1. Check if record exists
+        const { data: existing } = await supabase
+          .from("bookmarks")
+          .select("id")
+          .eq("user_id", activeUser.id)
+          .eq("anime_slug", anime.slug)
+          .maybeSingle();
+
+        if (existing?.id) {
+          await supabase
+            .from("bookmarks")
+            .update({
+              status: "watching" as WatchlistStatus,
+              anime_title: anime.title,
+              poster_image: anime.posterImage || anime.backgroundImage,
+            })
+            .eq("id", existing.id);
+        } else {
+          await supabase.from("bookmarks").insert({
+            user_id: activeUser.id,
             anime_slug: anime.slug,
             anime_title: anime.title,
-            poster_image: anime.posterImage,
+            poster_image: anime.posterImage || anime.backgroundImage,
             status: "watching" as WatchlistStatus,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id, anime_slug" }
-        );
+          });
+        }
+
+        // Mirror to localStorage
+        try {
+          const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+          const item = {
+            id: anime.slug,
+            anime_slug: anime.slug,
+            anime_title: anime.title,
+            poster_image: anime.posterImage || anime.backgroundImage,
+            status: "watching",
+            user_id: activeUser.id,
+            created_at: new Date().toISOString(),
+          };
+          localStorage.setItem("aniwavex_watchlist", JSON.stringify([item, ...localWatchlist.filter((it: any) => it.anime_slug !== anime.slug)]));
+        } catch {}
       } else {
         await supabase
           .from("bookmarks")
           .delete()
-          .eq("user_id", user.id)
+          .eq("user_id", activeUser.id)
           .eq("anime_slug", anime.slug);
+
+        try {
+          const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+          localStorage.setItem("aniwavex_watchlist", JSON.stringify(localWatchlist.filter((it: any) => it.anime_slug !== anime.slug)));
+        } catch {}
       }
     } catch (err) {
       console.error("Failed to update bookmark:", err);
-      setIsBookmarked(!isBookmarked);
+      // Fallback mirror to localStorage so user doesn't lose state
+      try {
+        const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+        if (nextState) {
+          const item = {
+            id: anime.slug,
+            anime_slug: anime.slug,
+            anime_title: anime.title,
+            poster_image: anime.posterImage || anime.backgroundImage,
+            status: "watching",
+            user_id: activeUser.id,
+            created_at: new Date().toISOString(),
+          };
+          localStorage.setItem("aniwavex_watchlist", JSON.stringify([item, ...localWatchlist.filter((it: any) => it.anime_slug !== anime.slug)]));
+        } else {
+          localStorage.setItem("aniwavex_watchlist", JSON.stringify(localWatchlist.filter((it: any) => it.anime_slug !== anime.slug)));
+        }
+      } catch {}
     } finally {
       setIsBookmarking(false);
     }

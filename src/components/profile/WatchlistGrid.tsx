@@ -15,17 +15,38 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
   const { user, supabase } = useAuth();
 
   useEffect(() => {
+    // 1. Initial hydration from localStorage
+    try {
+      const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+      if (localWatchlist.length > 0) {
+        setItems((prev) => {
+          const map = new Map();
+          [...localWatchlist, ...prev].forEach((item) => {
+            if (item?.anime_slug) map.set(item.anime_slug, item);
+          });
+          return Array.from(map.values());
+        });
+      }
+    } catch {}
+
+    // 2. Fetch from Supabase
     if (user) {
       supabase
         .from("bookmarks")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(50)
+        .limit(100)
         .then((fetchRes: any) => {
           const data = fetchRes?.data;
           if (data && data.length > 0) {
-            setItems(data);
+            setItems((prev) => {
+              const map = new Map();
+              [...data, ...prev].forEach((item) => {
+                if (item?.anime_slug) map.set(item.anime_slug, item);
+              });
+              return Array.from(map.values());
+            });
           }
         });
     }

@@ -40,6 +40,7 @@ export default function PublicProfileClient({
   bookmarks: initialBookmarks,
   history: initialHistory,
 }: PublicProfileClientProps) {
+  const [bookmarks, setBookmarks] = useState<any[]>(initialBookmarks || []);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<"showcase" | "watchlist" | "tierlists">("showcase");
   const [watchlistFilter, setWatchlistFilter] = useState("all");
@@ -52,7 +53,7 @@ export default function PublicProfileClient({
   const bannerPresetId = meta.banner_preset || "cyberpunk";
   const customBannerUrl = meta.custom_banner_url;
 
-  const { user: authUser } = useAuth();
+  const { user: authUser, supabase } = useAuth();
   const isOwner = authUser?.id === user?.id || 
     (authUser?.user_metadata?.username || authUser?.email?.split("@")[0])?.toLowerCase() === username.toLowerCase();
 
@@ -83,16 +84,51 @@ export default function PublicProfileClient({
     } catch {}
   }, [username]);
 
+  // Hydrate bookmarks from localStorage & Supabase
+  useEffect(() => {
+    try {
+      const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+      if (localWatchlist.length > 0) {
+        setBookmarks((prev) => {
+          const map = new Map();
+          [...localWatchlist, ...prev].forEach((item) => {
+            if (item?.anime_slug) map.set(item.anime_slug, item);
+          });
+          return Array.from(map.values());
+        });
+      }
+    } catch {}
+
+    if (authUser && isOwner) {
+      supabase
+        .from("bookmarks")
+        .select("*")
+        .eq("user_id", authUser.id)
+        .order("created_at", { ascending: false })
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            setBookmarks((prev) => {
+              const map = new Map();
+              [...data, ...prev].forEach((item) => {
+                if (item?.anime_slug) map.set(item.anime_slug, item);
+              });
+              return Array.from(map.values());
+            });
+          }
+        });
+    }
+  }, [authUser, isOwner, supabase]);
+
   // Compute stats
   const totalEpisodesWatched = initialHistory.length;
   const estimatedHours = Math.round((totalEpisodesWatched * 24) / 60);
-  const completedCount = initialBookmarks.filter((b) => b.status === "completed").length;
-  const watchingCount = initialBookmarks.filter((b) => b.status === "watching").length;
+  const completedCount = bookmarks.filter((b) => b.status === "completed").length;
+  const watchingCount = bookmarks.filter((b) => b.status === "watching").length;
 
   const filteredBookmarks = useMemo(() => {
-    if (watchlistFilter === "all") return initialBookmarks;
-    return initialBookmarks.filter((b) => b.status === watchlistFilter);
-  }, [initialBookmarks, watchlistFilter]);
+    if (watchlistFilter === "all") return bookmarks;
+    return bookmarks.filter((b) => b.status === watchlistFilter);
+  }, [bookmarks, watchlistFilter]);
 
   const handleShare = () => {
     if (typeof window !== "undefined") {
@@ -232,7 +268,7 @@ export default function PublicProfileClient({
             <Bookmark className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xl sm:text-2xl font-black text-white">{initialBookmarks.length}</div>
+            <div className="text-xl sm:text-2xl font-black text-white">{bookmarks.length}</div>
             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
               Total Watchlist
             </div>
@@ -263,7 +299,7 @@ export default function PublicProfileClient({
           }`}
         >
           <Grid className="w-4 h-4" />
-          <span>Watchlist ({initialBookmarks.length})</span>
+          <span>Watchlist ({bookmarks.length})</span>
         </button>
 
         <button
