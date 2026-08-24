@@ -73,6 +73,9 @@ export default function InPageVideoPlayer({
     currentUserRef.current = liveUser;
   }, [authUser, initialUser]);
 
+  // Track duration separately so it can be saved to Supabase
+  const lastKnownDurationRef = useRef(0);
+
   // Helper to upsert watch history to Supabase
   const syncToSupabase = useCallback(async (progressSeconds: number) => {
     if (!episode) return;
@@ -105,6 +108,12 @@ export default function InPageVideoPlayer({
 
       if (progressSeconds > 0) {
         payload.progress_seconds = Math.floor(progressSeconds);
+      }
+
+      // Save total_seconds so % calculation is accurate when restored
+      const knownDur = lastKnownDurationRef.current;
+      if (knownDur > 0) {
+        payload.total_seconds = knownDur;
       }
 
       const { error } = await supabase
@@ -166,6 +175,11 @@ export default function InPageVideoPlayer({
 
     const floorTime = Math.floor(currentTime);
     const floorDur = Math.floor(duration);
+
+    // Always keep the latest known duration up-to-date
+    if (floorDur > 0) {
+      lastKnownDurationRef.current = floorDur;
+    }
 
     // Save to localStorage every 2 seconds
     if (Math.abs(currentTime - lastSavedTimeRef.current) >= 2) {

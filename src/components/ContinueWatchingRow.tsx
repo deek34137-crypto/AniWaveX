@@ -41,7 +41,8 @@ export default function ContinueWatchingRow() {
               posterImage: r.poster_image,
               episodeId: r.last_episode_watched || 1,
               progressSeconds: r.progress_seconds || 0,
-              totalSeconds: 1440, // 24m fallback
+              // Use saved total_seconds; fall back to a standard 24-minute episode only if never set
+              totalSeconds: r.total_seconds > 0 ? r.total_seconds : 1440,
               updatedAt: new Date(r.updated_at).getTime(),
             }));
             setItems(mapped);
@@ -118,12 +119,12 @@ export default function ContinueWatchingRow() {
         {items.map((item) => {
           const totalSec = item.totalSeconds || 1440;
           const progSec = item.progressSeconds || 0;
-          const pct = Math.min(100, Math.max(5, Math.round((progSec / totalSec) * 100)));
+          const pct = Math.min(100, Math.round((progSec / totalSec) * 100));
 
           return (
             <Link
               key={item.animeSlug}
-              href={`/anime/${item.animeSlug}`}
+              href={`/anime/${item.animeSlug}?ep=${item.episodeId}`}
               className="snap-start shrink-0 w-[155px] sm:w-[185px] md:w-[205px] group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] hover:scale-[1.02]"
             >
               {/* Vertical Aspect Container (aspect-[2/3]) */}
