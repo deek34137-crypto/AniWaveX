@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAnikotoStream, getAnilistId } from "@/lib/providers/anikoto-wrapper";
+import { unstable_cache } from "next/cache";
 
 interface CacheEntry {
   data: any;
@@ -205,12 +206,48 @@ function extractWorkerSources(
   return { sources, subtitles: safeSubtitles };
 }
 
+/**
+ * Validates whether a resolved stream candidate is truly playable and non-empty.
+ */
+function isPlayableStream(result: any): boolean {
+  if (!result || !Array.isArray(result.sources) || result.sources.length === 0) {
+    return false;
+  }
+  return result.sources.some((s: any) => {
+    if (!s || !s.url || typeof s.url !== 'string') return false;
+    if (s.isM3U8) {
+      return s.url.includes('/api/proxy') || s.url.includes('.m3u8');
+    }
+    return s.url.startsWith('http://') || s.url.startsWith('https://');
+  });
+}
+
+function formatStreamResponse(sources: any[], subtitles: any[], audio: 'sub' | 'dub' | 'hindi') {
+  const sortedSources = [...sources].sort((a, b) => {
+    if (a.isM3U8 && !b.isM3U8) return -1;
+    if (!a.isM3U8 && b.isM3U8) return 1;
+    return 0;
+  });
+
+  return {
+    sources: sortedSources,
+    sub: audio === 'sub' ? sortedSources : [],
+    dub: audio === 'dub' ? sortedSources : [],
+    hindi: audio === 'hindi' ? sortedSources : [],
+    audio: audio,
+    nativeStream: {
+      subtitles: subtitles || []
+    }
+  };
+}
+
 async function fetchWorkerProvider(
   externalApi: string,
   provider: string,
   anilistId: number,
   ep: number,
   audio: 'sub' | 'dub' | 'hindi',
+  signal?: AbortSignal,
   timeoutMs = 2500
 ): Promise<ExtractedStreamResult | null> {
   const workerAudio = audio === 'hindi' 
@@ -220,12 +257,14 @@ async function fetchWorkerProvider(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+  const combinedSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+
   try {
     const res = await fetch(
       `${externalApi}/watch/${provider}/${anilistId}/${workerAudio}/${provider}-${ep}`,
       {
         headers: { Accept: 'application/json' },
-        signal: controller.signal,
+        signal: combinedSignal,
         next: { revalidate: 180 }
       }
     );
@@ -240,7 +279,131 @@ async function fetchWorkerProvider(
   }
 }
 
-async function resolveStream(
+/**
+ * Speculative parallel stream probe with non-canceling escalation timers (0ms, 600ms, 1000ms).
+ * Returns the first validated, playable candidate immediately.
+ */
+async function speculativeProbeEngine(
+  externalApi: string,
+  resolvedAnilistId: number,
+  parsedEp: number,
+  title: string,
+  audio: 'sub' | 'dub' | 'hindi'
+): Promise<any | null> {
+  return new Promise<any>((resolve) => {
+    let isResolved = false;
+    const masterController = new AbortController();
+
+    // Global hard timeout
+    const globalTimeout = setTimeout(() => {
+      if (!isResolved) {
+        isResolved = true;
+        masterController.abort();
+        resolve(null);
+      }
+    }, 5500);
+
+    const onCandidateFound = (candidate: any) => {
+      if (!isResolved && isPlayableStream(candidate)) {
+        isResolved = true;
+        clearTimeout(globalTimeout);
+        masterController.abort(); // Cancel remaining requests
+        resolve(candidate);
+      }
+    };
+
+    const tryProvider = async (provider: string, pAudio: 'sub' | 'dub' | 'hindi', timeoutMs = 2500) => {
+      if (isResolved) return;
+      try {
+        const res = await fetchWorkerProvider(
+          externalApi,
+          provider,
+          resolvedAnilistId,
+          parsedEp,
+          pAudio,
+          masterController.signal,
+          timeoutMs
+        );
+        if (res && res.sources.length > 0) {
+          const candidate = formatStreamResponse(res.sources, res.subtitles, audio);
+          onCandidateFound(candidate);
+        }
+      } catch {
+        // Continue probing other candidates
+      }
+    };
+
+    const tryLocalAnikoto = async () => {
+      if (isResolved || audio === 'hindi') return;
+      try {
+        const anikotoRes = await getAnikotoStream(title, parsedEp, audio as 'sub' | 'dub', resolvedAnilistId);
+        if (anikotoRes) {
+          const sources: any[] = [];
+          const subtitles = anikotoRes.subtitles || [];
+
+          if (anikotoRes.stream_url) {
+            sources.push({
+              url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
+              quality: "HD-1 (HLS)",
+              isM3U8: true,
+            });
+          }
+
+          if (anikotoRes.streams) {
+            const embedSources = anikotoRes.streams
+              .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top") && !s.url.includes("filmu.in"))
+              .map((s: any) => ({
+                url: s.url,
+                quality: s.server || "Server Embed",
+                isM3U8: false
+              }));
+
+            sources.push(...embedSources);
+          }
+
+          if (sources.length > 0) {
+            const candidate = formatStreamResponse(sources, subtitles, audio);
+            onCandidateFound(candidate);
+          }
+        }
+      } catch {
+        // Continue
+      }
+    };
+
+    // Non-canceling Escalation Pipeline:
+    if (audio === 'hindi') {
+      // t = 0ms: Probe 3 Hindi providers in parallel
+      ['animedunya', 'anibd', 'senshi'].forEach(p => tryProvider(p, 'hindi', 2500));
+
+      // t = 600ms: Concurrently launch Eng dub fallback providers
+      setTimeout(() => {
+        if (!isResolved) {
+          ['reanime', 'anikoto', 'animegg', 'kaa'].forEach(p => tryProvider(p, 'dub', 2500));
+        }
+      }, 600);
+    } else {
+      // t = 0ms: Tier 1 high-speed providers
+      ['reanime', 'hianime', 'anikoto'].forEach(p => tryProvider(p, audio, 2500));
+
+      // t = 600ms: Tier 2 providers launched in parallel without canceling Tier 1
+      setTimeout(() => {
+        if (!isResolved) {
+          ['kaa', 'animegg', 'anizone', 'anineko', '2dhive'].forEach(p => tryProvider(p, audio, 2500));
+        }
+      }, 600);
+
+      // t = 1000ms: Local Anikoto resolver launched in parallel
+      setTimeout(() => {
+        if (!isResolved) {
+          tryLocalAnikoto();
+        }
+      }, 1000);
+    }
+  });
+}
+
+async function resolveStreamRaw(
   id: string,
   ep: string,
   title: string,
@@ -249,148 +412,66 @@ async function resolveStream(
   anilistParam?: string | null
 ) {
   const parsedEp = parseInt(ep, 10);
-
-  // 1. Resolve AniList ID once if not provided by caller (uses bounded LRU cache)
   const resolvedAnilistId = anilistParam ? Number(anilistParam) : await getAnilistId(title);
 
-  const sources: any[] = [];
-  let subtitles: any[] = [];
-
-  // 1. Try external Cloudflare Worker API (Anivexa-API) using bounded parallel probing
-  const externalApi = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL || "https://anivexa-stream-api.deek34137.workers.dev";
-  if (externalApi && !externalApi.startsWith('/') && resolvedAnilistId) {
-    try {
-      if (audio === 'hindi') {
-        // Probe all 3 Hindi providers in parallel
-        const hindiProviders = ['animedunya', 'anibd', 'senshi'];
-        const results = await Promise.allSettled(
-          hindiProviders.map(p => fetchWorkerProvider(externalApi, p, resolvedAnilistId, parsedEp, 'hindi', 2500))
-        );
-
-        for (const res of results) {
-          if (res.status === 'fulfilled' && res.value && res.value.sources.length > 0) {
-            sources.push(...res.value.sources);
-            subtitles.push(...res.value.subtitles);
-            break;
-          }
-        }
-
-        // If no Hindi streams found, probe fallback English dub providers in parallel
-        if (sources.length === 0) {
-          const fallbackProviders = ['reanime', 'anikoto', 'animegg', 'kaa'];
-          const fbResults = await Promise.allSettled(
-            fallbackProviders.map(p => fetchWorkerProvider(externalApi, p, resolvedAnilistId, parsedEp, 'dub', 2500))
-          );
-
-          for (const res of fbResults) {
-            if (res.status === 'fulfilled' && res.value && res.value.sources.length > 0) {
-              sources.push(...res.value.sources);
-              subtitles.push(...res.value.subtitles);
-              break;
-            }
-          }
-        }
-      } else {
-        // Probe Tier 1 high-speed providers in parallel (3 concurrent)
-        const tier1Providers = ['reanime', 'hianime', 'anikoto'];
-        const tier1Results = await Promise.allSettled(
-          tier1Providers.map(p => fetchWorkerProvider(externalApi, p, resolvedAnilistId, parsedEp, audio, 2500))
-        );
-
-        for (const res of tier1Results) {
-          if (res.status === 'fulfilled' && res.value && res.value.sources.length > 0) {
-            sources.push(...res.value.sources);
-            subtitles.push(...res.value.subtitles);
-            break;
-          }
-        }
-
-        // If Tier 1 produced no sources, probe Tier 2 providers in parallel
-        if (sources.length === 0) {
-          const tier2Providers = ['animegg', 'anizone', 'kaa', 'anineko', '2dhive'];
-          const tier2Results = await Promise.allSettled(
-            tier2Providers.map(p => fetchWorkerProvider(externalApi, p, resolvedAnilistId, parsedEp, audio, 3000))
-          );
-
-          for (const res of tier2Results) {
-            if (res.status === 'fulfilled' && res.value && res.value.sources.length > 0) {
-              sources.push(...res.value.sources);
-              subtitles.push(...res.value.subtitles);
-              break;
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("External worker stream fetch error, falling back to local resolver:", err);
-    }
-  }
-
-  // 2. Local Resolver (Anikoto Stream Resolution)
-  if (sources.length === 0 && audio !== 'hindi') {
-    try {
-      const anikotoRes = await getAnikotoStream(title, parsedEp, audio, resolvedAnilistId);
-
-      if (anikotoRes) {
-        if (anikotoRes.subtitles) {
-          subtitles = anikotoRes.subtitles;
-        }
-
-        // A. If direct HLS stream is available, proxy it
-        if (anikotoRes.stream_url) {
-          sources.push({
+  if (!resolvedAnilistId) {
+    // Fallback directly to local Anikoto if AniList ID is completely missing
+    if (audio !== 'hindi') {
+      try {
+        const anikotoRes = await getAnikotoStream(title, parsedEp, audio as 'sub' | 'dub');
+        if (anikotoRes && anikotoRes.stream_url) {
+          const sources = [{
             url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
             quality: "HD-1 (HLS)",
             isM3U8: true,
-          });
+          }];
+          return formatStreamResponse(sources, anikotoRes.subtitles || [], audio);
         }
-
-        // B. Add embed servers (e.g. Server SB, Server HD-2, etc.)
-        if (anikotoRes.streams) {
-          const embedSources = anikotoRes.streams
-            .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top") && !s.url.includes("filmu.in"))
-            .map((s: any) => ({
-              url: s.url,
-              quality: s.server || "Server Embed",
-              isM3U8: false
-            }));
-
-          sources.push(...embedSources);
-        }
-      }
-    } catch (err) {
-      console.warn("Local anikoto stream resolution error:", err);
+      } catch {}
     }
+    return null;
   }
 
-  if (sources.length > 0) {
-    const sortedSources = [...sources].sort((a, b) => {
-      if (a.isM3U8 && !b.isM3U8) return -1;
-      if (!a.isM3U8 && b.isM3U8) return 1;
-      return 0;
-    });
+  const rawExternalApi = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL || "https://anivexa-stream-api.deek34137.workers.dev";
+  const externalApi = rawExternalApi ? rawExternalApi.replace(/\/+$/, '').replace(/\/stream$/, '') : "";
 
-    return {
-      sources: sortedSources,
-      sub: audio === 'sub' ? sortedSources : [],
-      dub: audio === 'dub' ? sortedSources : [],
-      hindi: audio === 'hindi' ? sortedSources : [],
-      audio: audio,
-      nativeStream: {
-        subtitles: subtitles
-      }
-    };
-  }
+  const result = await speculativeProbeEngine(
+    externalApi,
+    resolvedAnilistId,
+    parsedEp,
+    title,
+    audio
+  );
 
-  return null;
+  return isPlayableStream(result) ? result : null;
 }
+
+// Next.js persistent cache layer (3 minutes TTL across distributed serverless instances)
+const resolveStreamCachedPersistent = unstable_cache(
+  async (
+    _cacheKey: string,
+    id: string,
+    ep: string,
+    title: string,
+    type: string | null,
+    audio: 'sub' | 'dub' | 'hindi',
+    anilistParam?: string | null
+  ) => {
+    return await resolveStreamRaw(id, ep, title, type, audio, anilistParam);
+  },
+  ['stream-resolution-v2'],
+  {
+    revalidate: 180, // 3 minutes
+    tags: ['stream-resolution']
+  }
+);
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   const ep = searchParams.get("ep");
   const title = searchParams.get("title");
-  const type = searchParams.get("type"); // e.g., 'movie', 'TV'
+  const type = searchParams.get("type");
   const audio = (searchParams.get("audio") || 'sub') as 'sub' | 'dub' | 'hindi';
   const anilistParam = searchParams.get("anilistId");
 
@@ -398,39 +479,59 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing required parameters (id, ep, title)" }, { status: 400 });
   }
 
-  // Build normalized cache key using all resolution-affecting parameters
-  const cacheKey = `${id}:${ep}:${title.toLowerCase().trim()}:${audio}:${type || ''}:${anilistParam || ''}`;
+  // Build deterministic cache key with every parameter affecting stream resolution
+  const cacheKey = `stream:${id}:${ep}:${title.toLowerCase().trim()}:${audio}:${type || ''}:${anilistParam || ''}`;
 
-  // Check LRU Cache
+  // 1. Check L1 in-memory LRU Cache (Fastest same-instance hit)
   const cached = streamCache.get(cacheKey);
-  if (cached) {
-    return NextResponse.json(cached);
+  if (cached && isPlayableStream(cached)) {
+    return NextResponse.json(cached, {
+      headers: {
+        "Cache-Control": "public, s-maxage=180, stale-while-revalidate=360",
+      }
+    });
   }
 
-  // Check In-Flight Requests (Deduplication)
+  // 2. Check in-flight request deduplication Map
   let requestPromise = inFlightRequests.get(cacheKey);
 
   if (!requestPromise) {
-    requestPromise = resolveStream(id, ep, title, type, audio, anilistParam);
+    requestPromise = (async () => {
+      // 3. Persistent Data Cache across serverless lambdas
+      const streamResult = await resolveStreamCachedPersistent(
+        cacheKey,
+        id,
+        ep,
+        title,
+        type,
+        audio,
+        anilistParam
+      );
+      return streamResult;
+    })();
     inFlightRequests.set(cacheKey, requestPromise);
   }
 
   try {
     const result = await requestPromise;
 
-    if (!result) {
+    if (!result || !isPlayableStream(result)) {
       return NextResponse.json({ error: "Stream not found" }, { status: 404 });
     }
 
-    // Cache successful stream resolution for 3 minutes
+    // Cache valid resolution in L1 LRU Cache
     streamCache.set(cacheKey, result, STREAM_CACHE_TTL_MS);
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "public, s-maxage=180, stale-while-revalidate=360",
+      }
+    });
   } catch (error) {
     console.error("Stream fetch error:", error);
     return NextResponse.json({ error: "Failed to fetch stream" }, { status: 500 });
   } finally {
-    // ALWAYS remove the in-flight promise to prevent poisoning subsequent requests
+    // ALWAYS remove in-flight promise to prevent poisoning subsequent requests
     inFlightRequests.delete(cacheKey);
   }
 }

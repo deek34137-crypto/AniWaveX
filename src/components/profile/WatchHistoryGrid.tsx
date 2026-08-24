@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Star, Trash2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/AuthProvider";
 import AnimeImage from "@/components/AnimeImage";
 
 interface WatchHistoryItem {
@@ -32,8 +32,12 @@ function formatTime(totalSeconds: number): string {
 
 export default function WatchHistoryGrid({ initialItems }: { initialItems: WatchHistoryItem[] }) {
   const [items, setItems] = useState<WatchHistoryItem[]>(initialItems);
-  const [localMeta, setLocalMeta] = useState<Record<string, { duration: number; progress: number }>>(() => {
-    if (typeof window === "undefined") return {};
+  const [localMeta, setLocalMeta] = useState<Record<string, { duration: number; progress: number }>>({});
+  const { user, supabase } = useAuth();
+
+  // Defer reading localStorage to client-side useEffect to prevent SSR hydration mismatch
+  useEffect(() => {
+    if (!initialItems || initialItems.length === 0) return;
     const metaMap: Record<string, { duration: number; progress: number }> = {};
     initialItems.forEach((item) => {
       try {
@@ -52,48 +56,44 @@ export default function WatchHistoryGrid({ initialItems }: { initialItems: Watch
         // Ignore localStorage read errors
       }
     });
-    return metaMap;
-  });
-  const supabase = createClient();
+    setLocalMeta(metaMap);
+  }, [initialItems]);
 
   useEffect(() => {
-    supabase.auth.getUser().then((res: any) => {
-      const user = res?.data?.user;
-      if (user) {
-        supabase
-          .from("watch_history")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false })
-          .limit(50)
-          .then((fetchRes: any) => {
-            const data = fetchRes?.data;
-            if (data && data.length > 0) {
-              setItems(data);
-              const metaMap: Record<string, { duration: number; progress: number }> = {};
-              data.forEach((item: any) => {
-                try {
-                  const storageKey = `watch_progress_${item.anime_slug}_ep_${item.last_episode_watched}`;
-                  const saved = localStorage.getItem(storageKey);
-                  if (saved) {
-                    const parsed = JSON.parse(saved);
-                    if (parsed.duration && parsed.duration > 0) {
-                      metaMap[item.id] = {
-                        duration: parsed.duration,
-                        progress: parsed.currentTime || item.progress_seconds || 0
-                      };
-                    }
+    if (user) {
+      supabase
+        .from("watch_history")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(50)
+        .then((fetchRes: any) => {
+          const data = fetchRes?.data;
+          if (data && data.length > 0) {
+            setItems(data);
+            const metaMap: Record<string, { duration: number; progress: number }> = {};
+            data.forEach((item: any) => {
+              try {
+                const storageKey = `watch_progress_${item.anime_slug}_ep_${item.last_episode_watched}`;
+                const saved = localStorage.getItem(storageKey);
+                if (saved) {
+                  const parsed = JSON.parse(saved);
+                  if (parsed.duration && parsed.duration > 0) {
+                    metaMap[item.id] = {
+                      duration: parsed.duration,
+                      progress: parsed.currentTime || item.progress_seconds || 0
+                    };
                   }
-                } catch {
-                  // Ignore
                 }
-              });
-              setLocalMeta((prev) => ({ ...prev, ...metaMap }));
-            }
-          });
-      }
-    });
-  }, [supabase]);
+              } catch {
+                // Ignore
+              }
+            });
+            setLocalMeta((prev) => ({ ...prev, ...metaMap }));
+          }
+        });
+    }
+  }, [user, supabase]);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();

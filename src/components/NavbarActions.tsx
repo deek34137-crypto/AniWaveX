@@ -6,39 +6,19 @@ import AuthModal from "./AuthModal";
 import UsernameModal from "./UsernameModal";
 import Link from "next/link";
 import { getAvatarUrl } from "@/lib/avatars";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/AuthProvider";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-export default function NavbarActions({ user: initialUser }: { user: any }) {
-  const [currentUser, setCurrentUser] = useState<any>(initialUser);
+export default function NavbarActions({ user: initialUser }: { user?: any }) {
+  const { user: authUser, supabase } = useAuth();
+  const currentUser = authUser || initialUser;
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isUsernameModalOpen, setIsUsernameModalOpen] = useState(false);
   
   const router = useRouter();
-  const supabase = createClient();
-
-  useEffect(() => {
-    setCurrentUser(initialUser);
-  }, [initialUser]);
-
-  useEffect(() => {
-    // 1. Fetch current session user on mount
-    supabase.auth.getUser().then((res: any) => {
-      if (res?.data?.user) setCurrentUser(res.data.user);
-    });
-
-    // 2. Real-time auth state subscription for immediate UI update on login/logout
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      setCurrentUser(session?.user ?? null);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [supabase]);
 
   useEffect(() => {
     if (currentUser && !currentUser.user_metadata?.username) {
@@ -48,7 +28,6 @@ export default function NavbarActions({ user: initialUser }: { user: any }) {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    setCurrentUser(null);
     setIsMenuOpen(false);
     router.refresh();
     router.push('/');

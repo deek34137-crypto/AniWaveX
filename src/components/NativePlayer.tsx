@@ -20,23 +20,8 @@ interface NativePlayerProps {
 
 function isValidVttSubtitle(url: string): boolean {
   if (!url || typeof url !== 'string') return false;
-
-  let target = url;
-  if (url.startsWith('/api/proxy')) {
-    try {
-      const parsed = new URL(url, 'http://localhost');
-      const paramUrl = parsed.searchParams.get('url');
-      if (paramUrl) target = paramUrl;
-    } catch {
-      target = decodeURIComponent(url);
-    }
-  }
-
-  const lower = target.toLowerCase().split('?')[0];
-  // Filter out .ass and .ssa files which standard HTML5 <track> cannot parse
-  if (lower.endsWith('.ass') || lower.endsWith('.ssa')) return false;
-  // Accept standard WebVTT tracks
-  return lower.endsWith('.vtt') || lower.includes('.vtt') || lower.includes('/vtt/');
+  // All subtitles (including .ass, .ssa, .srt, .vtt) proxied through /api/proxy or valid WebVTT tracks are supported
+  return url.startsWith('/api/proxy') || url.startsWith('http://') || url.startsWith('https://');
 }
 
 export default function NativePlayer({ 

@@ -1,6 +1,7 @@
 import Navbar from "@/components/Navbar";
 import HeroSlider from "@/components/HeroSlider";
 import AnimeRow from "@/components/AnimeRow";
+import ContinueWatchingRow from "@/components/ContinueWatchingRow";
 import { getTrendingAnime, getTopRatedAnime } from "@/lib/api";
 
 export default async function Home() {
@@ -22,6 +23,8 @@ export default async function Home() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <HeroSlider animeList={heroAnimeList} />
         
+        <ContinueWatchingRow />
+
         <AnimeRow title="Trending Now" items={trendingRow} />
         <AnimeRow title="Highest Rated" items={topRated} />
       </div>

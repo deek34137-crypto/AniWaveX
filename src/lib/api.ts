@@ -72,6 +72,26 @@ export const getTopRatedAnime = cache(async () => {
   }
 });
 
+export const getAiringAnime = cache(async () => {
+  try {
+    const res = await fetch('https://kitsu.io/api/edge/anime?filter[status]=current&sort=-user_count&page[limit]=40&include=categories', {
+      headers: {
+        "Accept": "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      },
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 } // 1 hour ISR cache
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.data || []).map((a: any) => formatAnimeData(a, json.included));
+  } catch (error) {
+    console.error("Failed to fetch airing anime:", error);
+    return [];
+  }
+});
+
 // Alias map for common titles that might fail normal search
 const SEARCH_ALIASES: Record<string, string> = {
   "slime datta ken": "That Time I Got Reincarnated as a Slime",
@@ -102,11 +122,11 @@ function normalizeSearchQuery(query: string): string {
     return SEARCH_ALIASES[lowerQuery];
   }
 
-  // 3. Strip confusing punctuation (dots, hyphens) but keep spaces
-  const normalized = lowerQuery.replace(/[-]/g, ' ').replace(/[._!?,;'"]/g, '');
+  // 3. Strip confusing punctuation (dots, hyphens) but keep spaces and all Unicode letters & numbers
+  const normalized = lowerQuery.replace(/[-_]/g, ' ').replace(/[^\p{L}\p{N}\s]/gu, '');
   
-  // 4. Return normalized
-  return normalized.trim();
+  // 4. Return normalized (or fallback to trimmed lowerQuery if strip leaves it empty)
+  return normalized.trim() || lowerQuery;
 }
 
 export const searchAnime = cache(async (query: string, limit: number = 20) => {
@@ -132,61 +152,35 @@ export const searchAnime = cache(async (query: string, limit: number = 20) => {
   }
 });
 
-async function fetchAllKitsuEpisodes(animeId: string, initialEpJson: any): Promise<any[]> {
+export async function fetchKitsuEpisodeRange(animeId: string, offset: number = 0, limit: number = 100) {
   const headers = {
     "Accept": "application/vnd.api+json",
     "Content-Type": "application/vnd.api+json",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
   };
 
-  const initialEpisodes: any[] = initialEpJson?.data || [];
-  const metaCount: number = initialEpJson?.meta?.count || 0;
-  const pageSize = 100;
-
-  // If all episodes fit in the initial response, return immediately
-  if (metaCount <= initialEpisodes.length || initialEpisodes.length === 0) {
-    return initialEpisodes;
-  }
-
-  // Create offsets for remaining episodes (up to 1500 episodes)
-  const maxEpisodes = Math.min(metaCount, 1500);
-  const offsets: number[] = [];
-  for (let offset = pageSize; offset < maxEpisodes; offset += pageSize) {
-    offsets.push(offset);
-  }
-
-  // Fetch remaining pages in parallel batches of 5 to avoid overwhelming the server
-  const allFetched = [...initialEpisodes];
-  const batchSize = 5;
-
-  for (let i = 0; i < offsets.length; i += batchSize) {
-    const chunk = offsets.slice(i, i + batchSize);
-    const chunkResults = await Promise.all(
-      chunk.map(async (offset) => {
-        try {
-          const res = await fetch(
-            `https://kitsu.io/api/edge/anime/${animeId}/episodes?page[limit]=${pageSize}&page[offset]=${offset}`,
-            {
-              headers,
-              signal: AbortSignal.timeout(8000),
-              next: { revalidate: 86400 } // 24h ISR cache
-            }
-          );
-          if (!res.ok) return [];
-          const epData = await res.json();
-          return epData.data || [];
-        } catch {
-          return [];
-        }
-      })
+  try {
+    const res = await fetch(
+      `https://kitsu.io/api/edge/anime/${encodeURIComponent(animeId)}/episodes?page[limit]=${limit}&page[offset]=${offset}`,
+      {
+        headers,
+        signal: AbortSignal.timeout(8000),
+        next: { revalidate: 86400 } // 24 hours ISR cache
+      }
     );
-
-    for (const eps of chunkResults) {
-      allFetched.push(...eps);
-    }
+    if (!res.ok) return { data: [], meta: { count: 0 } };
+    const json = await res.json();
+    return {
+      data: (json.data || []).map((ep: any) => ({
+        id: ep.attributes?.number ?? ep.id,
+        title: ep.attributes?.canonicalTitle || `Episode ${ep.attributes?.number ?? ep.id}`,
+      })),
+      meta: json.meta || { count: 0 }
+    };
+  } catch (err) {
+    console.error(`Failed to fetch episode range for anime ${animeId}:`, err);
+    return { data: [], meta: { count: 0 } };
   }
-
-  return allFetched;
 }
 
 export const getAnimeData = cache(async (slug: string) => {
@@ -223,47 +217,34 @@ export const getAnimeData = cache(async (slug: string) => {
     const metadata = formatAnimeData(anime, json.included);
     const episodeCount = anime.attributes.episodeCount; // Might be null for airing
 
-    // 2. Fetch initial episodes from Kitsu (up to 100 episodes, cached 24h)
+    // 2. Fetch initial episodes from Kitsu (first 100 episodes, cached 24h)
     const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=100`, {
       headers,
       signal: AbortSignal.timeout(8000),
       next: { revalidate: 86400 } // 24 hours ISR cache
     });
     const epJson = epRes.ok ? await epRes.json() : { data: [], meta: { count: 0 } };
-    
-    // 3. Fetch all remaining episode pages if anime has > 100 episodes
-    const rawEpisodes = await fetchAllKitsuEpisodes(anime.id, epJson);
+    const initialEpisodes: any[] = epJson.data || [];
 
-    let fetchedEpisodes: any[] = [];
-    if (rawEpisodes.length > 0) {
-      fetchedEpisodes = rawEpisodes
-        .filter((ep: any) => ep.attributes?.number !== null && ep.attributes?.number !== undefined)
-        .sort((a: any, b: any) => a.attributes.number - b.attributes.number);
-    }
-
-    // 4. Determine the total count to render
-    let totalCount = episodeCount;
-    
-    // Kitsu's episodes endpoint returns the actual total count of released episodes in meta
+    // 3. Determine totalCount reliably from meta.count or episodeCount
     const metaCount = epJson.meta?.count || 0;
-    if (metaCount > (totalCount || 0)) {
-      totalCount = metaCount;
-    }
+    let totalCount = metaCount || episodeCount;
 
     if (!totalCount) {
-      // If unknown total or currently airing, default to the fetched number
-      totalCount = fetchedEpisodes.length > 0 ? fetchedEpisodes[fetchedEpisodes.length - 1].attributes.number : 12;
+      // If unknown total or currently airing, default to initial episodes length
+      totalCount = initialEpisodes.length > 0 ? (initialEpisodes[initialEpisodes.length - 1].attributes?.number || initialEpisodes.length) : 12;
     }
 
-    // 5. Build the normalized episodes array in O(N) linear time using a Map lookup
+    // 4. Map initial 100 episode titles in O(N) linear time
     const epMap = new Map<number, any>();
-    for (const ep of fetchedEpisodes) {
+    for (const ep of initialEpisodes) {
       const num = ep.attributes?.number;
       if (num !== undefined && num !== null) {
         epMap.set(num, ep);
       }
     }
 
+    // 5. Synthesize full episode list instantly (1..totalCount) without N+1 blocking
     const episodes = Array.from({ length: totalCount }, (_, i) => {
       const episodeNum = i + 1;
       const realEpData = epMap.get(episodeNum);
@@ -274,7 +255,12 @@ export const getAnimeData = cache(async (slug: string) => {
       };
     });
 
-    return { ...metadata, episodes };
+    return { 
+      ...metadata, 
+      animeId: anime.id,
+      totalEpisodes: totalCount,
+      episodes 
+    };
   } catch (error) {
     console.error(`Failed to fetch anime data for slug "${slug}":`, error);
     return null;

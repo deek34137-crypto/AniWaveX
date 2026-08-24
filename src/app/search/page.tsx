@@ -1,8 +1,6 @@
 import { searchAnime } from "@/lib/api";
 import Navbar from "@/components/Navbar";
-import Link from "next/link";
-import AnimeImage from "@/components/AnimeImage";
-import { Star } from "lucide-react";
+import AnimeCard from "@/components/AnimeCard";
 
 export default async function SearchPage({
   searchParams,
@@ -26,35 +24,11 @@ export default async function SearchPage({
         {results.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
             {results.map((anime: any) => (
-              <Link 
-                href={`/anime/${anime.slug}`} 
+              <AnimeCard
                 key={anime.id}
-                className="group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105"
-              >
-                <div className="aspect-[2/3] relative">
-                  <AnimeImage 
-                    src={anime.posterImage} 
-                    alt={anime.title} 
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
-                  
-                  {/* Bottom Info */}
-                  <div className="absolute bottom-0 left-0 w-full p-4 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-                    <h3 className="text-white font-bold text-sm line-clamp-2 mb-1">
-                      {anime.title}
-                    </h3>
-                    <div className="flex items-center justify-between text-xs font-medium text-slate-300">
-                      <span>{anime.year}</span>
-                      <span className="flex items-center gap-1 text-yellow-400">
-                        <Star className="w-3 h-3 fill-current" />
-                        {anime.rating}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </Link>
+                anime={anime}
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+              />
             ))}
           </div>
         ) : (

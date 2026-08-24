@@ -5,7 +5,7 @@ import Hero from "@/components/Hero";
 import EpisodesGrid from "@/components/EpisodesGrid";
 import Recommendations from "@/components/Recommendations";
 import InPageVideoPlayer from "@/components/InPageVideoPlayer";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/AuthProvider";
 
 export default function AnimePageClient({ 
   data, 
@@ -23,28 +23,8 @@ export default function AnimePageClient({
   lastWatchedEpisode?: number | null 
 }) {
   const [activeEpisode, setActiveEpisode] = useState<any | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(initialUser);
-  const supabase = createClient();
-
-  useEffect(() => {
-    setCurrentUser(initialUser);
-  }, [initialUser]);
-
-  useEffect(() => {
-    // 1. Fetch active session user on mount
-    supabase.auth.getUser().then((res: any) => {
-      if (res?.data?.user) setCurrentUser(res.data.user);
-    });
-
-    // 2. Real-time auth state subscription
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      setCurrentUser(session?.user ?? null);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [supabase]);
+  const { user: authUser } = useAuth();
+  const currentUser = authUser || initialUser;
 
   if (!data) return <div className="text-white p-10">Loading...</div>;
 
@@ -80,6 +60,9 @@ export default function AnimePageClient({
           episodes={data.episodes} 
           activeEpisodeId={activeEpisode?.id}
           onPlay={(episode) => setActiveEpisode(episode)} 
+          animeSlug={data.slug}
+          animeId={data.animeId || data.id}
+          lastWatchedEpisode={lastWatchedEpisode}
         />
         
         <Recommendations items={recommendations} />

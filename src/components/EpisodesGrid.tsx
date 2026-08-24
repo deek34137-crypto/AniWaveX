@@ -1,7 +1,7 @@
 "use client";
 
-import { LayoutGrid, List, Play, Search, X } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { LayoutGrid, List, Play, Search, X, Check } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
 
 interface Episode {
   id: number;
@@ -13,14 +13,47 @@ interface EpisodesGridProps {
   episodes: Episode[];
   activeEpisodeId?: number | null;
   onPlay?: (episode: Episode) => void;
+  animeSlug?: string;
+  animeId?: string | number;
+  lastWatchedEpisode?: number | null;
 }
 
 const CHUNK_SIZE = 25;
 
-export default function EpisodesGrid({ episodes, activeEpisodeId, onPlay }: EpisodesGridProps) {
+export default function EpisodesGrid({ 
+  episodes, 
+  activeEpisodeId, 
+  onPlay, 
+  animeSlug, 
+  animeId,
+  lastWatchedEpisode 
+}: EpisodesGridProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRangeIndex, setSelectedRangeIndex] = useState(0);
+  const [hydratedTitles, setHydratedTitles] = useState<Record<number, string>>({});
+  const [episodeProgressMap, setEpisodeProgressMap] = useState<Record<number, number>>({});
+  const fetchedOffsetsRef = useRef<Set<number>>(new Set());
+
+  // Load episode watch progress from localStorage
+  useEffect(() => {
+    if (!animeSlug || !episodes || episodes.length === 0) return;
+    try {
+      const map: Record<number, number> = {};
+      for (const ep of episodes) {
+        const storageKey = `watch_progress_${animeSlug}_ep_${ep.id}`;
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.currentTime && parsed.duration) {
+            const pct = Math.min(100, Math.round((parsed.currentTime / parsed.duration) * 100));
+            map[ep.id] = pct;
+          }
+        }
+      }
+      setEpisodeProgressMap(map);
+    } catch {}
+  }, [animeSlug, episodes]);
 
   // Generate range chunks if > 25 episodes (e.g. 1-25, 26-50, 51-75)
   const rangeChunks = useMemo(() => {
@@ -44,14 +77,54 @@ export default function EpisodesGrid({ episodes, activeEpisodeId, onPlay }: Epis
     }
   }, [activeEpisodeId, rangeChunks.length]);
 
+  // On-demand chunk metadata hydration for episodes > 100
+  useEffect(() => {
+    if (!rangeChunks || rangeChunks.length === 0 || !animeSlug) return;
+    const currentChunk = rangeChunks[selectedRangeIndex];
+    if (!currentChunk) return;
+
+    // If chunk starts > 100, check if we need to hydrate titles from API
+    if (currentChunk.start > 100 && !fetchedOffsetsRef.current.has(currentChunk.start - 1)) {
+      const offset = currentChunk.start - 1;
+      const limit = CHUNK_SIZE;
+      fetchedOffsetsRef.current.add(offset);
+
+      const animeIdParam = animeId ? `&animeId=${encodeURIComponent(animeId)}` : "";
+      fetch(`/api/anime/${encodeURIComponent(animeSlug)}/episodes?offset=${offset}&limit=${limit}${animeIdParam}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (Array.isArray(result?.data) && result.data.length > 0) {
+            setHydratedTitles((prev) => {
+              const next = { ...prev };
+              for (const ep of result.data) {
+                if (ep.id && ep.title) {
+                  next[ep.id] = ep.title;
+                }
+              }
+              return next;
+            });
+          }
+        })
+        .catch(() => {
+          // Ignore hydration network errors gracefully
+        });
+    }
+  }, [selectedRangeIndex, rangeChunks, animeSlug, animeId]);
+
   // Filtered episodes based on search query or selected range chunk
   const displayedEpisodes = useMemo(() => {
     if (!episodes) return [];
     
+    // Map with hydrated titles
+    const mapped = episodes.map((ep) => ({
+      ...ep,
+      title: hydratedTitles[ep.id] || ep.title,
+    }));
+
     // 1. If searching, search across all episodes
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      return episodes.filter((ep) => 
+      return mapped.filter((ep) => 
         ep.id.toString() === q ||
         `ep ${ep.id}`.includes(q) ||
         `episode ${ep.id}`.includes(q) ||
@@ -63,12 +136,12 @@ export default function EpisodesGrid({ episodes, activeEpisodeId, onPlay }: Epis
     if (rangeChunks.length > 0) {
       const chunk = rangeChunks[selectedRangeIndex];
       if (chunk) {
-        return episodes.slice(chunk.start - 1, chunk.end);
+        return mapped.slice(chunk.start - 1, chunk.end);
       }
     }
 
-    return episodes;
-  }, [episodes, searchQuery, rangeChunks, selectedRangeIndex]);
+    return mapped;
+  }, [episodes, searchQuery, rangeChunks, selectedRangeIndex, hydratedTitles]);
 
   return (
     <div className="w-full mt-16 px-2">
@@ -164,6 +237,9 @@ export default function EpisodesGrid({ episodes, activeEpisodeId, onPlay }: Epis
         <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-3"}>
           {displayedEpisodes.map((episode) => {
             const isActive = episode.id === activeEpisodeId;
+            const progressPct = episodeProgressMap[episode.id] || 0;
+            const isCompleted = progressPct >= 90 || (lastWatchedEpisode && episode.id < lastWatchedEpisode);
+
             return (
               <div 
                 key={episode.id}
@@ -171,6 +247,8 @@ export default function EpisodesGrid({ episodes, activeEpisodeId, onPlay }: Epis
                 className={`group relative flex items-start p-5 glass transition-all duration-300 rounded-2xl cursor-pointer overflow-hidden border ${
                   isActive 
                     ? 'border-blue-500/80 bg-blue-600/10 shadow-[0_0_25px_rgba(37,99,235,0.25)] ring-1 ring-blue-500/50' 
+                    : isCompleted
+                    ? 'border-emerald-500/30 bg-emerald-950/10 hover:border-emerald-500/50'
                     : 'border-white/10 hover:border-white/20 hover:bg-white/[0.08]'
                 } ${viewMode === "grid" ? "gap-4" : "gap-6 items-center"}`}
               >
@@ -178,13 +256,19 @@ export default function EpisodesGrid({ episodes, activeEpisodeId, onPlay }: Epis
                 <div className={`absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/0 to-blue-500/5 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
                 
                 <div className={`flex-1 min-w-0 ${viewMode === "list" ? "flex items-center gap-4" : ""}`}>
-                  <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <p className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-blue-400 font-extrabold' : 'text-blue-400'}`}>
                       EP {episode.id}
                     </p>
                     {isActive && (
                       <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 bg-blue-600 text-white rounded-full animate-pulse">
                         PLAYING
+                      </span>
+                    )}
+                    {isCompleted && !isActive && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full">
+                        <Check className="w-2.5 h-2.5" />
+                        WATCHED
                       </span>
                     )}
                   </div>
@@ -196,10 +280,26 @@ export default function EpisodesGrid({ episodes, activeEpisodeId, onPlay }: Epis
                 <button className={`flex-shrink-0 w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-300 z-10 ${
                   isActive 
                     ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.6)] scale-105' 
+                    : isCompleted
+                    ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-600 hover:text-white'
                     : 'bg-white/5 border-white/10 text-slate-300 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-500 group-hover:scale-110'
                 }`}>
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                  {isCompleted && !isActive ? (
+                    <Check className="w-4 h-4 stroke-[2.5]" />
+                  ) : (
+                    <Play className="w-4 h-4 fill-current ml-0.5" />
+                  )}
                 </button>
+
+                {/* In-progress percentage bar on episode card */}
+                {progressPct > 0 && progressPct < 90 && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-800/80">
+                    <div 
+                      className="h-full bg-blue-500 rounded-r-full"
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}

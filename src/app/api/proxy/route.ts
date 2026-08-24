@@ -80,6 +80,98 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 /**
+ * In-flight ASS/SSA to WebVTT subtitle parser and converter.
+ * Converts SubStation Alpha subtitles into valid WebVTT for HTML5 track playback.
+ */
+function convertAssToVtt(assText: string): string {
+  if (!assText || typeof assText !== "string") return "WEBVTT\n\n";
+  if (assText.trim().startsWith("WEBVTT")) return assText;
+
+  const lines = assText.split(/\r?\n/);
+  const vttLines: string[] = ["WEBVTT", ""];
+  let inEvents = false;
+  let formatFields: string[] = ["layer", "start", "end", "style", "name", "marginl", "marginr", "marginv", "effect", "text"];
+
+  const formatTimestamp = (ts: string) => {
+    // ASS timestamp: H:MM:SS.cs (e.g. 0:01:23.45)
+    const match = ts.trim().match(/^(\d+):(\d{2}):(\d{2})\.(\d{2,3})$/);
+    if (!match) return ts;
+    const hours = match[1].padStart(2, "0");
+    const mins = match[2];
+    const secs = match[3];
+    let ms = match[4];
+    if (ms.length === 2) ms = ms + "0";
+    else if (ms.length > 3) ms = ms.slice(0, 3);
+    return `${hours}:${mins}:${secs}.${ms.padEnd(3, "0")}`;
+  };
+
+  const cleanAssText = (raw: string) => {
+    return raw
+      .replace(/\\N/gi, "\n")
+      .replace(/\\n/gi, "\n")
+      .replace(/\\h/gi, " ")
+      .replace(/\{[^\}]*\}/g, "") // strip override tags
+      .trim();
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith("[Events]")) {
+      inEvents = true;
+      continue;
+    }
+
+    if (trimmed.startsWith("[") && inEvents && !trimmed.startsWith("[Events]")) {
+      inEvents = false;
+      continue;
+    }
+
+    if (inEvents) {
+      if (trimmed.startsWith("Format:")) {
+        formatFields = trimmed.slice(7).split(",").map((f) => f.trim().toLowerCase());
+        continue;
+      }
+
+      if (trimmed.startsWith("Dialogue:")) {
+        const payload = trimmed.slice(9).trim();
+        const commaCount = Math.max(formatFields.length - 1, 9);
+        const parts: string[] = [];
+        let cur = "";
+        let splitCount = 0;
+        for (let i = 0; i < payload.length; i++) {
+          if (payload[i] === "," && splitCount < commaCount) {
+            parts.push(cur.trim());
+            cur = "";
+            splitCount++;
+          } else {
+            cur += payload[i];
+          }
+        }
+        parts.push(cur.trim());
+
+        const startIdx = formatFields.indexOf("start") !== -1 ? formatFields.indexOf("start") : 1;
+        const endIdx = formatFields.indexOf("end") !== -1 ? formatFields.indexOf("end") : 2;
+        const textIdx = formatFields.indexOf("text") !== -1 ? formatFields.indexOf("text") : parts.length - 1;
+
+        const startTs = parts[startIdx] ? formatTimestamp(parts[startIdx]) : "00:00:00.000";
+        const endTs = parts[endIdx] ? formatTimestamp(parts[endIdx]) : "00:00:00.000";
+        const text = parts[textIdx] ? cleanAssText(parts[textIdx]) : "";
+
+        if (text) {
+          vttLines.push(`${startTs} --> ${endTs}`);
+          vttLines.push(text);
+          vttLines.push("");
+        }
+      }
+    }
+  }
+
+  return vttLines.length > 2 ? vttLines.join("\n") : "WEBVTT\n\n";
+}
+
+/**
  * Domain allowlist to prevent SSRF and proxy abuse.
  * Rejects private subnets, loopbacks, and unapproved external hosts.
  */
@@ -87,7 +179,7 @@ function isAllowedHost(hostname: string): boolean {
   if (!hostname) return false;
   const host = hostname.toLowerCase();
 
-  // Reject local/private IPs and loopbacks
+  // Reject local/private IPs, IPv6 loopbacks, and link-local metadata
   if (
     host === "localhost" ||
     host === "127.0.0.1" ||
@@ -95,11 +187,38 @@ function isAllowedHost(hostname: string): boolean {
     host.startsWith("10.") ||
     host.startsWith("192.168.") ||
     host.startsWith("172.16.") ||
+    host.startsWith("172.17.") ||
+    host.startsWith("172.18.") ||
+    host.startsWith("172.19.") ||
+    host.startsWith("172.20.") ||
+    host.startsWith("172.21.") ||
+    host.startsWith("172.22.") ||
+    host.startsWith("172.23.") ||
+    host.startsWith("172.24.") ||
+    host.startsWith("172.25.") ||
+    host.startsWith("172.26.") ||
+    host.startsWith("172.27.") ||
+    host.startsWith("172.28.") ||
+    host.startsWith("172.29.") ||
+    host.startsWith("172.30.") ||
+    host.startsWith("172.31.") ||
     host.startsWith("169.254.")
   ) {
     return false;
   }
 
+  // Exact pinned hosts on multi-tenant platforms
+  const allowedExactHosts = new Set([
+    "kitsu-production-media.s3.us-west-002.backblazeb2.com",
+    "anivexa-stream-api.deek34137.workers.dev",
+    "deek34137.workers.dev",
+    "vibevibe.workers.dev",
+    "anikoto-ksz4.onrender.com",
+  ]);
+
+  if (allowedExactHosts.has(host)) return true;
+
+  // Allowed specific streaming/CDN domain suffixes
   const allowedSuffixes = [
     "flixcloud.cc",
     "megacloud.tv",
@@ -113,8 +232,6 @@ function isAllowedHost(hostname: string): boolean {
     "vidcloud.fun",
     "mcloud.to",
     "dokicloud.one",
-    "deek34137.workers.dev",
-    "vibevibe.workers.dev",
     "streamtape.com",
     "streamtape.net",
     "streamtape.site",
@@ -136,7 +253,6 @@ function isAllowedHost(hostname: string): boolean {
     "vivibebe.site",
     "bibiemb.xyz",
     "vidstream.pro",
-    "backblazeb2.com",
     "streamwish.to",
     "streamwish.com",
     "filemoon.sx",
@@ -164,8 +280,11 @@ function rewriteM3U8Content(
   const lines = text.split("\n");
 
   // Route through Cloudflare Worker edge proxy if available to offload segment bandwidth
-  const proxyBase = externalWorkerProxy && !externalWorkerProxy.startsWith('/')
-    ? `${externalWorkerProxy}/proxy`
+  const cleanWorker = externalWorkerProxy && !externalWorkerProxy.startsWith('/')
+    ? externalWorkerProxy.replace(/\/+$/, '').replace(/\/stream$/, '')
+    : null;
+  const proxyBase = cleanWorker
+    ? `${cleanWorker}/proxy`
     : `${proxyOrigin}/api/proxy`;
 
   return lines.map((line) => {
@@ -334,6 +453,44 @@ export async function GET(request: NextRequest) {
           ...corsHeaders,
           "Content-Type": "application/vnd.apple.mpegurl",
           "Cache-Control": "public, max-age=60, s-maxage=60",
+        },
+      });
+    }
+
+    // Handle SubStation Alpha (.ass / .ssa) subtitle conversion to WebVTT
+    const isAssOrSsa =
+      contentType.includes("text/x-ssa") ||
+      contentType.includes("text/x-ass") ||
+      targetUrl.pathname.endsWith(".ass") ||
+      targetUrl.pathname.endsWith(".ssa");
+
+    if (isAssOrSsa) {
+      const rawText = await upstreamRes.text();
+      const vtt = convertAssToVtt(rawText);
+      return new NextResponse(vtt, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/vtt; charset=utf-8",
+          "Cache-Control": "public, max-age=86400, s-maxage=86400",
+        },
+      });
+    }
+
+    // Handle WebVTT subtitle passthrough
+    const isVtt =
+      contentType.includes("text/vtt") ||
+      contentType.includes("application/vtt") ||
+      targetUrl.pathname.endsWith(".vtt");
+
+    if (isVtt) {
+      const rawText = await upstreamRes.text();
+      return new NextResponse(rawText, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/vtt; charset=utf-8",
+          "Cache-Control": "public, max-age=86400, s-maxage=86400",
         },
       });
     }

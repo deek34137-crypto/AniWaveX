@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import MobileBottomNav from "@/components/MobileBottomNav";
+import CommandPalette from "@/components/CommandPalette";
+import { AuthProvider } from "@/providers/AuthProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -31,6 +34,7 @@ export const metadata: Metadata = {
     description: "Discover, track, and stream your favorite anime in high quality without interruptions.",
   },
 };
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -38,7 +42,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col pb-20 md:pb-0">
+        <AuthProvider>
+          {children}
+          <CommandPalette />
+          <MobileBottomNav />
+        </AuthProvider>
+      </body>
     </html>
   );
 }

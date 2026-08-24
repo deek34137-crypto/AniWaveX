@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, X, Keyboard, Tv, AlertCircle } from "lucide-react";
+import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2 } from "lucide-react";
 import NativePlayer from "./NativePlayer";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/AuthProvider";
 import type { MediaPlayerInstance } from "@vidstack/react";
 
 interface StreamSource {
@@ -42,51 +42,36 @@ export default function InPageVideoPlayer({
   animePosterImage, 
   onEpisodeChange,
   onClose,
-  user,
+  user: initialUser,
   anilistId
 }: InPageVideoPlayerProps) {
+  const { user: authUser, supabase } = useAuth();
   const [activeTab, setActiveTab] = useState<"sub" | "dub" | "hindi">("sub");
   const [streams, setStreams] = useState<{ sub: StreamSource[], dub: StreamSource[], hindi?: StreamSource[], nativeStream?: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [autoplayNext, setAutoplayNext] = useState(false);
+  const [ambientMode, setAmbientMode] = useState(true);
   const [selectedServerIndex, setSelectedServerIndex] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [initialTime, setInitialTime] = useState(0);
-  const [currentUser, setCurrentUser] = useState<any>(user);
+  const [currentUser, setCurrentUser] = useState<any>(authUser || initialUser);
   const [resumedBanner, setResumedBanner] = useState<string | null>(null);
   const [fallbackToIframe, setFallbackToIframe] = useState(false);
   const [playerError, setPlayerError] = useState(false);
+  const [isScrolledPast, setIsScrolledPast] = useState(false);
+  const [isMiniPlayerDismissed, setIsMiniPlayerDismissed] = useState(false);
   
-  const currentUserRef = useRef(user);
+  const currentUserRef = useRef<any>(authUser || initialUser);
   const playerRef = useRef<HTMLDivElement>(null);
   const mediaPlayerRef = useRef<MediaPlayerInstance>(null);
   const lastSavedTimeRef = useRef(0);
   const lastSupabaseSyncRef = useRef(0);
-  const supabase = createClient();
 
   useEffect(() => {
-    setCurrentUser(user);
-    currentUserRef.current = user;
-  }, [user]);
-
-  useEffect(() => {
-    supabase.auth.getUser().then((res: any) => {
-      if (res?.data?.user) {
-        setCurrentUser(res.data.user);
-        currentUserRef.current = res.data.user;
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      const liveUser = session?.user ?? null;
-      setCurrentUser(liveUser);
-      currentUserRef.current = liveUser;
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [supabase]);
+    const liveUser = authUser || initialUser;
+    setCurrentUser(liveUser);
+    currentUserRef.current = liveUser;
+  }, [authUser, initialUser]);
 
   // Helper to upsert watch history to Supabase
   const syncToSupabase = useCallback(async (progressSeconds: number) => {
@@ -192,6 +177,24 @@ export default function InPageVideoPlayer({
           duration: floorDur,
           updatedAt: Date.now()
         }));
+
+        // Update unified recent watches list for Continue Watching row
+        const rawRecent = localStorage.getItem("aniwavex_recent_watches");
+        let recentList = rawRecent ? JSON.parse(rawRecent) : [];
+        if (!Array.isArray(recentList)) recentList = [];
+        recentList = recentList.filter((x: any) => x.animeSlug !== animeSlug);
+        recentList.unshift({
+          animeSlug,
+          animeTitle,
+          posterImage: animePosterImage,
+          episodeId: episode.id,
+          episodeTitle: episode.title,
+          progressSeconds: floorTime,
+          totalSeconds: floorDur,
+          updatedAt: Date.now()
+        });
+        if (recentList.length > 20) recentList = recentList.slice(0, 20);
+        localStorage.setItem("aniwavex_recent_watches", JSON.stringify(recentList));
       } catch {
         // Ignore localStorage quota errors
       }
@@ -202,7 +205,7 @@ export default function InPageVideoPlayer({
       lastSupabaseSyncRef.current = currentTime;
       syncToSupabase(floorTime);
     }
-  }, [episode?.id, animeSlug, syncToSupabase]);
+  }, [episode?.id, episode?.title, animeSlug, animeTitle, animePosterImage, syncToSupabase]);
 
   // Initial watch history sync + flush on unmount / episode change
   useEffect(() => {
@@ -234,16 +237,45 @@ export default function InPageVideoPlayer({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [syncToSupabase]);
 
-  // Read autoplay preference from localStorage on mount
+  // Read autoplay & ambient preferences from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem("autoplayNext");
-    if (stored) setAutoplayNext(stored === "true");
+    const storedAutoplay = localStorage.getItem("autoplayNext");
+    if (storedAutoplay) setAutoplayNext(storedAutoplay === "true");
+
+    const storedAmbient = localStorage.getItem("ambientMode");
+    if (storedAmbient !== null) setAmbientMode(storedAmbient === "true");
+  }, []);
+
+  // IntersectionObserver for undocking into floating mini-player
+  useEffect(() => {
+    const target = playerRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const isPast = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+        setIsScrolledPast(isPast);
+        if (!isPast) {
+          setIsMiniPlayerDismissed(false);
+        }
+      },
+      { threshold: 0.15 }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
   }, []);
 
   const toggleAutoplay = () => {
     const newVal = !autoplayNext;
     setAutoplayNext(newVal);
     localStorage.setItem("autoplayNext", newVal.toString());
+  };
+
+  const toggleAmbientMode = () => {
+    const newVal = !ambientMode;
+    setAmbientMode(newVal);
+    localStorage.setItem("ambientMode", newVal.toString());
   };
 
   const requestIdRef = useRef(0);
@@ -317,12 +349,23 @@ export default function InPageVideoPlayer({
     }
   }, [hasPrev, onEpisodeChange, episodes, currentIndex]);
 
-  // Global Keyboard Shortcuts (Feature 3.3)
+  // Global Keyboard Shortcuts (Guarded against inputs and open dialogs)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is in an input field
+      // Ignore if user is in an input field or any modal dialog/overlay is active
       const activeTag = (document.activeElement?.tagName || '').toLowerCase();
-      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select' || (document.activeElement as HTMLElement)?.isContentEditable) {
+      if (
+        activeTag === 'input' || 
+        activeTag === 'textarea' || 
+        activeTag === 'select' || 
+        (document.activeElement as HTMLElement)?.isContentEditable ||
+        document.querySelector('[role="dialog"]') ||
+        document.querySelector('[aria-modal="true"]') ||
+        document.querySelector('.fixed.z-\\[200\\]') ||
+        document.querySelector('.fixed.z-\\[100\\]') ||
+        document.querySelector('[data-state="open"]') ||
+        document.querySelector('dialog[open]')
+      ) {
         return;
       }
 
@@ -501,152 +544,164 @@ export default function InPageVideoPlayer({
           </div>
         </div>
 
-        {/* Video Player Container */}
-        <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-white/10 flex items-center justify-center">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center gap-4 text-slate-400">
-              <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
-              <p className="font-semibold tracking-wide">Resolving Stream Servers...</p>
-            </div>
-          ) : playerError ? (
-            <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/90">
-              <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Stream Playback Issue</h3>
-              <p className="text-xs text-slate-400 max-w-md">
-                Unable to load this server feed. Please switch to an alternate server or select another audio track.
-              </p>
-              <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
-                {activeSources && activeSources.length > 1 && (
-                  activeSources.map((source, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        setSelectedServerIndex(idx);
-                        setPlayerError(false);
-                        setFallbackToIframe(!source.isM3U8);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                        validServerIndex === idx
-                          ? 'bg-blue-600 border-blue-500 text-white'
-                          : 'bg-slate-800 border-white/10 text-slate-300 hover:bg-slate-700 hover:text-white'
-                      }`}
-                    >
-                      Server {source.quality}
-                    </button>
-                  ))
-                )}
-                <button
-                  onClick={() => {
-                    setPlayerError(false);
-                    setFallbackToIframe(false);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-white/10 transition-colors"
-                >
-                  Reload Player
-                </button>
-              </div>
-            </div>
-          ) : !fallbackToIframe && isM3U8 && currentUrl ? (
-            <NativePlayer 
-              key={currentUrl}
-              playerRef={mediaPlayerRef}
-              url={currentUrl} 
-              title={`${animeTitle} - Episode ${episode.id}`}
-              poster={animePosterImage}
-              subtitles={streams?.nativeStream?.subtitles}
-              initialTime={initialTime}
-              onTimeUpdate={handleTimeUpdate}
-              onError={() => {
-                console.warn("Native HLS stream playback failed, looking for alternate server");
-                // 1. Try another HLS server first
-                const otherHlsIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && s.isM3U8);
-                if (otherHlsIdx !== undefined && otherHlsIdx !== -1) {
-                  setSelectedServerIndex(otherHlsIdx);
-                  setFallbackToIframe(false);
-                  setPlayerError(false);
-                  return;
-                }
-                // 2. Only if no HLS servers remain, fallback to a working embed server
-                const embedIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && !s.isM3U8 && isValidEmbedUrl(s.url));
-                if (embedIdx !== undefined && embedIdx !== -1) {
-                  setSelectedServerIndex(embedIdx);
-                  setFallbackToIframe(true);
-                  setPlayerError(false);
-                  return;
-                }
-                setPlayerError(true);
-              }}
-              onEnded={() => {
-                if (autoplayNext && hasNext) {
-                  handleNext();
-                }
+        {/* Video Player Container with Dynamic Ambient Cinema Glow */}
+        <div className="relative w-full aspect-video">
+          {/* Dynamic Ambient Cinema Glow */}
+          {ambientMode && (
+            <div 
+              className="absolute -inset-4 md:-inset-10 rounded-3xl opacity-40 blur-3xl -z-10 pointer-events-none transition-all duration-1000"
+              style={{
+                background: `radial-gradient(ellipse at center, rgba(59, 130, 246, 0.45) 0%, rgba(99, 102, 241, 0.25) 50%, rgba(15, 23, 42, 0) 80%)`
               }}
             />
-          ) : isValidEmbedUrl(currentUrl) ? (
-            <iframe 
-              key={currentUrl}
-              src={currentUrl}
-              className="w-full h-full border-0 bg-black"
-              allow="autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write"
-              referrerPolicy="no-referrer-when-downgrade"
-              onError={() => setPlayerError(true)}
-            />
-          ) : isM3U8 && currentUrl ? (
-            <NativePlayer 
-              key={currentUrl}
-              playerRef={mediaPlayerRef}
-              url={currentUrl} 
-              title={`${animeTitle} - Episode ${episode.id}`}
-              poster={animePosterImage}
-              subtitles={streams?.nativeStream?.subtitles}
-              initialTime={initialTime}
-              onTimeUpdate={handleTimeUpdate}
-              onError={() => setPlayerError(true)}
-              onEnded={() => {
-                if (autoplayNext && hasNext) {
-                  handleNext();
-                }
-              }}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/80">
-              <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                <Tv className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Stream Not Available Yet</h3>
-              <p className="text-xs text-slate-400 max-w-md">
-                This episode is either an upcoming release or has not been indexed by upstream streaming servers yet.
-              </p>
-              <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
-                {activeTab !== 'sub' && (
-                  <button
-                    onClick={() => setActiveTab('sub')}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
-                  >
-                    Switch to SUB (JP)
-                  </button>
-                )}
-                {activeTab !== 'dub' && (
-                  <button
-                    onClick={() => setActiveTab('dub')}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
-                  >
-                    Switch to ENG DUB
-                  </button>
-                )}
-                {activeTab !== 'hindi' && (
-                  <button
-                    onClick={() => setActiveTab('hindi')}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-300 border border-amber-500/20 transition-colors"
-                  >
-                    Try HINDI DUB
-                  </button>
-                )}
-              </div>
-            </div>
           )}
+
+          <div className="relative w-full h-full bg-black rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-white/10 flex items-center justify-center">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center gap-4 text-slate-400">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                <p className="font-semibold tracking-wide">Resolving Stream Servers...</p>
+              </div>
+            ) : playerError ? (
+              <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/90">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Stream Playback Issue</h3>
+                <p className="text-xs text-slate-400 max-w-md">
+                  Unable to load this server feed. Please switch to an alternate server or select another audio track.
+                </p>
+                <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
+                  {activeSources && activeSources.length > 1 && (
+                    activeSources.map((source, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setSelectedServerIndex(idx);
+                          setPlayerError(false);
+                          setFallbackToIframe(!source.isM3U8);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                          validServerIndex === idx
+                            ? 'bg-blue-600 border-blue-500 text-white'
+                            : 'bg-slate-800 border-white/10 text-slate-300 hover:bg-slate-700 hover:text-white'
+                        }`}
+                      >
+                        Server {source.quality}
+                      </button>
+                    ))
+                  )}
+                  <button
+                    onClick={() => {
+                      setPlayerError(false);
+                      setFallbackToIframe(false);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-white/10 transition-colors"
+                  >
+                    Reload Player
+                  </button>
+                </div>
+              </div>
+            ) : !fallbackToIframe && isM3U8 && currentUrl ? (
+              <NativePlayer 
+                key={currentUrl}
+                playerRef={mediaPlayerRef}
+                url={currentUrl} 
+                title={`${animeTitle} - Episode ${episode.id}`}
+                poster={animePosterImage}
+                subtitles={streams?.nativeStream?.subtitles}
+                initialTime={initialTime}
+                onTimeUpdate={handleTimeUpdate}
+                onError={() => {
+                  console.warn("Native HLS stream playback failed, looking for alternate server");
+                  // 1. Try another HLS server first
+                  const otherHlsIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && s.isM3U8);
+                  if (otherHlsIdx !== undefined && otherHlsIdx !== -1) {
+                    setSelectedServerIndex(otherHlsIdx);
+                    setFallbackToIframe(false);
+                    setPlayerError(false);
+                    return;
+                  }
+                  // 2. Only if no HLS servers remain, fallback to a working embed server
+                  const embedIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && !s.isM3U8 && isValidEmbedUrl(s.url));
+                  if (embedIdx !== undefined && embedIdx !== -1) {
+                    setSelectedServerIndex(embedIdx);
+                    setFallbackToIframe(true);
+                    setPlayerError(false);
+                    return;
+                  }
+                  setPlayerError(true);
+                }}
+                onEnded={() => {
+                  if (autoplayNext && hasNext) {
+                    handleNext();
+                  }
+                }}
+              />
+            ) : isValidEmbedUrl(currentUrl) ? (
+              <iframe 
+                key={currentUrl}
+                src={currentUrl}
+                className="w-full h-full border-0 bg-black"
+                allow="autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write"
+                referrerPolicy="no-referrer-when-downgrade"
+                onError={() => setPlayerError(true)}
+              />
+            ) : isM3U8 && currentUrl ? (
+              <NativePlayer 
+                key={currentUrl}
+                playerRef={mediaPlayerRef}
+                url={currentUrl} 
+                title={`${animeTitle} - Episode ${episode.id}`}
+                poster={animePosterImage}
+                subtitles={streams?.nativeStream?.subtitles}
+                initialTime={initialTime}
+                onTimeUpdate={handleTimeUpdate}
+                onError={() => setPlayerError(true)}
+                onEnded={() => {
+                  if (autoplayNext && hasNext) {
+                    handleNext();
+                  }
+                }}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/80">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                  <Tv className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Stream Not Available Yet</h3>
+                <p className="text-xs text-slate-400 max-w-md">
+                  This episode is either an upcoming release or has not been indexed by upstream streaming servers yet.
+                </p>
+                <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
+                  {activeTab !== 'sub' && (
+                    <button
+                      onClick={() => setActiveTab('sub')}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
+                    >
+                      Switch to SUB (JP)
+                    </button>
+                  )}
+                  {activeTab !== 'dub' && (
+                    <button
+                      onClick={() => setActiveTab('dub')}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
+                    >
+                      Switch to ENG DUB
+                    </button>
+                  )}
+                  {activeTab !== 'hindi' && (
+                    <button
+                      onClick={() => setActiveTab('hindi')}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-300 border border-amber-500/20 transition-colors"
+                    >
+                      Try HINDI DUB
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer Navigation */}
@@ -676,7 +731,21 @@ export default function InPageVideoPlayer({
             </button>
           </div>
 
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Ambient Cinema Glow Toggle */}
+            <button
+              onClick={toggleAmbientMode}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                ambientMode
+                  ? "bg-blue-600/20 text-blue-400 border-blue-500/30"
+                  : "bg-slate-900/50 text-slate-400 hover:text-white border-white/5"
+              }`}
+              title="Toggle Dynamic Cinema Ambient Glow"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Ambient Glow</span>
+            </button>
+
             {/* Manual Player Mode Switcher (only shown if both HLS and Embed servers exist) */}
             {hasEmbedOption && (
               <button
@@ -740,6 +809,59 @@ export default function InPageVideoPlayer({
           </div>
         )}
       </div>
+
+      {/* Floating Picture-in-Picture Mini-Player on Scroll */}
+      {isScrolledPast && !isMiniPlayerDismissed && currentUrl && !playerError && !isLoading && (
+        <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-50 w-72 sm:w-96 aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-[0_15px_50px_rgba(0,0,0,0.9)] border border-white/20 animate-in slide-in-from-bottom-5 duration-300 group select-none">
+          <div className="w-full h-full relative">
+            {!fallbackToIframe && isM3U8 ? (
+              <NativePlayer 
+                url={currentUrl} 
+                title={`${animeTitle} - Episode ${episode.id}`}
+                poster={animePosterImage}
+                subtitles={streams?.nativeStream?.subtitles}
+                initialTime={lastSavedTimeRef.current || initialTime}
+                onTimeUpdate={handleTimeUpdate}
+                onEnded={() => {
+                  if (autoplayNext && hasNext) handleNext();
+                }}
+              />
+            ) : isValidEmbedUrl(currentUrl) ? (
+              <iframe 
+                src={currentUrl}
+                className="w-full h-full border-0 bg-black"
+                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            ) : null}
+
+            {/* Mini Player Overlay Header */}
+            <div className="absolute top-0 left-0 right-0 p-2.5 bg-gradient-to-b from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-between pointer-events-auto z-20">
+              <span className="text-xs font-bold text-white line-clamp-1">
+                EP {episode.id}: {episode.title}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    playerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                  className="p-1.5 bg-black/60 hover:bg-slate-800 text-white rounded-lg transition-colors border border-white/10"
+                  title="Expand to Full Player"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setIsMiniPlayerDismissed(true)}
+                  className="p-1.5 bg-black/60 hover:bg-red-500 text-white rounded-lg transition-colors border border-white/10"
+                  title="Close Mini Player"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

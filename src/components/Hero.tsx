@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Play, Bookmark, Star, Calendar, Clock, ChevronDown, Check } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/AuthProvider";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
 import AnimeImage from "@/components/AnimeImage";
 
@@ -19,42 +19,23 @@ export default function Hero({
   anime, 
   initialBookmarked = false, 
   initialBookmarkStatus = 'watching',
-  user, 
+  user: initialUser, 
   lastWatchedEpisode, 
   onPlayEpisode 
 }: HeroProps) {
-  const [currentUser, setCurrentUser] = useState<any>(user);
+  const { user: authUser, supabase } = useAuth();
+  const currentUser = authUser || initialUser;
   const [isBookmarked, setIsBookmarked] = useState(initialBookmarked);
   const [currentStatus, setCurrentStatus] = useState<WatchlistStatus>(initialBookmarkStatus || 'watching');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const supabase = createClient();
-
-  useEffect(() => {
-    setCurrentUser(user);
-  }, [user]);
-
-  useEffect(() => {
-    supabase.auth.getUser().then((res: any) => {
-      if (res?.data?.user) setCurrentUser(res.data.user);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      setCurrentUser(session?.user ?? null);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [supabase]);
 
   const handleSetStatus = async (status: WatchlistStatus) => {
-    let activeUser = currentUser || user;
+    let activeUser = currentUser;
     if (!activeUser) {
       const { data: { user: liveUser } } = await supabase.auth.getUser();
       if (liveUser) {
         activeUser = liveUser;
-        setCurrentUser(liveUser);
       }
     }
 
@@ -92,12 +73,11 @@ export default function Hero({
   };
 
   const handleRemoveBookmark = async () => {
-    let activeUser = currentUser || user;
+    let activeUser = currentUser;
     if (!activeUser) {
       const { data: { user: liveUser } } = await supabase.auth.getUser();
       if (liveUser) {
         activeUser = liveUser;
-        setCurrentUser(liveUser);
       }
     }
 

@@ -1,5 +1,6 @@
 import { AnikotoProvider } from './anikoto/provider.js';
 import { searchAnilist } from './anikoto/core/anilist.js';
+import { unstable_cache } from 'next/cache';
 
 const anikoto = new AnikotoProvider();
 
@@ -58,7 +59,7 @@ const CACHE_TTL_MISS_MS = 60 * 60 * 1000;
 const inFlightSearches = new Map<string, Promise<number | null>>();
 
 function normalizeTitle(str: string | null | undefined): string {
-  return (str || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return (str || "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
 
 function pickBestMatch(searchTitle: string, results: any[]): number | null {
@@ -71,7 +72,8 @@ function pickBestMatch(searchTitle: string, results: any[]): number | null {
     if (!m || !m.id) continue;
     const romajiNorm = normalizeTitle(m.title?.romaji);
     const englishNorm = normalizeTitle(m.title?.english);
-    if (romajiNorm === targetNorm || englishNorm === targetNorm) {
+    const nativeNorm = normalizeTitle(m.title?.native);
+    if (romajiNorm === targetNorm || englishNorm === targetNorm || nativeNorm === targetNorm) {
       return m.id;
     }
   }
@@ -81,8 +83,12 @@ function pickBestMatch(searchTitle: string, results: any[]): number | null {
     if (!m || !m.id) return false;
     const romajiNorm = normalizeTitle(m.title?.romaji);
     const englishNorm = normalizeTitle(m.title?.english);
-    return romajiNorm.includes(targetNorm) || (targetNorm.length > 4 && targetNorm.includes(romajiNorm)) ||
-           englishNorm.includes(targetNorm) || (targetNorm.length > 4 && targetNorm.includes(englishNorm));
+    const nativeNorm = normalizeTitle(m.title?.native);
+    return (
+      (romajiNorm && (romajiNorm.includes(targetNorm) || (targetNorm.length > 4 && targetNorm.includes(romajiNorm)))) ||
+      (englishNorm && (englishNorm.includes(targetNorm) || (targetNorm.length > 4 && targetNorm.includes(englishNorm)))) ||
+      (nativeNorm && (nativeNorm.includes(targetNorm) || (targetNorm.length > 2 && targetNorm.includes(nativeNorm))))
+    );
   });
 
   if (matchingCandidates.length > 0) {
@@ -96,18 +102,105 @@ function pickBestMatch(searchTitle: string, results: any[]): number | null {
   return topSlice[0]?.id || results[0].id;
 }
 
+async function resolveAnilistIdRaw(title: string): Promise<number | null> {
+  const normalizedKey = title.toLowerCase().trim();
+  try {
+    // Step 1: Direct title search
+    let results = await searchAnilist(title);
+    let matchId = pickBestMatch(title, results);
+    if (matchId) return matchId;
+
+    // Step 2: Cleaned title (replace hyphens, underscores, colons with spaces)
+    const cleaned = title.replace(/[-_:]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (cleaned.toLowerCase() !== normalizedKey) {
+      results = await searchAnilist(cleaned);
+      matchId = pickBestMatch(cleaned, results);
+      if (matchId) return matchId;
+    }
+
+    // High-confidence fallback candidates (capped to at most 2 queries to prevent rate-limiting)
+    const candidateQueries: string[] = [];
+    const words = cleaned.split(' ').filter(w => w.length > 1);
+
+    // Step 3: Remove season / part numbers (highest confidence)
+    const noSeason = cleaned
+      .replace(/season \d+/i, '')
+      .replace(/\d+(nd|rd|th|st) season/i, '')
+      .replace(/part \d+/i, '')
+      .replace(/\b(tv|movie|ova|ona|special)\b/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (noSeason.length > 2 && noSeason.toLowerCase() !== cleaned.toLowerCase()) {
+      candidateQueries.push(noSeason);
+    }
+
+    // Step 4: Romanization vowel expansion (e.g. Tomei -> Toumei, Shojo -> Shoujo, etc.)
+    const ouNormalized = cleaned
+      .replace(/\btomei\b/gi, 'Toumei')
+      .replace(/\bkyoto\b/gi, 'Kyouto')
+      .replace(/\byusha\b/gi, 'Yuusha')
+      .replace(/\bshojo\b/gi, 'Shoujo')
+      .replace(/\bshonen\b/gi, 'Shounen');
+
+    if (ouNormalized.toLowerCase() !== cleaned.toLowerCase() && !candidateQueries.includes(ouNormalized)) {
+      candidateQueries.push(ouNormalized);
+    }
+
+    // Step 5: Significant word prefix
+    if (words.length > 3 && candidateQueries.length < 2) {
+      const prefix = words.slice(0, 3).join(' ');
+      if (!candidateQueries.includes(prefix)) {
+        candidateQueries.push(prefix);
+      }
+    }
+
+    // Execute at most 2 fallback candidates in parallel
+    const limitedCandidates = candidateQueries.slice(0, 2);
+    if (limitedCandidates.length > 0) {
+      const batchResults = await Promise.all(
+        limitedCandidates.map(q => searchAnilist(q).catch(() => []))
+      );
+
+      for (let i = 0; i < batchResults.length; i++) {
+        const res = batchResults[i];
+        const queryUsed = limitedCandidates[i];
+        const foundId = pickBestMatch(queryUsed, res);
+        if (foundId) return foundId;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error fetching Anilist ID:", error);
+    return null;
+  }
+}
+
+// Next.js persistent data cache (7 days TTL across serverless lambdas)
+const getCachedAnilistIdPersistent = unstable_cache(
+  async (normalizedKey: string) => {
+    return await resolveAnilistIdRaw(normalizedKey);
+  },
+  ['anilist-id-resolver'],
+  {
+    revalidate: 604800, // 7 days (604,800s)
+    tags: ['anilist-id']
+  }
+);
+
 export async function getAnilistId(title: string): Promise<number | null> {
   if (!title || typeof title !== 'string') return null;
   const normalizedKey = title.toLowerCase().trim();
   if (!normalizedKey) return null;
 
-  // 1. Check LRU Cache
+  // 1. Check in-memory L1 LRU Cache
   const cached = anilistIdCache.get(normalizedKey);
   if (cached !== undefined) {
     return cached;
   }
 
-  // 2. Check In-Flight Deduplication
+  // 2. Check in-flight request deduplication map
   const inFlight = inFlightSearches.get(normalizedKey);
   if (inFlight) {
     return inFlight;
@@ -115,85 +208,15 @@ export async function getAnilistId(title: string): Promise<number | null> {
 
   const searchPromise = (async (): Promise<number | null> => {
     try {
-      // Step 1: Direct title search
-      let results = await searchAnilist(title);
-      let matchId = pickBestMatch(title, results);
+      const matchId = await getCachedAnilistIdPersistent(normalizedKey);
       if (matchId) {
         anilistIdCache.set(normalizedKey, matchId, CACHE_TTL_SUCCESS_MS);
-        return matchId;
+      } else {
+        anilistIdCache.set(normalizedKey, null, CACHE_TTL_MISS_MS);
       }
-
-      // Step 2: Cleaned title (replace hyphens, underscores, colons with spaces)
-      const cleaned = title.replace(/[-_:]/g, ' ').replace(/\s+/g, ' ').trim();
-      if (cleaned.toLowerCase() !== normalizedKey) {
-        results = await searchAnilist(cleaned);
-        matchId = pickBestMatch(cleaned, results);
-        if (matchId) {
-          anilistIdCache.set(normalizedKey, matchId, CACHE_TTL_SUCCESS_MS);
-          return matchId;
-        }
-      }
-
-      // High-confidence fallback candidates (capped to at most 2 queries to prevent rate-limiting)
-      const candidateQueries: string[] = [];
-      const words = cleaned.split(' ').filter(w => w.length > 1);
-
-      // Step 3: Remove season / part numbers (highest confidence)
-      const noSeason = cleaned
-        .replace(/season \d+/i, '')
-        .replace(/\d+(nd|rd|th|st) season/i, '')
-        .replace(/part \d+/i, '')
-        .replace(/\b(tv|movie|ova|ona|special)\b/i, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      if (noSeason.length > 2 && noSeason.toLowerCase() !== cleaned.toLowerCase()) {
-        candidateQueries.push(noSeason);
-      }
-
-      // Step 4: Romanization vowel expansion (e.g. Tomei -> Toumei, Shojo -> Shoujo, etc.)
-      const ouNormalized = cleaned
-        .replace(/\btomei\b/gi, 'Toumei')
-        .replace(/\bkyoto\b/gi, 'Kyouto')
-        .replace(/\byusha\b/gi, 'Yuusha')
-        .replace(/\bshojo\b/gi, 'Shoujo')
-        .replace(/\bshonen\b/gi, 'Shounen');
-
-      if (ouNormalized.toLowerCase() !== cleaned.toLowerCase() && !candidateQueries.includes(ouNormalized)) {
-        candidateQueries.push(ouNormalized);
-      }
-
-      // Step 5: Significant word prefix
-      if (words.length > 3 && candidateQueries.length < 2) {
-        const prefix = words.slice(0, 3).join(' ');
-        if (!candidateQueries.includes(prefix)) {
-          candidateQueries.push(prefix);
-        }
-      }
-
-      // Execute at most 2 fallback candidates in parallel
-      const limitedCandidates = candidateQueries.slice(0, 2);
-      if (limitedCandidates.length > 0) {
-        const batchResults = await Promise.all(
-          limitedCandidates.map(q => searchAnilist(q).catch(() => []))
-        );
-
-        for (let i = 0; i < batchResults.length; i++) {
-          const res = batchResults[i];
-          const queryUsed = limitedCandidates[i];
-          const foundId = pickBestMatch(queryUsed, res);
-          if (foundId) {
-            anilistIdCache.set(normalizedKey, foundId, CACHE_TTL_SUCCESS_MS);
-            return foundId;
-          }
-        }
-      }
-
-      // Cache negative lookup for 1 hour to prevent repeat hammering
-      anilistIdCache.set(normalizedKey, null, CACHE_TTL_MISS_MS);
-      return null;
+      return matchId;
     } catch (error) {
-      console.error("Error fetching Anilist ID:", error);
+      console.error("Failed to resolve Anilist ID:", error);
       return null;
     } finally {
       inFlightSearches.delete(normalizedKey);

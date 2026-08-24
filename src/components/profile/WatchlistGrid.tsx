@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { Trash2, ChevronDown } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/AuthProvider";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
 import AnimeImage from "@/components/AnimeImage";
 
@@ -12,27 +12,24 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
   const [selectedTab, setSelectedTab] = useState<WatchlistStatus | "all">("all");
   const [toastItem, setToastItem] = useState<any | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const supabase = createClient();
+  const { user, supabase } = useAuth();
 
   useEffect(() => {
-    supabase.auth.getUser().then((res: any) => {
-      const user = res?.data?.user;
-      if (user) {
-        supabase
-          .from("bookmarks")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(50)
-          .then((fetchRes: any) => {
-            const data = fetchRes?.data;
-            if (data && data.length > 0) {
-              setItems(data);
-            }
-          });
-      }
-    });
-  }, [supabase]);
+    if (user) {
+      supabase
+        .from("bookmarks")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50)
+        .then((fetchRes: any) => {
+          const data = fetchRes?.data;
+          if (data && data.length > 0) {
+            setItems(data);
+          }
+        });
+    }
+  }, [user, supabase]);
 
   // Counts by status
   const counts = useMemo(() => {
