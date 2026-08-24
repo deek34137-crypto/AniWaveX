@@ -624,7 +624,8 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
                       <AnimeImage
                         src={item.posterImage}
                         alt={item.title}
-                        sizes="80px"
+                        sizes="(max-width: 640px) 180px, 280px"
+                        quality={95}
                         className="object-cover pointer-events-none"
                       />
                       <button
@@ -730,7 +731,8 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
                 <AnimeImage
                   src={item.posterImage}
                   alt={item.title}
-                  sizes="96px"
+                  sizes="(max-width: 640px) 240px, 360px"
+                  quality={95}
                   className="object-cover pointer-events-none"
                 />
                 <button
@@ -816,7 +818,8 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
                           <AnimeImage
                             src={anime.posterImage}
                             alt={anime.title}
-                            sizes="40px"
+                            sizes="120px"
+                            quality={95}
                             className="object-cover"
                           />
                         </div>

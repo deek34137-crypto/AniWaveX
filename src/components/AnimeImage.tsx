@@ -11,6 +11,8 @@ interface AnimeImageProps {
   fill?: boolean;
   sizes?: string;
   priority?: boolean;
+  quality?: number;
+  unoptimized?: boolean;
 }
 
 export default function AnimeImage({
@@ -20,6 +22,8 @@ export default function AnimeImage({
   fill = true,
   sizes,
   priority = false,
+  quality = 85,
+  unoptimized,
 }: AnimeImageProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -57,12 +61,13 @@ export default function AnimeImage({
       fill={fill}
       sizes={sizes || "(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"}
       priority={priority}
+      quality={quality}
       className={`${className} transition-opacity duration-300 ${
         isLoaded ? "opacity-100" : "opacity-0"
       }`}
       onLoad={() => setIsLoaded(true)}
       onError={() => setHasError(true)}
-      unoptimized={src.startsWith("http://")}
+      unoptimized={unoptimized !== undefined ? unoptimized : src.startsWith("http://")}
     />
   );
 }
