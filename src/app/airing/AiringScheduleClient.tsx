@@ -10,7 +10,8 @@ import {
   Sparkles, 
   Search, 
   Tv, 
-  Filter
+  Building2,
+  Film
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import type { AiringAnimeScheduleItem } from "@/lib/schedule";
@@ -29,7 +30,7 @@ const DAYS_OF_WEEK = [
 function formatCountdown(targetEpochSeconds: number, nowEpochMs: number) {
   const diffSeconds = targetEpochSeconds - Math.floor(nowEpochMs / 1000);
   if (diffSeconds <= 0) {
-    return { text: "Aired", isLive: true };
+    return { text: "Aired / Available", isLive: true };
   }
 
   const days = Math.floor(diffSeconds / 86400);
@@ -84,8 +85,9 @@ export default function AiringScheduleClient({ animeList }: { animeList: AiringA
         const q = searchQuery.toLowerCase().trim();
         const matchesTitle = anime.title.toLowerCase().includes(q);
         const matchesRomaji = anime.romajiTitle?.toLowerCase().includes(q);
+        const matchesStudio = anime.studio?.toLowerCase().includes(q);
         const matchesGenre = anime.genres?.some((g) => g.toLowerCase().includes(q));
-        if (!matchesTitle && !matchesRomaji && !matchesGenre) return false;
+        if (!matchesTitle && !matchesRomaji && !matchesStudio && !matchesGenre) return false;
       }
 
       return true;
@@ -99,13 +101,13 @@ export default function AiringScheduleClient({ animeList }: { animeList: AiringA
         <div className="relative z-10 max-w-3xl">
           <div className="flex items-center gap-2 text-blue-400 font-bold text-xs uppercase tracking-widest mb-3">
             <Sparkles className="w-4 h-4" />
-            Tsuzuki & AniList Airing Engine
+            Japanese Simulcast & Broadcast Schedule
           </div>
           <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4 leading-tight">
-            Weekly Airing Schedule
+            Weekly Airing Anime
           </h1>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-6">
-            Real-time simulcast releases, broadcast timers, and live countdowns across {animeList.length} seasonal anime series.
+            Live Japanese TV broadcast schedules, episode countdowns, and simulcast releases across {animeList.length} seasonal anime series.
           </p>
 
           {/* Quick Search & Genre Filter Bar */}
@@ -114,7 +116,7 @@ export default function AiringScheduleClient({ animeList }: { animeList: AiringA
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search anime title or genre..."
+                placeholder="Search anime title, studio, or genre..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-slate-950/80 border border-white/15 rounded-2xl pl-10 pr-4 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-400 outline-none focus:border-blue-500 transition-all backdrop-blur-md"
@@ -222,7 +224,7 @@ export default function AiringScheduleClient({ animeList }: { animeList: AiringA
                     </span>
 
                     {anime.rating && anime.rating !== "N/A" && (
-                      <div className="flex items-center gap-1 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/10 shadow-sm">
+                      <div className="flex items-center gap-1 bg-black/75 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/10 shadow-sm">
                         <Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />
                         <span className="text-[11px] font-bold text-white">{anime.rating}</span>
                       </div>
@@ -263,13 +265,13 @@ export default function AiringScheduleClient({ animeList }: { animeList: AiringA
                       {anime.title}
                     </h3>
 
-                    {/* Genre / Streaming Tag */}
+                    {/* Studio / Genre / Platform Tag */}
                     <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
-                      <span className="truncate max-w-[90px]">
-                        {anime.genres && anime.genres.length > 0 ? anime.genres[0] : "Anime"}
+                      <span className="truncate max-w-[100px] text-slate-300 font-medium">
+                        {anime.studio || (anime.genres && anime.genres.length > 0 ? anime.genres[0] : "Anime")}
                       </span>
                       {anime.streamingPlatforms && anime.streamingPlatforms.length > 0 ? (
-                        <span className="text-slate-300 font-semibold truncate max-w-[70px]">
+                        <span className="text-blue-400 font-semibold truncate max-w-[70px]">
                           {anime.streamingPlatforms[0].site}
                         </span>
                       ) : (
