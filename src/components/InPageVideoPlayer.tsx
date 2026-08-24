@@ -279,6 +279,7 @@ export default function InPageVideoPlayer({
   };
 
   const requestIdRef = useRef(0);
+  const failedServersRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     if (!episode) return;
@@ -289,6 +290,7 @@ export default function InPageVideoPlayer({
     const fetchStream = async () => {
       setIsLoading(true);
       setStreams(null);
+      failedServersRef.current.clear();
       setSelectedServerIndex(0); // Reset server index
       setFallbackToIframe(false);
       setPlayerError(false);
@@ -492,6 +494,7 @@ export default function InPageVideoPlayer({
                   <button
                     key={idx}
                     onClick={() => {
+                      failedServersRef.current.delete(idx);
                       setSelectedServerIndex(idx);
                       setPlayerError(false);
                       setFallbackToIframe(!source.isM3U8);
@@ -577,6 +580,7 @@ export default function InPageVideoPlayer({
                       <button
                         key={idx}
                         onClick={() => {
+                          failedServersRef.current.delete(idx);
                           setSelectedServerIndex(idx);
                           setPlayerError(false);
                           setFallbackToIframe(!source.isM3U8);
@@ -593,6 +597,7 @@ export default function InPageVideoPlayer({
                   )}
                   <button
                     onClick={() => {
+                      failedServersRef.current.clear();
                       setPlayerError(false);
                       setFallbackToIframe(false);
                     }}
@@ -613,23 +618,26 @@ export default function InPageVideoPlayer({
                 initialTime={initialTime}
                 onTimeUpdate={handleTimeUpdate}
                 onError={() => {
-                  console.warn("Native HLS stream playback failed, looking for alternate server");
-                  // 1. Try another HLS server first
-                  const otherHlsIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && s.isM3U8);
+                  console.warn("Native HLS stream playback failed on server index", validServerIndex);
+                  failedServersRef.current.add(validServerIndex);
+
+                  // 1. Try another unfailed HLS server first
+                  const otherHlsIdx = activeSources?.findIndex((s, i) => !failedServersRef.current.has(i) && s.isM3U8);
                   if (otherHlsIdx !== undefined && otherHlsIdx !== -1) {
                     setSelectedServerIndex(otherHlsIdx);
                     setFallbackToIframe(false);
                     setPlayerError(false);
                     return;
                   }
-                  // 2. Only if no HLS servers remain, fallback to a working embed server
-                  const embedIdx = activeSources?.findIndex((s, i) => i !== selectedServerIndex && !s.isM3U8 && isValidEmbedUrl(s.url));
+                  // 2. Only if no unfailed HLS servers remain, fallback to a working embed server
+                  const embedIdx = activeSources?.findIndex((s, i) => !failedServersRef.current.has(i) && !s.isM3U8 && isValidEmbedUrl(s.url));
                   if (embedIdx !== undefined && embedIdx !== -1) {
                     setSelectedServerIndex(embedIdx);
                     setFallbackToIframe(true);
                     setPlayerError(false);
                     return;
                   }
+                  // All servers exhausted, show clean fallback UI
                   setPlayerError(true);
                 }}
                 onEnded={() => {

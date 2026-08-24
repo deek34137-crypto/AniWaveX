@@ -241,6 +241,15 @@ function isAllowedHost(hostname: string): boolean {
     "anilist.co",
     "watching.onl",
     "megaplay.buzz",
+    "sugevideo.xyz",
+    "sugevids.com",
+    "swishsrv.com",
+    "streamwish.site",
+    "bunnycdn.ru",
+    "b-cdn.net",
+    "gogo-stream.com",
+    "aniverse.fun",
+    "anivexa.com",
     "vidtube.site",
     "krussdomi.com",
     "akirax.buzz",
@@ -272,20 +281,13 @@ function rewriteM3U8Content(
   text: string, 
   baseUrl: string, 
   proxyOrigin: string, 
-  referer: string,
-  externalWorkerProxy?: string | null
+  referer: string
 ): string {
   const base = new URL(baseUrl);
   const basePath = base.origin + base.pathname.substring(0, base.pathname.lastIndexOf("/") + 1);
   const lines = text.split("\n");
 
-  // Route through Cloudflare Worker edge proxy if available to offload segment bandwidth
-  const cleanWorker = externalWorkerProxy && !externalWorkerProxy.startsWith('/')
-    ? externalWorkerProxy.replace(/\/+$/, '').replace(/\/stream$/, '')
-    : null;
-  const proxyBase = cleanWorker
-    ? `${cleanWorker}/proxy`
-    : `${proxyOrigin}/api/proxy`;
+  const proxyBase = `${proxyOrigin}/api/proxy`;
 
   return lines.map((line) => {
     const t = line.trim();
@@ -318,8 +320,8 @@ function rewriteM3U8Content(
 
 function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
   const host = targetUrl.hostname.toLowerCase();
-  if (host.includes("watching.onl") || host.includes("megaplay.buzz")) {
-    return "https://megaplay.buzz/";
+  if (host.includes("watching.onl") || host.includes("megaplay.buzz") || host.includes("sugevideo") || host.includes("sugevids")) {
+    return refererParam || "https://megaplay.buzz/";
   }
   if (host.includes("krussdomi")) {
     return "https://krussdomi.com/";
@@ -444,8 +446,7 @@ export async function GET(request: NextRequest) {
     if (isM3U8) {
       const text = await upstreamRes.text();
       const origin = new URL(request.url).origin;
-      const externalWorker = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL || null;
-      const rewritten = rewriteM3U8Content(text, target, origin, referer, externalWorker);
+      const rewritten = rewriteM3U8Content(text, target, origin, referer);
 
       return new NextResponse(rewritten, {
         status: 200,
