@@ -35,16 +35,40 @@ export default function ContinueWatchingRow() {
             .limit(12);
 
           if (records && records.length > 0) {
-            const mapped: WatchHistoryItem[] = records.map((r: any) => ({
-              animeSlug: r.anime_slug,
-              animeTitle: r.anime_title,
-              posterImage: r.poster_image,
-              episodeId: r.last_episode_watched || 1,
-              progressSeconds: r.progress_seconds || 0,
-              // Use saved total_seconds; fall back to a standard 24-minute episode only if never set
-              totalSeconds: r.total_seconds > 0 ? r.total_seconds : 1440,
-              updatedAt: new Date(r.updated_at).getTime(),
-            }));
+            const mapped: WatchHistoryItem[] = records.map((r: any) => {
+              const slug = r.anime_slug;
+              const epId = r.last_episode_watched || 1;
+
+              // Pull per-episode localStorage progress as a more accurate source
+              let localProgress = 0;
+              let localDuration = 0;
+              try {
+                const localRaw = localStorage.getItem(`watch_progress_${slug}_ep_${epId}`);
+                if (localRaw) {
+                  const lp = JSON.parse(localRaw);
+                  localProgress = lp.currentTime || 0;
+                  localDuration = lp.duration || 0;
+                }
+              } catch {}
+
+              // Use the higher of DB vs localStorage progress
+              const dbProgress = r.progress_seconds || 0;
+              const bestProgress = Math.max(dbProgress, Math.floor(localProgress));
+
+              // Use localStorage duration if DB has none yet
+              const dbDuration = r.total_seconds > 0 ? r.total_seconds : 0;
+              const bestDuration = dbDuration > 0 ? dbDuration : (localDuration > 0 ? Math.floor(localDuration) : 1440);
+
+              return {
+                animeSlug: slug,
+                animeTitle: r.anime_title,
+                posterImage: r.poster_image,
+                episodeId: epId,
+                progressSeconds: bestProgress,
+                totalSeconds: bestDuration,
+                updatedAt: new Date(r.updated_at).getTime(),
+              };
+            });
             setItems(mapped);
             setLoading(false);
             return;
