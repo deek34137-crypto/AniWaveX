@@ -272,12 +272,16 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     }
   };
 
-  // Add anime from search modal
-  const handleAddCustomAnime = (anime: any) => {
+  // Added anime flash notification
+  const [lastAddedFeedback, setLastAddedFeedback] = useState<string | null>(null);
+
+  // Add anime from search modal (can specify targetRowId or defaults to "pool")
+  const handleAddCustomAnime = (anime: any, targetRowId: string | "pool" = "pool") => {
+    const slug = anime.slug || anime.id?.toString() || `anime-${Date.now()}`;
     const newItem: TierItem = {
-      id: anime.id,
-      slug: anime.slug,
-      title: anime.title,
+      id: anime.id || slug,
+      slug,
+      title: anime.title || "Unknown Anime",
       posterImage: anime.posterImage || anime.backgroundImage || "",
       rating: anime.rating,
       year: anime.year,
@@ -288,13 +292,23 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       rows.some((r) => r.items.some((it) => it.slug === newItem.slug));
 
     if (exists) {
-      alert("This anime is already in your tier list.");
+      setLastAddedFeedback(`"${newItem.title}" is already in your tier list!`);
+      setTimeout(() => setLastAddedFeedback(null), 3000);
       return;
     }
 
-    setPool((prev) => [newItem, ...prev]);
-    setSearchQuery("");
-    setSearchResults([]);
+    if (targetRowId === "pool") {
+      setPool((prev) => [newItem, ...prev]);
+      setLastAddedFeedback(`Added "${newItem.title}" to Unranked Pool!`);
+    } else {
+      const targetRow = rows.find((r) => r.id === targetRowId);
+      setRows((prev) =>
+        prev.map((r) => (r.id === targetRowId ? { ...r, items: [...r.items, newItem] } : r))
+      );
+      setLastAddedFeedback(`Added "${newItem.title}" to ${targetRow?.label || "Tier"}!`);
+    }
+
+    setTimeout(() => setLastAddedFeedback(null), 3500);
   };
 
   // Row controls
@@ -775,38 +789,86 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               />
             </div>
 
+            {/* Notification Banner */}
+            {lastAddedFeedback && (
+              <div className="px-4 py-2 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs font-bold flex items-center justify-between animate-in fade-in">
+                <span>{lastAddedFeedback}</span>
+                <span className="text-[10px] text-emerald-400/80">Available in list below</span>
+              </div>
+            )}
+
             {/* Results */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-800" style={{ maxHeight: "55vh" }}>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-800" style={{ maxHeight: "50vh" }}>
               {searchResults.length > 0 ? (
-                searchResults.map((anime) => (
-                  <div
-                    key={anime.id || anime.slug}
-                    onClick={() => handleAddCustomAnime(anime)}
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/30 cursor-pointer transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="relative w-10 h-14 rounded-lg overflow-hidden bg-slate-800 shrink-0">
-                        <AnimeImage
-                          src={anime.posterImage}
-                          alt={anime.title}
-                          sizes="40px"
-                          className="object-cover"
-                        />
-                      </div>
-                      <div>
-                        <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-blue-400 transition-colors line-clamp-1">
-                          {anime.title}
-                        </h4>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                          {anime.year || "Anime"}{anime.rating ? ` · ★ ${anime.rating}` : ""}
+                searchResults.map((anime) => {
+                  const slug = anime.slug || anime.id?.toString();
+                  const isAlreadyAdded =
+                    pool.some((it) => it.slug === slug) ||
+                    rows.some((r) => r.items.some((it) => it.slug === slug));
+
+                  return (
+                    <div
+                      key={anime.id || anime.slug}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl bg-slate-950/60 hover:bg-slate-800/50 border border-white/5 transition-all gap-2"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="relative w-10 h-14 rounded-lg overflow-hidden bg-slate-800 shrink-0">
+                          <AnimeImage
+                            src={anime.posterImage}
+                            alt={anime.title}
+                            sizes="40px"
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="truncate">
+                          <h4 className="text-xs sm:text-sm font-bold text-white transition-colors line-clamp-1">
+                            {anime.title}
+                          </h4>
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            {anime.year || "Anime"}{anime.rating ? ` · ★ ${anime.rating}` : ""}
+                          </div>
                         </div>
                       </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                        {isAlreadyAdded ? (
+                          <span className="px-3 py-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" /> Added
+                          </span>
+                        ) : (
+                          <>
+                            {/* Quick add to specific tier rows */}
+                            {rows.slice(0, 4).map((r) => (
+                              <button
+                                key={r.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddCustomAnime(anime, r.id);
+                                }}
+                                className="px-2 py-1 text-[11px] font-black text-white rounded-md shadow-sm hover:scale-110 transition-transform"
+                                style={{ backgroundColor: r.color }}
+                                title={`Add directly to ${r.label}`}
+                              >
+                                +{r.label}
+                              </button>
+                            ))}
+                            {/* Add to Pool */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddCustomAnime(anime, "pool");
+                              }}
+                              className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm hover:scale-105"
+                            >
+                              + Pool
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shrink-0">
-                      + Add
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               ) : searchQuery.length >= 2 && !isSearching ? (
                 <div className="py-12 text-center text-slate-500 text-xs">
                   No anime found matching &quot;{searchQuery}&quot;
