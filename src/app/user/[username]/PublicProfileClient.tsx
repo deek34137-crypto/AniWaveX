@@ -17,12 +17,14 @@ import {
   Grid, 
   Layers, 
   Calendar,
-  ExternalLink
+  ExternalLink,
+  Trash2
 } from "lucide-react";
 import AnimeCard from "@/components/AnimeCard";
 import AnimeImage from "@/components/AnimeImage";
 import { getAvatarUrl } from "@/lib/avatars";
 import { PROFILE_BANNER_PRESETS, AnimeTierList } from "@/lib/tierlist";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface PublicProfileClientProps {
   username: string;
@@ -48,6 +50,21 @@ export default function PublicProfileClient({
   const topFive = meta.top_five_anime || [];
   const bannerPresetId = meta.banner_preset || "cyberpunk";
   const customBannerUrl = meta.custom_banner_url;
+
+  const { user: authUser } = useAuth();
+  const isOwner = authUser?.id === user?.id || 
+    (authUser?.user_metadata?.username || authUser?.email?.split("@")[0])?.toLowerCase() === username.toLowerCase();
+
+  const handleDeleteTierList = (id: string) => {
+    if (confirm("Are you sure you want to remove this tier list?")) {
+      const key = `aniwavex_tierlists_${username.toLowerCase()}`;
+      const updated = tierLists.filter((tl) => tl.id !== id);
+      setTierLists(updated);
+      try {
+        localStorage.setItem(key, JSON.stringify(updated));
+      } catch {}
+    }
+  };
 
   const bannerPreset =
     PROFILE_BANNER_PRESETS.find((p) => p.id === bannerPresetId) || PROFILE_BANNER_PRESETS[0];
@@ -416,14 +433,26 @@ export default function PublicProfileClient({
                   key={tl.id}
                   className="rounded-2xl overflow-hidden bg-slate-900 border border-white/10 p-5 flex flex-col justify-between gap-4 shadow-xl hover:border-blue-500/50 transition-all group"
                 >
-                  <div>
-                    <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors line-clamp-1">
-                      {tl.title}
-                    </h3>
-                    {tl.description && (
-                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                        {tl.description}
-                      </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors line-clamp-1">
+                        {tl.title}
+                      </h3>
+                      {tl.description && (
+                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                          {tl.description}
+                        </p>
+                      )}
+                    </div>
+                    {isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTierList(tl.id)}
+                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
+                        title="Remove this tier list"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     )}
                   </div>
 
