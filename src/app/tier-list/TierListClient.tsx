@@ -384,6 +384,24 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     }
   };
 
+  // Helper to load image for canvas export
+  const loadCanvasImage = (src: string): Promise<HTMLImageElement | null> => {
+    return new Promise((resolve) => {
+      if (!src) return resolve(null);
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => {
+        // Retry without crossOrigin or resolve null
+        const fallback = new window.Image();
+        fallback.onload = () => resolve(fallback);
+        fallback.onerror = () => resolve(null);
+        fallback.src = src;
+      };
+      img.src = src;
+    });
+  };
+
   // Export as Image
   const handleExportImage = async () => {
     setIsExporting(true);
@@ -393,49 +411,132 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       if (!ctx) throw new Error("Canvas 2D context not available");
 
       const width = 1200;
-      const rowHeight = 110;
       const headerHeight = 90;
-      const footerHeight = 40;
-      const totalHeight = headerHeight + rows.length * rowHeight + footerHeight;
+      const footerHeight = 45;
+      const cardW = 68;
+      const cardH = 96;
+      const cardGap = 8;
+      const tierLabelW = 110;
+      const itemsStartX = 20 + tierLabelW + 12;
+      const availableItemsW = width - itemsStartX - 20;
+      const maxCols = Math.max(1, Math.floor(availableItemsW / (cardW + cardGap)));
+
+      // Calculate dynamic row heights based on item count
+      const rowLayouts = rows.map((row) => {
+        const numRows = Math.max(1, Math.ceil((row.items?.length || 0) / maxCols));
+        const height = Math.max(110, numRows * (cardH + cardGap) + 16);
+        return { row, height, numRows };
+      });
+
+      const totalHeight = headerHeight + rowLayouts.reduce((acc, r) => acc + r.height, 0) + footerHeight;
 
       canvas.width = width;
       canvas.height = totalHeight;
 
+      // 1. Draw dark background
       ctx.fillStyle = "#090d16";
       ctx.fillRect(0, 0, width, totalHeight);
 
+      // 2. Draw Title Header
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 26px sans-serif";
-      ctx.fillText(title || "AniWaveX Tier List", 40, 50);
+      ctx.fillText(title || "AniWaveX Tier List", 30, 52);
 
       ctx.fillStyle = "#3b82f6";
       ctx.font = "bold 14px sans-serif";
-      ctx.fillText("AniWaveX • aniwavex.bond", width - 240, 50);
+      ctx.fillText("AniWaveX • aniwavex.bond", width - 230, 52);
 
+      // Preload all images across all rows
+      const allItemsToLoad = rows.flatMap((r) => r.items || []);
+      const loadedImageMap = new Map<string, HTMLImageElement | null>();
+      await Promise.all(
+        allItemsToLoad.map(async (it) => {
+          if (it.posterImage && !loadedImageMap.has(it.posterImage)) {
+            const img = await loadCanvasImage(it.posterImage);
+            loadedImageMap.set(it.posterImage, img);
+          }
+        })
+      );
+
+      // 3. Draw each Tier Row & its Anime Posters
       let currentY = headerHeight;
-      for (const row of rows) {
+      for (const { row, height } of rowLayouts) {
+        const rowBgY = currentY;
+        const rowH = height - 6;
+
+        // Row background
         ctx.fillStyle = "#111827";
-        ctx.fillRect(20, currentY, width - 40, rowHeight - 6);
+        ctx.fillRect(20, rowBgY, width - 40, rowH);
 
+        // Tier Label Box
         ctx.fillStyle = row.color || "#ef4444";
-        ctx.fillRect(20, currentY, 100, rowHeight - 6);
+        ctx.fillRect(20, rowBgY, tierLabelW, rowH);
 
+        // Tier Label Text
         ctx.fillStyle = "#ffffff";
-        ctx.font = "black 32px sans-serif";
+        ctx.font = "900 32px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(row.label, 70, currentY + 62);
+        ctx.textBaseline = "middle";
+        ctx.fillText(row.label, 20 + tierLabelW / 2, rowBgY + rowH / 2);
         ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
 
-        currentY += rowHeight;
+        // Draw items in this tier
+        if (row.items && row.items.length > 0) {
+          row.items.forEach((item, idx) => {
+            const col = idx % maxCols;
+            const rowIdx = Math.floor(idx / maxCols);
+            const x = itemsStartX + col * (cardW + cardGap);
+            const y = rowBgY + 8 + rowIdx * (cardH + cardGap);
+
+            const img = item.posterImage ? loadedImageMap.get(item.posterImage) : null;
+            if (img) {
+              // Draw rounded card image
+              ctx.save();
+              ctx.beginPath();
+              if (typeof ctx.roundRect === "function") {
+                ctx.roundRect(x, y, cardW, cardH, 8);
+              } else {
+                ctx.rect(x, y, cardW, cardH);
+              }
+              ctx.clip();
+              ctx.drawImage(img, x, y, cardW, cardH);
+
+              // Dark bottom gradient for readability
+              const grad = ctx.createLinearGradient(x, y + cardH - 24, x, y + cardH);
+              grad.addColorStop(0, "rgba(9,13,22,0)");
+              grad.addColorStop(1, "rgba(9,13,22,0.95)");
+              ctx.fillStyle = grad;
+              ctx.fillRect(x, y + cardH - 24, cardW, 24);
+
+              // Title snippet
+              ctx.fillStyle = "#ffffff";
+              ctx.font = "bold 9px sans-serif";
+              const titleText = item.title.length > 10 ? item.title.slice(0, 9) + "…" : item.title;
+              ctx.fillText(titleText, x + 4, y + cardH - 6);
+              ctx.restore();
+            } else {
+              // Fallback placeholder card
+              ctx.fillStyle = "#1e293b";
+              ctx.fillRect(x, y, cardW, cardH);
+              ctx.fillStyle = "#94a3b8";
+              ctx.font = "bold 10px sans-serif";
+              ctx.fillText(item.title.slice(0, 8), x + 4, y + cardH / 2);
+            }
+          });
+        }
+
+        currentY += height;
       }
 
+      // 4. Draw Footer
       ctx.fillStyle = "#64748b";
       ctx.font = "12px sans-serif";
-      ctx.fillText("Generated on AniWaveX - The Ultimate Anime Experience", 40, totalHeight - 15);
+      ctx.fillText("Generated on AniWaveX - The Ultimate Anime Experience", 30, totalHeight - 18);
 
       const dataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
-      link.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-tierlist.png`;
+      link.download = `${(title || "anime").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-tierlist.png`;
       link.href = dataUrl;
       link.click();
     } catch (err: any) {
