@@ -515,42 +515,53 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
         </div>
       </div>
 
-      {/* Selected Item Notification (Mobile / Tap Assist) */}
+      {/* Floating Bottom Action Capsule (1-tap Placement) */}
       {selectedItem && (
-        <div className="bg-blue-600/20 border border-blue-500/50 rounded-2xl p-4 flex items-center justify-between animate-in fade-in sticky top-20 z-30 backdrop-blur-md shadow-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-11 rounded-lg overflow-hidden shrink-0 border border-blue-400">
-              <AnimeImage src={selectedItem.item.posterImage} alt={selectedItem.item.title} className="object-cover" />
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[95vw] sm:max-w-2xl bg-slate-900/95 backdrop-blur-xl border border-blue-500/50 shadow-[0_10px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(59,130,246,0.35)] rounded-2xl sm:rounded-full px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-6 animate-in slide-in-from-bottom-5 duration-300">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            {/* Thumbnail with strict relative positioning */}
+            <div className="relative w-8 h-11 rounded-lg overflow-hidden shrink-0 border border-blue-400/80 shadow-md bg-slate-950">
+              <AnimeImage
+                src={selectedItem.item.posterImage}
+                alt={selectedItem.item.title}
+                sizes="64px"
+                quality={90}
+                className="object-cover"
+              />
             </div>
-            <div>
-              <span className="text-xs font-bold text-white block">
-                Selected: {selectedItem.item.title}
+            <div className="truncate max-w-[200px] sm:max-w-[240px]">
+              <span className="text-xs font-bold text-white block truncate">
+                {selectedItem.item.title}
               </span>
-              <span className="text-[11px] text-blue-300">
-                Click any Tier below or choose where to move it:
+              <span className="text-[10px] text-blue-300 font-medium">
+                Tap tier to place:
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
+
+          {/* Quick Tier Buttons */}
+          <div className="flex items-center gap-1.5 flex-wrap justify-center">
             {rows.map((r) => (
               <button
                 key={r.id}
                 onClick={() => moveItem(selectedItem.item, selectedItem.sourceRowId, r.id)}
-                className="px-2.5 py-1 text-xs font-black text-white rounded-lg shadow-sm hover:scale-105 transition-transform"
+                className="px-2.5 py-1 text-xs font-black text-white rounded-lg shadow-sm hover:scale-110 active:scale-95 transition-transform"
                 style={{ backgroundColor: r.color }}
+                title={`Move to ${r.label}`}
               >
                 {r.label}
               </button>
             ))}
             <button
               onClick={() => moveItem(selectedItem.item, selectedItem.sourceRowId, "pool")}
-              className="px-2.5 py-1 text-xs font-bold bg-slate-800 text-slate-300 hover:text-white rounded-lg border border-white/10"
+              className="px-2.5 py-1 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-white/10 transition-colors"
             >
               Pool
             </button>
             <button
               onClick={() => setSelectedItem(null)}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors ml-1"
+              title="Deselect"
             >
               <X className="w-4 h-4" />
             </button>
