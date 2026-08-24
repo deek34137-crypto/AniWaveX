@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { 
-  Trophy, 
   Download, 
   Plus, 
   Trash2, 
@@ -17,58 +16,67 @@ import {
   MoveDown,
   Layers,
   X,
+  ArrowDownToLine,
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import { DEFAULT_TIER_ROWS, TierRow, TierItem, AnimeTierList } from "@/lib/tierlist";
 import { useAuth } from "@/providers/AuthProvider";
 
 // ── Auto-scroll while dragging ───────────────────────────────────────────────
-// Scrolls the page when the drag ghost is within EDGE_PX pixels of the top/bottom viewport
-const EDGE_PX = 80;    // zone height in px
-const SCROLL_SPEED = 12; // px per animation frame
+const EDGE_THRESHOLD_PX = 90;
+const MAX_SCROLL_SPEED = 16;
 
 function useAutoScrollOnDrag() {
-  const rafRef = useRef<number | null>(null);
-  const mouseYRef = useRef<number | null>(null);
-  const isDraggingRef = useRef(false);
+  const rafId = useRef<number | null>(null);
+  const pointerY = useRef<number | null>(null);
+  const isDragging = useRef(false);
 
-  const scroll = useCallback(() => {
-    const y = mouseYRef.current;
-    if (y === null || !isDraggingRef.current) return;
-
+  const loop = useCallback(() => {
+    if (!isDragging.current || pointerY.current === null) return;
+    const y = pointerY.current;
     const vh = window.innerHeight;
-    if (y < EDGE_PX) {
-      window.scrollBy(0, -SCROLL_SPEED * (1 - y / EDGE_PX));
-    } else if (y > vh - EDGE_PX) {
-      window.scrollBy(0, SCROLL_SPEED * ((y - (vh - EDGE_PX)) / EDGE_PX));
+
+    if (y < EDGE_THRESHOLD_PX) {
+      const factor = 1 - Math.max(0, y) / EDGE_THRESHOLD_PX;
+      window.scrollBy(0, -Math.round(MAX_SCROLL_SPEED * factor));
+    } else if (y > vh - EDGE_THRESHOLD_PX) {
+      const factor = (y - (vh - EDGE_THRESHOLD_PX)) / EDGE_THRESHOLD_PX;
+      window.scrollBy(0, Math.round(MAX_SCROLL_SPEED * factor));
     }
-    rafRef.current = requestAnimationFrame(scroll);
+
+    rafId.current = requestAnimationFrame(loop);
   }, []);
 
   useEffect(() => {
-    const onDragOver = (e: DragEvent) => {
-      mouseYRef.current = e.clientY;
-    };
-    const onDragStart = () => {
-      isDraggingRef.current = true;
-      rafRef.current = requestAnimationFrame(scroll);
-    };
-    const onDragEnd = () => {
-      isDraggingRef.current = false;
-      mouseYRef.current = null;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const handleDragOver = (e: DragEvent) => {
+      pointerY.current = e.clientY;
+      if (!isDragging.current) {
+        isDragging.current = true;
+        if (rafId.current) cancelAnimationFrame(rafId.current);
+        rafId.current = requestAnimationFrame(loop);
+      }
     };
 
-    window.addEventListener("dragover", onDragOver);
-    window.addEventListener("dragstart", onDragStart);
-    window.addEventListener("dragend", onDragEnd);
-    return () => {
-      window.removeEventListener("dragover", onDragOver);
-      window.removeEventListener("dragstart", onDragStart);
-      window.removeEventListener("dragend", onDragEnd);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const handleDragEnd = () => {
+      isDragging.current = false;
+      pointerY.current = null;
+      if (rafId.current) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
     };
-  }, [scroll]);
+
+    window.addEventListener("dragover", handleDragOver, { passive: true });
+    window.addEventListener("dragend", handleDragEnd, { passive: true });
+    window.addEventListener("drop", handleDragEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("dragend", handleDragEnd);
+      window.removeEventListener("drop", handleDragEnd);
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, [loop]);
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -87,12 +95,12 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
   );
 
   const [title, setTitle] = useState("Seasonal Anime Tier List");
-  const [description, setDescription] = useState("");
+  const [activeDropTarget, setActiveDropTarget] = useState<string | null>(null);
 
-  // Drag & drop state
-  const [draggedItem, setDraggedItem] = useState<{ item: TierItem; sourceRowId: string | "pool" } | null>(null);
+  // Persistent ref for active drag item (prevents React state closure drops)
+  const draggedItemRef = useRef<{ item: TierItem; sourceRowId: string | "pool" } | null>(null);
 
-  // Click-to-place selected item for mobile tap interactions
+  // Tap-to-place selected item
   const [selectedItem, setSelectedItem] = useState<{ item: TierItem; sourceRowId: string | "pool" } | null>(null);
 
   // Search anime modal
@@ -107,10 +115,10 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
   const { user, supabase } = useAuth();
   const tierGridRef = useRef<HTMLDivElement>(null);
 
-  // Enable auto-scroll while dragging
+  // Activate auto scroll
   useAutoScrollOnDrag();
 
-  // Debounced search — fix: API returns array directly, not { anime: [] }
+  // Search anime with debounce
   useEffect(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) {
       setSearchResults([]);
@@ -123,7 +131,6 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
         const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=20`);
         if (res.ok) {
           const data = await res.json();
-          // API returns the array directly (not wrapped in { anime: [] })
           setSearchResults(Array.isArray(data) ? data : data.anime || []);
         }
       } catch (err) {
@@ -190,9 +197,10 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
   };
 
   // Move item between rows / pool
-  const moveItem = (item: TierItem, sourceRowId: string | "pool", targetRowId: string | "pool") => {
+  const moveItem = useCallback((item: TierItem, sourceRowId: string | "pool", targetRowId: string | "pool") => {
     if (sourceRowId === targetRowId) return;
 
+    // 1. Remove from source
     if (sourceRowId === "pool") {
       setPool((prev) => prev.filter((it) => it.slug !== item.slug));
     } else {
@@ -203,6 +211,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       );
     }
 
+    // 2. Add to target
     if (targetRowId === "pool") {
       setPool((prev) => [...prev, item]);
     } else {
@@ -212,25 +221,54 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     }
 
     setSelectedItem(null);
-    setDraggedItem(null);
-  };
+    draggedItemRef.current = null;
+    setActiveDropTarget(null);
+  }, []);
 
   // Drag handlers
   const handleDragStart = (e: React.DragEvent, item: TierItem, sourceRowId: string | "pool") => {
-    setDraggedItem({ item, sourceRowId });
-    e.dataTransfer.setData("text/plain", item.slug);
-    e.dataTransfer.effectAllowed = "move";
+    draggedItemRef.current = { item, sourceRowId };
+    try {
+      e.dataTransfer.setData("text/plain", JSON.stringify({ item, sourceRowId }));
+      e.dataTransfer.effectAllowed = "move";
+    } catch {}
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
+    e.stopPropagation();
+    try {
+      e.dataTransfer.dropEffect = "move";
+    } catch {}
+    if (activeDropTarget !== targetId) {
+      setActiveDropTarget(targetId);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (activeDropTarget === targetId) {
+      setActiveDropTarget(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent, targetRowId: string | "pool") => {
     e.preventDefault();
-    if (draggedItem) {
-      moveItem(draggedItem.item, draggedItem.sourceRowId, targetRowId);
+    e.stopPropagation();
+    setActiveDropTarget(null);
+
+    let dragData = draggedItemRef.current;
+    if (!dragData) {
+      try {
+        const raw = e.dataTransfer.getData("text/plain");
+        if (raw) {
+          dragData = JSON.parse(raw);
+        }
+      } catch {}
+    }
+
+    if (dragData?.item) {
+      moveItem(dragData.item, dragData.sourceRowId, targetRowId);
     }
   };
 
@@ -255,7 +293,6 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     }
 
     setPool((prev) => [newItem, ...prev]);
-    // Keep modal open so the user can keep adding
     setSearchQuery("");
     setSearchResults([]);
   };
@@ -300,6 +337,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       const allItems = [...rows.flatMap((r) => r.items), ...pool];
       setRows(DEFAULT_TIER_ROWS);
       setPool(allItems);
+      setSelectedItem(null);
     }
   };
 
@@ -309,7 +347,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     const tierListObj: AnimeTierList = {
       id: `tierlist_${Date.now()}`,
       title: title.trim() || "My Anime Tier List",
-      description: description.trim(),
+      description: "",
       username,
       userId: user?.id,
       rows,
@@ -412,7 +450,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               placeholder="Enter Tier List Title..."
             />
             <p className="text-slate-300 text-xs sm:text-sm">
-              Drag & drop anime into tiers, customize rows, or click to place. Export as a high-res image.
+              Drag &amp; drop anime into tiers, customize rows, or click to place. Auto-scrolls while dragging.
             </p>
           </div>
 
@@ -465,115 +503,152 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
       {/* Selected Item Notification (Mobile / Tap Assist) */}
       {selectedItem && (
-        <div className="bg-blue-600/20 border border-blue-500/50 rounded-2xl p-4 flex items-center justify-between animate-in fade-in">
+        <div className="bg-blue-600/20 border border-blue-500/50 rounded-2xl p-4 flex items-center justify-between animate-in fade-in sticky top-20 z-30 backdrop-blur-md shadow-xl">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-blue-300">
-              Selected: <strong className="text-white">{selectedItem.item.title}</strong>
-            </span>
-            <span className="text-[11px] text-slate-400">
-              Tap any Tier row below to place it
-            </span>
+            <div className="w-8 h-11 rounded-lg overflow-hidden shrink-0 border border-blue-400">
+              <AnimeImage src={selectedItem.item.posterImage} alt={selectedItem.item.title} className="object-cover" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-white block">
+                Selected: {selectedItem.item.title}
+              </span>
+              <span className="text-[11px] text-blue-300">
+                Click any Tier below or choose where to move it:
+              </span>
+            </div>
           </div>
-          <button
-            onClick={() => setSelectedItem(null)}
-            className="p-1 text-slate-400 hover:text-white"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {rows.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => moveItem(selectedItem.item, selectedItem.sourceRowId, r.id)}
+                className="px-2.5 py-1 text-xs font-black text-white rounded-lg shadow-sm hover:scale-105 transition-transform"
+                style={{ backgroundColor: r.color }}
+              >
+                {r.label}
+              </button>
+            ))}
+            <button
+              onClick={() => moveItem(selectedItem.item, selectedItem.sourceRowId, "pool")}
+              className="px-2.5 py-1 text-xs font-bold bg-slate-800 text-slate-300 hover:text-white rounded-lg border border-white/10"
+            >
+              Pool
+            </button>
+            <button
+              onClick={() => setSelectedItem(null)}
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
       {/* Interactive Tier Rows */}
       <div ref={tierGridRef} className="space-y-3 bg-slate-950/80 p-3 sm:p-5 rounded-3xl border border-white/10 shadow-2xl">
-        {rows.map((row, index) => (
-          <div
-            key={row.id}
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, row.id)}
-            onClick={() => selectedItem && moveItem(selectedItem.item, selectedItem.sourceRowId, row.id)}
-            className="group relative flex flex-col sm:flex-row items-stretch rounded-2xl overflow-hidden bg-slate-900/90 border border-white/10 hover:border-white/20 transition-all min-h-[110px]"
-          >
-            {/* Tier Label */}
-            <div
-              className="sm:w-28 flex items-center justify-center p-3 text-white font-black text-2xl sm:text-3xl shrink-0 shadow-lg select-none"
-              style={{ backgroundColor: row.color }}
-            >
-              <input
-                type="text"
-                value={row.label}
-                onChange={(e) =>
-                  setRows((prev) =>
-                    prev.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r))
-                  )
-                }
-                className="bg-transparent text-center font-black outline-none w-full cursor-text"
-                title="Click to rename tier"
-              />
-            </div>
+        {rows.map((row, index) => {
+          const isTargeted = activeDropTarget === row.id;
 
-            {/* Items Row */}
-            <div className="flex-1 flex items-center flex-wrap gap-2.5 p-3 min-h-[90px] overflow-x-auto">
-              {row.items.length === 0 ? (
-                <div className="text-xs text-slate-600 font-medium italic pl-2 pointer-events-none select-none">
-                  Drag anime here or click to assign…
-                </div>
-              ) : (
-                row.items.map((item) => (
-                  <div
-                    key={item.slug}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, item, row.id)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedItem({ item, sourceRowId: row.id });
-                    }}
-                    className={`group/card relative w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden bg-slate-950 border cursor-grab active:cursor-grabbing hover:scale-105 transition-all shadow-md shrink-0 ${
-                      selectedItem?.item.slug === item.slug
-                        ? "border-blue-400 ring-2 ring-blue-500 scale-105"
-                        : "border-white/10 hover:border-blue-400"
-                    }`}
-                  >
-                    <AnimeImage
-                      src={item.posterImage}
-                      alt={item.title}
-                      sizes="80px"
-                      className="object-cover pointer-events-none"
-                    />
-                    <button
+          return (
+            <div
+              key={row.id}
+              onDragOver={(e) => handleDragOver(e, row.id)}
+              onDragLeave={(e) => handleDragLeave(e, row.id)}
+              onDrop={(e) => handleDrop(e, row.id)}
+              onClick={() => selectedItem && moveItem(selectedItem.item, selectedItem.sourceRowId, row.id)}
+              className={`group relative flex flex-col sm:flex-row items-stretch rounded-2xl overflow-hidden bg-slate-900/90 border transition-all duration-200 min-h-[110px] ${
+                isTargeted
+                  ? "border-blue-400 ring-2 ring-blue-500/60 bg-blue-950/40"
+                  : "border-white/10 hover:border-white/20"
+              }`}
+            >
+              {/* Tier Label Box */}
+              <div
+                className="sm:w-28 flex items-center justify-center p-3 text-white font-black text-2xl sm:text-3xl shrink-0 shadow-lg select-none"
+                style={{ backgroundColor: row.color }}
+              >
+                <input
+                  type="text"
+                  value={row.label}
+                  onChange={(e) =>
+                    setRows((prev) =>
+                      prev.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r))
+                    )
+                  }
+                  className="bg-transparent text-center font-black outline-none w-full cursor-text"
+                  title="Click to rename tier"
+                />
+              </div>
+
+              {/* Items Row Area */}
+              <div 
+                className="flex-1 flex items-center flex-wrap gap-2.5 p-3 min-h-[90px] overflow-x-auto"
+                onDragOver={(e) => handleDragOver(e, row.id)}
+                onDrop={(e) => handleDrop(e, row.id)}
+              >
+                {row.items.length === 0 ? (
+                  <div className="text-xs text-slate-500 font-medium italic pl-2 pointer-events-none select-none flex items-center gap-2">
+                    <ArrowDownToLine className="w-3.5 h-3.5 opacity-50" />
+                    Drag anime here or click to assign…
+                  </div>
+                ) : (
+                  row.items.map((item) => (
+                    <div
+                      key={item.slug}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item, row.id)}
                       onClick={(e) => {
                         e.stopPropagation();
-                        moveItem(item, row.id, "pool");
+                        setSelectedItem({ item, sourceRowId: row.id });
                       }}
-                      className="absolute top-1 right-1 p-1 bg-black/80 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors opacity-0 group-hover/card:opacity-100"
-                      title="Move back to pool"
+                      className={`group/card relative w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden bg-slate-950 border cursor-grab active:cursor-grabbing hover:scale-105 transition-all shadow-md shrink-0 ${
+                        selectedItem?.item.slug === item.slug
+                          ? "border-blue-400 ring-2 ring-blue-500 scale-105"
+                          : "border-white/10 hover:border-blue-400"
+                      }`}
                     >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                    <div className="absolute bottom-0 left-0 right-0 p-1 bg-slate-950/90 text-[9px] text-white font-bold truncate opacity-0 group-hover/card:opacity-100 transition-opacity">
-                      {item.title}
+                      <AnimeImage
+                        src={item.posterImage}
+                        alt={item.title}
+                        sizes="80px"
+                        className="object-cover pointer-events-none"
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          moveItem(item, row.id, "pool");
+                        }}
+                        className="absolute top-1 right-1 p-1 bg-black/80 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors opacity-0 group-hover/card:opacity-100"
+                        title="Move back to pool"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                      <div className="absolute bottom-0 left-0 right-0 p-1 bg-slate-950/90 text-[9px] text-white font-bold truncate opacity-0 group-hover/card:opacity-100 transition-opacity">
+                        {item.title}
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
+                  ))
+                )}
+              </div>
 
-            {/* Row Controls */}
-            <div className="flex sm:flex-col items-center justify-center gap-1 p-2 bg-slate-950/80 border-t sm:border-t-0 sm:border-l border-white/5 shrink-0 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => handleMoveRow(index, "up")} disabled={index === 0} className="p-1 text-slate-400 hover:text-white disabled:opacity-20" title="Move Row Up">
-                <MoveUp className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={() => handleMoveRow(index, "down")} disabled={index === rows.length - 1} className="p-1 text-slate-400 hover:text-white disabled:opacity-20" title="Move Row Down">
-                <MoveDown className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={() => handleClearRow(row.id)} className="p-1 text-slate-400 hover:text-amber-400" title="Clear Row">
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={() => handleDeleteRow(row.id)} className="p-1 text-slate-400 hover:text-red-400" title="Delete Row">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {/* Row Controls */}
+              <div className="flex sm:flex-col items-center justify-center gap-1 p-2 bg-slate-950/80 border-t sm:border-t-0 sm:border-l border-white/5 shrink-0 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => handleMoveRow(index, "up")} disabled={index === 0} className="p-1 text-slate-400 hover:text-white disabled:opacity-20" title="Move Row Up">
+                  <MoveUp className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleMoveRow(index, "down")} disabled={index === rows.length - 1} className="p-1 text-slate-400 hover:text-white disabled:opacity-20" title="Move Row Down">
+                  <MoveDown className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleClearRow(row.id)} className="p-1 text-slate-400 hover:text-amber-400" title="Clear Row">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleDeleteRow(row.id)} className="p-1 text-slate-400 hover:text-red-400" title="Delete Row">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Add Tier Row */}
         <button
@@ -587,10 +662,15 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
       {/* Unranked Pool */}
       <div
-        onDragOver={handleDragOver}
+        onDragOver={(e) => handleDragOver(e, "pool")}
+        onDragLeave={(e) => handleDragLeave(e, "pool")}
         onDrop={(e) => handleDrop(e, "pool")}
         onClick={() => selectedItem && moveItem(selectedItem.item, selectedItem.sourceRowId, "pool")}
-        className="bg-slate-900/80 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 shadow-xl"
+        className={`bg-slate-900/80 border rounded-3xl p-6 sm:p-8 space-y-4 shadow-xl transition-all duration-200 ${
+          activeDropTarget === "pool"
+            ? "border-blue-400 ring-2 ring-blue-500/60 bg-blue-950/40"
+            : "border-white/10"
+        }`}
       >
         <div className="flex items-center justify-between">
           <div>
@@ -599,7 +679,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               Unranked Anime Pool ({pool.length})
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Drag any card onto a tier above, or click to select and tap a row to place.
+              Drag any card onto a tier above, or click on a card to quickly place it.
             </p>
           </div>
 

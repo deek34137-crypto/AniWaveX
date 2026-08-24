@@ -107,7 +107,7 @@ export default function Hero({
   const bgImage = anime.backgroundImage || anime.posterImage;
 
   return (
-    <div className="relative w-full h-[85vh] min-h-[500px] md:min-h-[600px] flex items-end overflow-hidden">
+    <div className="relative w-full min-h-[550px] md:min-h-[620px] flex items-end overflow-hidden pt-24 md:pt-32 pb-8 md:pb-16">
       {/* Background Image */}
       {bgImage ? (
         <div className="absolute inset-0">
@@ -128,7 +128,7 @@ export default function Hero({
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent h-1/2 bottom-0" />
 
       {/* Content Container */}
-      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 pb-12 md:pb-24 z-10 flex flex-col md:flex-row gap-6 md:gap-10 items-end">
+      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 z-10 flex flex-col md:flex-row gap-6 md:gap-10 items-end">
         
         {/* Poster (Hidden on mobile, visible on md+) */}
         {anime.posterImage ? (
@@ -145,21 +145,23 @@ export default function Hero({
 
         {/* Text Details */}
         <div className="flex-1 flex flex-col gap-4">
-          {/* Status Badge */}
-          <div className="flex items-center gap-3">
-            <span className="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs font-bold uppercase tracking-wider rounded-md border border-blue-500/30">
-              {anime.status}
-            </span>
-            <div className="flex gap-2">
-              {anime.tags.map((tag: string) => (
+          {/* Status & Genre Badges */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {anime.status && (
+              <span className="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs font-bold uppercase tracking-wider rounded-md border border-blue-500/30">
+                {anime.status}
+              </span>
+            )}
+            {anime.tags && anime.tags.length > 0 ? (
+              anime.tags.map((tag: string) => (
                 <span key={tag} className="px-3 py-1 bg-white/5 text-slate-300 text-xs font-medium rounded-md border border-white/5">
                   {tag}
                 </span>
-              ))}
-            </div>
+              ))
+            ) : null}
           </div>
 
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-white tracking-tight drop-shadow-xl">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black text-white tracking-tight drop-shadow-xl leading-tight">
             {anime.title}
           </h1>
 
@@ -205,7 +207,7 @@ export default function Hero({
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl shadow-[0_0_30px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95"
               >
                 <Play className="w-5 h-5 fill-current" />
-                Watch Episode 1
+                Watch Episode {anime.episodes?.[0]?.id ?? 1}
               </button>
             )}
             
