@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
-import { getAiringAnime } from "@/lib/api";
+import { getUnifiedAiringSchedule } from "@/lib/schedule";
 import AiringScheduleClient from "./AiringScheduleClient";
 
 export const metadata: Metadata = {
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AiringPage() {
-  const airingAnime = await getAiringAnime();
+  const airingAnime = await getUnifiedAiringSchedule();
 
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
