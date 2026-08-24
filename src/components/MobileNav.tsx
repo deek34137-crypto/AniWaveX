@@ -84,6 +84,13 @@ export default function MobileNav() {
                 Schedule
               </Link>
               <Link 
+                href="/tier-list" 
+                onClick={() => setIsOpen(false)}
+                className="px-6 py-3 text-sm font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Tier List
+              </Link>
+              <Link 
                 href="/catalog?format=movie" 
                 onClick={() => setIsOpen(false)}
                 className="px-6 py-3 text-sm font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-colors"

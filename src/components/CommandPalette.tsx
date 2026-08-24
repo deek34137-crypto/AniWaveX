@@ -69,6 +69,13 @@ export default function CommandPalette() {
       action: () => router.push("/catalog?format=movie"),
     },
     {
+      id: "nav-tierlist",
+      label: "Anime Tier List Maker",
+      category: "Navigation",
+      icon: Layers,
+      action: () => router.push("/tier-list"),
+    },
+    {
       id: "nav-profile",
       label: "My Watchlist & Profile",
       category: "Navigation",
