@@ -11,7 +11,8 @@ import {
   Loader2, 
   Star, 
   Trophy, 
-  Image as ImageIcon 
+  Image as ImageIcon,
+  Layers
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import { PROFILE_BANNER_PRESETS } from "@/lib/tierlist";
