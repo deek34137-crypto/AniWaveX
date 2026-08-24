@@ -267,50 +267,168 @@ export const getAnimeData = cache(async (slug: string) => {
   }
 });
 
-export const getRecommendedAnime = cache(async (slug: string, genres?: string[]) => {
-  // 1. Find the primary meaningful genre (skipping generic labels)
-  const primaryGenre = (genres || [])
-    .map(g => g.trim().toLowerCase())
-    .find(g => g !== "animation" && g !== "anime" && g.length > 2);
+// ── AniList relation types that count as "next in series" ────────────────────
+const SEQUEL_RELATION_TYPES = ["SEQUEL", "ALTERNATIVE_VERSION"];
+const FRANCHISE_RELATION_TYPES = ["SEQUEL", "PREQUEL", "SIDE_STORY", "ALTERNATIVE_VERSION", "PARENT", "COMPILATION"];
 
-  if (primaryGenre) {
-    try {
-      const categorySlug = GENRE_MAP[primaryGenre] || primaryGenre.replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+function generateSlugFromTitle(title: string): string {
+  if (!title) return "";
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+/** Fetch AniList relations for a title. Returns array of related media sorted chronologically. */
+async function fetchAniListRelations(title: string): Promise<{
+  nextInSeries: { slug: string; title: string; posterImage: string; year: string; rating: string; tags: string[]; relationType: string } | null;
+  franchiseSlugs: string[];
+}> {
+  try {
+    const gqlQuery = `query($search: String) {
+      Media(search: $search, type: ANIME) {
+        title { english romaji }
+        startDate { year }
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              type
+              startDate { year }
+              title { english romaji }
+              coverImage { large extraLarge }
+              averageScore
+              genres
+              format
+            }
+          }
+        }
+      }
+    }`;
+
+    const res = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ query: gqlQuery, variables: { search: title } }),
+      signal: AbortSignal.timeout(6000),
+      next: { revalidate: 86400 },
+    });
+
+    if (!res.ok) return { nextInSeries: null, franchiseSlugs: [] };
+    const json = await res.json();
+    const edges: any[] = json.data?.Media?.relations?.edges || [];
+
+    // Collect all franchise slugs (to exclude from genre recs)
+    const franchiseSlugs: string[] = [];
+    for (const edge of edges) {
+      if (FRANCHISE_RELATION_TYPES.includes(edge.relationType) && edge.node?.type === "ANIME") {
+        const t = edge.node.title?.english || edge.node.title?.romaji || "";
+        if (t) franchiseSlugs.push(generateSlugFromTitle(t));
+      }
+    }
+
+    // Find the chronological next entry (SEQUEL or ALTERNATIVE_VERSION)
+    const sequelEdges = edges
+      .filter(e => SEQUEL_RELATION_TYPES.includes(e.relationType) && e.node?.type === "ANIME")
+      .sort((a, b) => (a.node.startDate?.year ?? 9999) - (b.node.startDate?.year ?? 9999));
+
+    if (sequelEdges.length === 0) return { nextInSeries: null, franchiseSlugs };
+
+    const next = sequelEdges[0].node;
+    const nextTitle = next.title?.english || next.title?.romaji || "";
+    const nextSlug = generateSlugFromTitle(nextTitle);
+
+    return {
+      nextInSeries: {
+        slug: nextSlug,
+        title: nextTitle,
+        posterImage: next.coverImage?.extraLarge || next.coverImage?.large || "",
+        year: next.startDate?.year?.toString() || "Unknown",
+        rating: next.averageScore ? (next.averageScore / 10).toFixed(1) : "N/A",
+        tags: next.genres?.slice(0, 3) || [],
+        relationType: sequelEdges[0].relationType,
+      },
+      franchiseSlugs,
+    };
+  } catch (err) {
+    console.error("AniList relations fetch failed:", err);
+    return { nextInSeries: null, franchiseSlugs: [] };
+  }
+}
+
+export const getRecommendedAnime = cache(async (slug: string, genres?: string[], title?: string) => {
+  // Step 1: Fetch sequel/franchise data from AniList in parallel with genre recs
+  const searchTitle = title || slug.replace(/-/g, " ");
+  const [relationsData, genreResults] = await Promise.allSettled([
+    fetchAniListRelations(searchTitle),
+    (async () => {
+      const primaryGenre = (genres || [])
+        .map(g => g.trim().toLowerCase())
+        .find(g => g !== "animation" && g !== "anime" && g.length > 2);
+
+      if (!primaryGenre) return [];
+
+      const categorySlug = GENRE_MAP[primaryGenre] || primaryGenre.replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
       const res = await fetch(
-        `https://kitsu.io/api/edge/anime?filter[categories]=${encodeURIComponent(categorySlug)}&sort=-userCount&page[limit]=12`,
+        `https://kitsu.io/api/edge/anime?filter[categories]=${encodeURIComponent(categorySlug)}&sort=-userCount&page[limit]=15`,
         {
           headers: {
             "Accept": "application/vnd.api+json",
             "Content-Type": "application/vnd.api+json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           },
           signal: AbortSignal.timeout(8000),
-          next: { revalidate: 86400 } // 24 hours ISR cache
+          next: { revalidate: 86400 },
         }
       );
-      if (res.ok) {
-        const json = await res.json();
-        const results = (json.data || [])
-          .map((a: any) => formatAnimeData(a))
-          .filter((a: any) => a.slug !== slug)
-          .slice(0, 5);
+      if (!res.ok) return [];
+      const json = await res.json();
+      return (json.data || []).map((a: any) => formatAnimeData(a));
+    })(),
+  ]);
 
-        if (results.length >= 3) {
-          return results;
-        }
-      }
-    } catch (err) {
-      console.error(`Failed to fetch genre recommendations for ${primaryGenre}:`, err);
-    }
+  const { nextInSeries, franchiseSlugs } =
+    relationsData.status === "fulfilled" ? relationsData.value : { nextInSeries: null, franchiseSlugs: [] };
+
+  const genreAnime: any[] =
+    genreResults.status === "fulfilled" ? genreResults.value : [];
+
+  // Step 2: Build exclusion set — current slug + ALL franchise slugs + sequel slug
+  const excludeSlugs = new Set<string>([slug, ...(franchiseSlugs || [])]);
+
+  // Step 3: Genre fill — exclude current + entire franchise
+  const genreFill = genreAnime
+    .filter((a: any) => !excludeSlugs.has(a.slug))
+    .slice(0, nextInSeries ? 4 : 5); // leave 1 slot for sequel if found
+
+  // Step 4: Compose final list — sequel FIRST, then genre fill
+  const final: any[] = [];
+
+  if (nextInSeries) {
+    final.push({
+      ...nextInSeries,
+      id: `sequel-${nextInSeries.slug}`,
+      status: "Completed",
+      type: "TV",
+      description: "",
+      duration: "24m",
+      backgroundImage: nextInSeries.posterImage,
+      isNextInSeries: true, // flag for UI badge
+    });
   }
 
-  // Fallback to top-rated / trending anime excluding current slug
-  try {
-    const trending = await getTrendingAnime();
-    return trending.filter((a: any) => a.slug !== slug).slice(0, 5);
-  } catch {
-    return [];
+  final.push(...genreFill);
+
+  // Step 5: If still short, pad with trending
+  if (final.length < 3) {
+    try {
+      const trending = await getTrendingAnime();
+      const trendingFill = trending
+        .filter((a: any) => !excludeSlugs.has(a.slug) && !final.find((f: any) => f.slug === a.slug))
+        .slice(0, 5 - final.length);
+      final.push(...trendingFill);
+    } catch {}
   }
+
+  return final.slice(0, 5);
 });
 
 export interface CatalogFilters {

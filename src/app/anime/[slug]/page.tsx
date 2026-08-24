@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getAnimeData, getRecommendedAnime } from "@/lib/api";
 import AnimePageClient from "./AnimePageClient";
 import { notFound } from "next/navigation";
@@ -52,7 +53,7 @@ export default async function AnimePage({
     notFound();
   }
 
-  const recommendations = await getRecommendedAnime(data.slug, data.tags);
+  const recommendations = await getRecommendedAnime(data.slug, data.tags, data.title);
 
   // Check bookmark and watch history status if user is logged in
   const supabase = await createClient();
@@ -80,14 +81,16 @@ export default async function AnimePage({
   return (
     <>
       <Navbar />
-      <AnimePageClient 
-        data={data} 
-        recommendations={recommendations}
-        initialBookmarked={initialBookmarked} 
-        initialBookmarkStatus={initialBookmarkStatus}
-        user={user} 
-        lastWatchedEpisode={lastWatchedEpisode} 
-      />
+      <Suspense fallback={null}>
+        <AnimePageClient 
+          data={data} 
+          recommendations={recommendations}
+          initialBookmarked={initialBookmarked} 
+          initialBookmarkStatus={initialBookmarkStatus}
+          user={user} 
+          lastWatchedEpisode={lastWatchedEpisode} 
+        />
+      </Suspense>
     </>
   );
 }

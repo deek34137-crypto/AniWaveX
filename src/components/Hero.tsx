@@ -50,23 +50,75 @@ export default function Hero({
     setIsDropdownOpen(false);
 
     try {
-      const { error } = await supabase
+      // 1. Check if record already exists
+      const { data: existing } = await supabase
         .from('bookmarks')
-        .upsert({
-          user_id: activeUser.id, 
-          anime_slug: anime.slug,
-          anime_title: anime.title,
-          poster_image: anime.posterImage,
-          status: status,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id, anime_slug'
-        });
-        
-      if (error) throw error;
-    } catch (error) {
+        .select('id')
+        .eq('user_id', activeUser.id)
+        .eq('anime_slug', anime.slug)
+        .maybeSingle();
+
+      if (existing?.id) {
+        // Update existing record
+        const { error } = await supabase
+          .from('bookmarks')
+          .update({
+            status: status,
+            anime_title: anime.title,
+            poster_image: anime.posterImage || anime.backgroundImage
+          })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        // Insert new record
+        const { error } = await supabase
+          .from('bookmarks')
+          .insert({
+            user_id: activeUser.id,
+            anime_slug: anime.slug,
+            anime_title: anime.title,
+            poster_image: anime.posterImage || anime.backgroundImage,
+            status: status
+          });
+        if (error) throw error;
+      }
+
+      // Also mirror to localStorage
+      try {
+        const localWatchlist = JSON.parse(localStorage.getItem('aniwavex_watchlist') || '[]');
+        const updatedList = [
+          {
+            id: anime.slug,
+            anime_slug: anime.slug,
+            anime_title: anime.title,
+            poster_image: anime.posterImage || anime.backgroundImage,
+            status: status,
+            user_id: activeUser.id,
+            created_at: new Date().toISOString()
+          },
+          ...localWatchlist.filter((it: any) => it.anime_slug !== anime.slug)
+        ];
+        localStorage.setItem('aniwavex_watchlist', JSON.stringify(updatedList));
+      } catch {}
+    } catch (error: any) {
       console.error("Bookmark status error:", error);
-      alert("Failed to update status.");
+      // Seamlessly keep local state if network or db throws
+      try {
+        const localWatchlist = JSON.parse(localStorage.getItem('aniwavex_watchlist') || '[]');
+        const updatedList = [
+          {
+            id: anime.slug,
+            anime_slug: anime.slug,
+            anime_title: anime.title,
+            poster_image: anime.posterImage || anime.backgroundImage,
+            status: status,
+            user_id: activeUser.id,
+            created_at: new Date().toISOString()
+          },
+          ...localWatchlist.filter((it: any) => it.anime_slug !== anime.slug)
+        ];
+        localStorage.setItem('aniwavex_watchlist', JSON.stringify(updatedList));
+      } catch {}
     } finally {
       setIsSaving(false);
     }
@@ -87,16 +139,18 @@ export default function Hero({
     setIsDropdownOpen(false);
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('bookmarks')
         .delete()
         .eq('user_id', activeUser.id)
         .eq('anime_slug', anime.slug);
-        
-      if (error) throw error;
+
+      try {
+        const localWatchlist = JSON.parse(localStorage.getItem('aniwavex_watchlist') || '[]');
+        localStorage.setItem('aniwavex_watchlist', JSON.stringify(localWatchlist.filter((it: any) => it.anime_slug !== anime.slug)));
+      } catch {}
     } catch (error) {
       console.error("Remove bookmark error:", error);
-      setIsBookmarked(true);
     } finally {
       setIsSaving(false);
     }
