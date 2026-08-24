@@ -21,7 +21,7 @@ import {
   Trash2,
   Settings
 } from "lucide-react";
-import AnimeCard from "@/components/AnimeCard";
+
 import AnimeImage from "@/components/AnimeImage";
 import { getAvatarUrl } from "@/lib/avatars";
 import { PROFILE_BANNER_PRESETS, AnimeTierList } from "@/lib/tierlist";
@@ -388,19 +388,61 @@ export default function PublicProfileClient({
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
-              {filteredBookmarks.map((b) => (
-                <AnimeCard
-                  key={b.id || b.anime_slug}
-                  anime={{
-                    id: b.id || b.anime_slug,
-                    slug: b.anime_slug,
-                    title: b.anime_title,
-                    posterImage: b.poster_image,
-                    rating: b.rating,
-                    status: b.status,
-                  }}
-                />
-              ))}
+              {filteredBookmarks.map((b) => {
+                const statusColors: Record<string, string> = {
+                  watching: "bg-blue-600/90 text-white",
+                  completed: "bg-emerald-600/90 text-white",
+                  plan_to_watch: "bg-amber-500/90 text-white",
+                  on_hold: "bg-purple-600/90 text-white",
+                  dropped: "bg-red-600/90 text-white",
+                };
+                const statusLabels: Record<string, string> = {
+                  watching: "Watching",
+                  completed: "Completed",
+                  plan_to_watch: "Plan to Watch",
+                  on_hold: "On Hold",
+                  dropped: "Dropped",
+                };
+                const statusClass = statusColors[b.status] || "bg-slate-600/90 text-white";
+                const statusLabel = statusLabels[b.status] || b.status || "Watching";
+
+                return (
+                  <Link
+                    key={b.id || b.anime_slug}
+                    href={`/anime/${b.anime_slug}`}
+                    className="group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 transition-all duration-300 hover:scale-[1.03] shadow-lg"
+                  >
+                    <div className="aspect-[2/3] relative">
+                      <AnimeImage
+                        src={b.poster_image}
+                        alt={b.anime_title}
+                        sizes="(max-width: 640px) 50vw, 20vw"
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent pointer-events-none" />
+
+                      {/* Status Badge */}
+                      <span className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold backdrop-blur-md shadow-md ${statusClass}`}>
+                        {statusLabel}
+                      </span>
+
+                      {/* Play Overlay */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                        <div className="w-12 h-12 bg-blue-600/90 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl">
+                          <Play className="w-5 h-5 fill-current ml-0.5" />
+                        </div>
+                      </div>
+
+                      {/* Title Overlay */}
+                      <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
+                        <h4 className="text-white font-bold text-xs sm:text-sm line-clamp-1 group-hover:text-blue-400 transition-colors" title={b.anime_title}>
+                          {b.anime_title}
+                        </h4>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>

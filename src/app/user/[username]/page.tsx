@@ -35,28 +35,32 @@ export default async function PublicProfilePage({ params }: Props) {
   let history: any[] = [];
   let profileUser: any = null;
 
-  if (
-    currentUser &&
-    (currentUser.user_metadata?.username?.toLowerCase() === decodedUsername.toLowerCase() ||
-      currentUser.email?.toLowerCase().startsWith(decodedUsername.toLowerCase()))
-  ) {
-    profileUser = currentUser;
+  if (currentUser) {
+    const currentUsername = (
+      currentUser.user_metadata?.username ||
+      currentUser.email?.split("@")[0] ||
+      ""
+    ).toLowerCase();
 
-    const [{ data: bData }, { data: hData }] = await Promise.all([
-      supabase
-        .from("bookmarks")
-        .select("*")
-        .eq("user_id", currentUser.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("watch_history")
-        .select("*")
-        .eq("user_id", currentUser.id)
-        .order("updated_at", { ascending: false }),
-    ]);
+    if (currentUsername === decodedUsername.toLowerCase()) {
+      profileUser = currentUser;
 
-    bookmarks = bData || [];
-    history = hData || [];
+      const [{ data: bData }, { data: hData }] = await Promise.all([
+        supabase
+          .from("bookmarks")
+          .select("*")
+          .eq("user_id", currentUser.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("watch_history")
+          .select("*")
+          .eq("user_id", currentUser.id)
+          .order("updated_at", { ascending: false }),
+      ]);
+
+      bookmarks = bData || [];
+      history = hData || [];
+    }
   }
 
   return (
