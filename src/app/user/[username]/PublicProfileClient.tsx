@@ -105,7 +105,8 @@ export default function PublicProfileClient({
         .select("*")
         .eq("user_id", authUser.id)
         .order("created_at", { ascending: false })
-        .then(({ data }) => {
+        .then((fetchRes: any) => {
+          const data = fetchRes?.data;
           if (data && data.length > 0) {
             setBookmarks((prev) => {
               const map = new Map();

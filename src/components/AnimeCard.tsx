@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Star, Play, Plus, Check } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
@@ -53,8 +53,8 @@ export default function AnimeCard({
         .eq("user_id", user.id)
         .eq("anime_slug", anime.slug)
         .maybeSingle()
-        .then(({ data }) => {
-          if (data) setIsBookmarked(true);
+        .then((res: any) => {
+          if (res?.data) setIsBookmarked(true);
         });
     }
   }, [user, anime.slug, supabase]);
