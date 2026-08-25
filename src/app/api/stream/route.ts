@@ -120,7 +120,9 @@ function extractWorkerSources(
   if (!data) return { sources, subtitles };
 
   const langTag = audio === 'hindi' ? 'Hindi Dub' : (audio === 'dub' ? 'Eng Dub' : 'Sub');
-  const providerLabel = provider === 'hianime' 
+  const providerLabel = provider === 'justanime'
+    ? 'JustAnime'
+    : provider === 'hianime'
     ? 'HiAnime' 
     : provider === 'anikoto' 
     ? 'MegaCloud' 
@@ -250,9 +252,7 @@ async function fetchWorkerProvider(
   signal?: AbortSignal,
   timeoutMs = 2500
 ): Promise<ExtractedStreamResult | null> {
-  const workerAudio = audio === 'hindi' 
-    ? (provider === 'animedunya' ? 'sub' : 'dub') 
-    : audio;
+  const workerAudio = audio === 'hindi' ? 'dub' : audio;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -373,23 +373,23 @@ async function speculativeProbeEngine(
 
     // Non-canceling Escalation Pipeline:
     if (audio === 'hindi') {
-      // t = 0ms: Probe 3 Hindi providers in parallel
-      ['animedunya', 'anibd', 'senshi'].forEach(p => tryProvider(p, 'hindi', 2500));
+      // t = 0ms: Primary Hindi provider
+      ['anibd'].forEach(p => tryProvider(p, 'hindi', 2500));
 
       // t = 600ms: Concurrently launch Eng dub fallback providers
       setTimeout(() => {
         if (!isResolved) {
-          ['reanime', 'anikoto', 'animegg', 'kaa'].forEach(p => tryProvider(p, 'dub', 2500));
+          ['reanime', 'justanime', 'anikoto', 'kaa'].forEach(p => tryProvider(p, 'dub', 2500));
         }
       }, 600);
     } else {
-      // t = 0ms: Tier 1 high-speed providers
-      ['reanime', 'hianime', 'anikoto'].forEach(p => tryProvider(p, audio, 2500));
+      // t = 0ms: Tier 1 high-speed providers (reanime, justanime, anikoto)
+      ['reanime', 'justanime', 'anikoto'].forEach(p => tryProvider(p, audio, 2500));
 
       // t = 600ms: Tier 2 providers launched in parallel without canceling Tier 1
       setTimeout(() => {
         if (!isResolved) {
-          ['kaa', 'animegg', 'anizone', 'anineko', '2dhive'].forEach(p => tryProvider(p, audio, 2500));
+          ['kaa', 'animegg', 'anineko', 'anibd', 'animenosub'].forEach(p => tryProvider(p, audio, 2500));
         }
       }, 600);
 
