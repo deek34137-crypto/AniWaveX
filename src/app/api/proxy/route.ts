@@ -79,13 +79,31 @@ export async function OPTIONS(request: NextRequest) {
   });
 }
 
+// In-memory cache for converted WebVTT subtitles (bounded to 200 items, 24h TTL)
+const vttConversionCache = new Map<string, { vtt: string; expiresAt: number }>();
+const MAX_VTT_CACHE_SIZE = 200;
+const VTT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Precompiled Regex for high-performance subtitle parsing
+const TIMESTAMP_REGEX = /^(\d+):(\d{2}):(\d{2})\.(\d{2,3})$/;
+const TAGS_REGEX = /\{[^\}]*\}/g;
+const BREAK_REGEX = /\\N/gi;
+const HARD_SPACE_REGEX = /\\h/gi;
+
 /**
- * In-flight ASS/SSA to WebVTT subtitle parser and converter.
+ * In-flight ASS/SSA to WebVTT subtitle parser and converter with LRU caching.
  * Converts SubStation Alpha subtitles into valid WebVTT for HTML5 track playback.
  */
-function convertAssToVtt(assText: string): string {
+function convertAssToVtt(assText: string, cacheKey?: string): string {
   if (!assText || typeof assText !== "string") return "WEBVTT\n\n";
   if (assText.trim().startsWith("WEBVTT")) return assText;
+
+  // 1. Check in-memory cache
+  const key = cacheKey || (assText.length > 64 ? `${assText.length}_${assText.slice(0, 64)}` : assText);
+  const cached = vttConversionCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.vtt;
+  }
 
   const lines = assText.split(/\r?\n/);
   const vttLines: string[] = ["WEBVTT", ""];
@@ -94,7 +112,7 @@ function convertAssToVtt(assText: string): string {
 
   const formatTimestamp = (ts: string) => {
     // ASS timestamp: H:MM:SS.cs (e.g. 0:01:23.45)
-    const match = ts.trim().match(/^(\d+):(\d{2}):(\d{2})\.(\d{2,3})$/);
+    const match = ts.trim().match(TIMESTAMP_REGEX);
     if (!match) return ts;
     const hours = match[1].padStart(2, "0");
     const mins = match[2];
@@ -107,14 +125,14 @@ function convertAssToVtt(assText: string): string {
 
   const cleanAssText = (raw: string) => {
     return raw
-      .replace(/\\N/gi, "\n")
-      .replace(/\\n/gi, "\n")
-      .replace(/\\h/gi, " ")
-      .replace(/\{[^\}]*\}/g, "") // strip override tags
+      .replace(BREAK_REGEX, "\n")
+      .replace(HARD_SPACE_REGEX, " ")
+      .replace(TAGS_REGEX, "") // strip override tags
       .trim();
   };
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const trimmed = line.trim();
     if (!trimmed) continue;
 
@@ -140,13 +158,13 @@ function convertAssToVtt(assText: string): string {
         const parts: string[] = [];
         let cur = "";
         let splitCount = 0;
-        for (let i = 0; i < payload.length; i++) {
-          if (payload[i] === "," && splitCount < commaCount) {
+        for (let j = 0; j < payload.length; j++) {
+          if (payload[j] === "," && splitCount < commaCount) {
             parts.push(cur.trim());
             cur = "";
             splitCount++;
           } else {
-            cur += payload[i];
+            cur += payload[j];
           }
         }
         parts.push(cur.trim());
@@ -168,7 +186,16 @@ function convertAssToVtt(assText: string): string {
     }
   }
 
-  return vttLines.length > 2 ? vttLines.join("\n") : "WEBVTT\n\n";
+  const resultVtt = vttLines.length > 2 ? vttLines.join("\n") : "WEBVTT\n\n";
+
+  // Store in LRU cache
+  if (vttConversionCache.size >= MAX_VTT_CACHE_SIZE) {
+    const oldestKey = vttConversionCache.keys().next().value;
+    if (oldestKey) vttConversionCache.delete(oldestKey);
+  }
+  vttConversionCache.set(key, { vtt: resultVtt, expiresAt: Date.now() + VTT_CACHE_TTL_MS });
+
+  return resultVtt;
 }
 
 /**
@@ -467,13 +494,13 @@ export async function GET(request: NextRequest) {
 
     if (isAssOrSsa) {
       const rawText = await upstreamRes.text();
-      const vtt = convertAssToVtt(rawText);
+      const vtt = convertAssToVtt(rawText, target);
       return new NextResponse(vtt, {
         status: 200,
         headers: {
           ...corsHeaders,
           "Content-Type": "text/vtt; charset=utf-8",
-          "Cache-Control": "public, max-age=86400, s-maxage=86400",
+          "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
         },
       });
     }

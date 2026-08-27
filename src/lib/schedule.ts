@@ -107,6 +107,11 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
         signal: AbortSignal.timeout(6000),
       });
 
+      if (res.status === 429) {
+        console.warn(`AniList GraphQL rate-limit reached (429) on schedule page ${page}. Falling back to secondary engine.`);
+        break;
+      }
+
       if (res.ok) {
         const json = await res.json();
         const schedules = json.data?.Page?.airingSchedules || [];
@@ -156,7 +161,7 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
         }
       }
     } catch (err: any) {
-      console.error(`AniList page ${page} schedule fetch failed:`, err?.message);
+      console.warn(`AniList page ${page} schedule fetch unavailable (${err?.message || "timeout"}). Using fallback.`);
     }
   }
 

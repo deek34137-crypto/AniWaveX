@@ -312,7 +312,12 @@ async function fetchAniListRelations(title: string): Promise<{
       next: { revalidate: 86400 },
     });
 
-    if (!res.ok) return { nextInSeries: null, franchiseSlugs: [] };
+    if (!res.ok) {
+      if (res.status === 429) {
+        console.warn(`AniList GraphQL rate-limit reached (429) on relations lookup for "${title}".`);
+      }
+      return { nextInSeries: null, franchiseSlugs: [] };
+    }
     const json = await res.json();
     const edges: any[] = json.data?.Media?.relations?.edges || [];
 
