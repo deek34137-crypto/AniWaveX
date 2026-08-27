@@ -11,17 +11,20 @@ interface HeroSliderProps {
 
 export default function HeroSlider({ animeList }: HeroSliderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
 
-  // Auto-slide every 6 seconds
+  // Auto-slide every 6 seconds (paused on hover or when browser tab is in background)
   useEffect(() => {
     if (!animeList || animeList.length === 0) return;
     
     const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % animeList.length);
+      if (document.visibilityState === "visible" && !isHovered) {
+        setCurrentIndex((prev) => (prev + 1) % animeList.length);
+      }
     }, 6000);
 
     return () => clearInterval(interval);
-  }, [animeList]);
+  }, [animeList, isHovered]);
 
   if (!animeList || animeList.length === 0) return null;
 
@@ -34,7 +37,11 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
   };
 
   return (
-    <div className="relative w-full h-[70vh] min-h-[500px] overflow-hidden rounded-3xl mt-6 group">
+    <div 
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="relative w-full h-[70vh] min-h-[500px] overflow-hidden rounded-3xl mt-6 group"
+    >
       {animeList.map((anime, index) => {
         const isActive = index === currentIndex;
         const imageUrl = anime.backgroundImage || anime.posterImage;
