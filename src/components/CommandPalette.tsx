@@ -84,6 +84,13 @@ export default function CommandPalette() {
       action: () => router.push("/profile"),
     },
     {
+      id: "nav-analytics",
+      label: "Live Traffic & Heartbeat Stats",
+      category: "Navigation",
+      icon: Sparkles,
+      action: () => router.push("/analytics"),
+    },
+    {
       id: "act-random",
       label: "Surprise Me (Random Anime)",
       category: "Quick Actions",

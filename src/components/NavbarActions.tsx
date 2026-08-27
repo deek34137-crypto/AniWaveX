@@ -1,18 +1,21 @@
 "use client";
 
-import { Bell, User, LogOut } from "lucide-react";
+import { Bell, User, LogOut, Activity, Shield } from "lucide-react";
 import { useState, useEffect } from "react";
 import AuthModal from "./AuthModal";
 import UsernameModal from "./UsernameModal";
+import LivePulseBadge from "./LivePulseBadge";
 import Link from "next/link";
 import { getAvatarUrl } from "@/lib/avatars";
 import { useAuth } from "@/providers/AuthProvider";
+import { isAdminUser } from "@/lib/admin";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
 export default function NavbarActions({ user: initialUser }: { user?: any }) {
   const { user: authUser, supabase } = useAuth();
   const currentUser = authUser || initialUser;
+  const isAdmin = isAdminUser(currentUser);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -38,6 +41,9 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
 
   return (
     <>
+      {/* Real-time Live Concurrency Pulse Badge (Only visible to Admin) */}
+      <LivePulseBadge />
+
       <div className="relative hidden sm:block">
         <button 
           onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -109,6 +115,15 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
             >
               <User className="w-4 h-4 text-blue-400" /> My Profile
             </Link>
+            {isAdmin && (
+              <Link 
+                href="/analytics" 
+                onClick={() => setIsMenuOpen(false)}
+                className="px-4 py-2 text-sm text-emerald-400 hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
+              >
+                <Activity className="w-4 h-4" /> Live Traffic Stats
+              </Link>
+            )}
             <Link 
               href="/profile" 
               onClick={() => setIsMenuOpen(false)}

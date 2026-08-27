@@ -12,8 +12,12 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - static image formats (.svg, .png, .jpg, .jpeg, .gif, .webp)
+     * - api/proxy (streaming video proxy segments)
+     * - api/stream (stream resolution)
+     * - api/heartbeat (telemetry heartbeat pings)
+     * - static formats (.svg, .png, .jpg, .jpeg, .gif, .webp, .m3u8, .ts, .vtt)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/proxy|api/stream|api/heartbeat|.*\\.(?:svg|png|jpg|jpeg|gif|webp|m3u8|ts|vtt)$).*)',
   ],
 };
+
