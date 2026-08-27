@@ -280,40 +280,89 @@ async function fetchWorkerProvider(
 }
 
 /**
- * Speculative parallel stream probe with non-canceling escalation timers (0ms, 600ms, 1000ms).
- * Returns the first validated, playable candidate immediately.
+ * Multi-Provider speculative probe engine with non-canceling grace window.
+ * Gathers streams from top 2-3 responsive providers within a fast window (600ms grace after 1st hit).
  */
-async function speculativeProbeEngine(
+async function multiProviderProbeEngine(
   externalApi: string,
   resolvedAnilistId: number,
   parsedEp: number,
   title: string,
-  audio: 'sub' | 'dub' | 'hindi'
+  audio: 'sub' | 'dub' | 'hindi',
+  options?: {
+    excludedProviders?: string[];
+    targetProvider?: string;
+    maxProviders?: number;
+    gracePeriodMs?: number;
+  }
 ): Promise<any | null> {
+  const maxProviders = options?.maxProviders || 3;
+  const gracePeriodMs = options?.gracePeriodMs || 600;
+  const excluded = new Set((options?.excludedProviders || []).map(p => p.toLowerCase().trim()).filter(Boolean));
+  const target = options?.targetProvider ? options.targetProvider.toLowerCase().trim() : null;
+
   return new Promise<any>((resolve) => {
-    let isResolved = false;
+    let isCompleted = false;
+    const gatheredResults: ExtractedStreamResult[] = [];
+    const completedProviders = new Set<string>();
     const masterController = new AbortController();
+    let graceTimer: NodeJS.Timeout | null = null;
 
-    // Global hard timeout
-    const globalTimeout = setTimeout(() => {
-      if (!isResolved) {
-        isResolved = true;
-        masterController.abort();
+    const finishAndResolve = () => {
+      if (isCompleted) return;
+      isCompleted = true;
+      if (graceTimer) clearTimeout(graceTimer);
+      clearTimeout(globalTimeout);
+      masterController.abort(); // Cancel remaining slow requests
+
+      if (gatheredResults.length === 0) {
         resolve(null);
+        return;
       }
-    }, 5500);
 
-    const onCandidateFound = (candidate: any) => {
-      if (!isResolved && isPlayableStream(candidate)) {
-        isResolved = true;
-        clearTimeout(globalTimeout);
-        masterController.abort(); // Cancel remaining requests
-        resolve(candidate);
+      // Merge all sources and deduplicate subtitles
+      const allSources: any[] = [];
+      const allSubtitles: any[] = [];
+
+      for (const res of gatheredResults) {
+        if (Array.isArray(res.sources)) {
+          allSources.push(...res.sources);
+        }
+        if (Array.isArray(res.subtitles)) {
+          for (const sub of res.subtitles) {
+            if (sub && sub.url && !allSubtitles.some(s => s.url === sub.url)) {
+              allSubtitles.push(sub);
+            }
+          }
+        }
+      }
+
+      const formatted = formatStreamResponse(allSources, allSubtitles, audio);
+      resolve(isPlayableStream(formatted) ? formatted : null);
+    };
+
+    // Global hard ceiling timeout
+    const globalTimeout = setTimeout(finishAndResolve, 5000);
+
+    const onProviderSuccess = (provider: string, result: ExtractedStreamResult) => {
+      if (isCompleted || completedProviders.has(provider)) return;
+      completedProviders.add(provider);
+      gatheredResults.push(result);
+
+      // If we reached the target count (e.g. 3 providers), finish immediately
+      if (gatheredResults.length >= maxProviders) {
+        finishAndResolve();
+        return;
+      }
+
+      // If this is the FIRST provider, start grace timer for the remaining ones
+      if (gatheredResults.length === 1 && !graceTimer) {
+        graceTimer = setTimeout(finishAndResolve, gracePeriodMs);
       }
     };
 
     const tryProvider = async (provider: string, pAudio: 'sub' | 'dub' | 'hindi', timeoutMs = 2500) => {
-      if (isResolved) return;
+      if (isCompleted || excluded.has(provider) || (target && target !== provider)) return;
       try {
         const res = await fetchWorkerProvider(
           externalApi,
@@ -325,8 +374,7 @@ async function speculativeProbeEngine(
           timeoutMs
         );
         if (res && res.sources.length > 0) {
-          const candidate = formatStreamResponse(res.sources, res.subtitles, audio);
-          onCandidateFound(candidate);
+          onProviderSuccess(provider, res);
         }
       } catch {
         // Continue probing other candidates
@@ -334,7 +382,7 @@ async function speculativeProbeEngine(
     };
 
     const tryLocalAnikoto = async () => {
-      if (isResolved || audio === 'hindi') return;
+      if (isCompleted || audio === 'hindi' || excluded.has('local-anikoto') || (target && target !== 'local-anikoto')) return;
       try {
         const anikotoRes = await getAnikotoStream(title, parsedEp, audio as 'sub' | 'dub', resolvedAnilistId);
         if (anikotoRes) {
@@ -344,7 +392,7 @@ async function speculativeProbeEngine(
           if (anikotoRes.stream_url) {
             sources.push({
               url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
-              quality: "HD-1 (HLS)",
+              quality: "MegaCloud (HD-1)",
               isM3U8: true,
             });
           }
@@ -354,7 +402,7 @@ async function speculativeProbeEngine(
               .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top") && !s.url.includes("filmu.in"))
               .map((s: any) => ({
                 url: s.url,
-                quality: s.server || "Server Embed",
+                quality: s.server ? `MegaCloud (${s.server})` : "MegaCloud Embed",
                 isM3U8: false
               }));
 
@@ -362,8 +410,7 @@ async function speculativeProbeEngine(
           }
 
           if (sources.length > 0) {
-            const candidate = formatStreamResponse(sources, subtitles, audio);
-            onCandidateFound(candidate);
+            onProviderSuccess('local-anikoto', { sources, subtitles });
           }
         }
       } catch {
@@ -376,29 +423,29 @@ async function speculativeProbeEngine(
       // t = 0ms: Primary Hindi provider
       ['anibd'].forEach(p => tryProvider(p, 'hindi', 2500));
 
-      // t = 600ms: Concurrently launch Eng dub fallback providers
+      // t = 500ms: Concurrently launch Eng dub fallback providers
       setTimeout(() => {
-        if (!isResolved) {
+        if (!isCompleted) {
           ['reanime', 'justanime', 'anikoto', 'kaa'].forEach(p => tryProvider(p, 'dub', 2500));
         }
-      }, 600);
+      }, 500);
     } else {
       // t = 0ms: Tier 1 high-speed providers (reanime, justanime, anikoto)
       ['reanime', 'justanime', 'anikoto'].forEach(p => tryProvider(p, audio, 2500));
 
-      // t = 600ms: Tier 2 providers launched in parallel without canceling Tier 1
+      // t = 400ms: Tier 2 providers launched in parallel without canceling Tier 1
       setTimeout(() => {
-        if (!isResolved) {
+        if (!isCompleted) {
           ['kaa', 'animegg', 'anineko', 'anibd', 'animenosub'].forEach(p => tryProvider(p, audio, 2500));
         }
-      }, 600);
+      }, 400);
 
-      // t = 1000ms: Local Anikoto resolver launched in parallel
+      // t = 800ms: Local Anikoto resolver launched in parallel if needed
       setTimeout(() => {
-        if (!isResolved) {
+        if (!isCompleted && gatheredResults.length === 0) {
           tryLocalAnikoto();
         }
-      }, 1000);
+      }, 800);
     }
   });
 }
@@ -409,7 +456,9 @@ async function resolveStreamRaw(
   title: string,
   type: string | null,
   audio: 'sub' | 'dub' | 'hindi',
-  anilistParam?: string | null
+  anilistParam?: string | null,
+  excludedProviders?: string[],
+  targetProvider?: string
 ) {
   const parsedEp = parseInt(ep, 10);
   const resolvedAnilistId = anilistParam ? Number(anilistParam) : await getAnilistId(title);
@@ -422,7 +471,7 @@ async function resolveStreamRaw(
         if (anikotoRes && anikotoRes.stream_url) {
           const sources = [{
             url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
-            quality: "HD-1 (HLS)",
+            quality: "MegaCloud (HD-1)",
             isM3U8: true,
           }];
           return formatStreamResponse(sources, anikotoRes.subtitles || [], audio);
@@ -435,12 +484,18 @@ async function resolveStreamRaw(
   const rawExternalApi = process.env.STREAM_API_URL || process.env.NEXT_PUBLIC_STREAM_API_URL || "https://anivexa-stream-api.deek34137.workers.dev";
   const externalApi = rawExternalApi ? rawExternalApi.replace(/\/+$/, '').replace(/\/stream$/, '') : "";
 
-  const result = await speculativeProbeEngine(
+  const result = await multiProviderProbeEngine(
     externalApi,
     resolvedAnilistId,
     parsedEp,
     title,
-    audio
+    audio,
+    {
+      excludedProviders,
+      targetProvider,
+      maxProviders: 3,
+      gracePeriodMs: 600,
+    }
   );
 
   return isPlayableStream(result) ? result : null;
@@ -455,11 +510,13 @@ const resolveStreamCachedPersistent = unstable_cache(
     title: string,
     type: string | null,
     audio: 'sub' | 'dub' | 'hindi',
-    anilistParam?: string | null
+    anilistParam?: string | null,
+    excludedProviders?: string[],
+    targetProvider?: string
   ) => {
-    return await resolveStreamRaw(id, ep, title, type, audio, anilistParam);
+    return await resolveStreamRaw(id, ep, title, type, audio, anilistParam, excludedProviders, targetProvider);
   },
-  ['stream-resolution-v2'],
+  ['stream-resolution-v3'],
   {
     revalidate: 180, // 3 minutes
     tags: ['stream-resolution']
@@ -474,13 +531,18 @@ export async function GET(request: Request) {
   const type = searchParams.get("type");
   const audio = (searchParams.get("audio") || 'sub') as 'sub' | 'dub' | 'hindi';
   const anilistParam = searchParams.get("anilistId");
+  const excludeParam = searchParams.get("exclude");
+  const providerParam = searchParams.get("provider");
 
   if (!id || !ep || !title) {
     return NextResponse.json({ error: "Missing required parameters (id, ep, title)" }, { status: 400 });
   }
 
+  const excludedProviders = excludeParam ? excludeParam.split(",").map(p => p.trim()).filter(Boolean) : [];
+  const targetProvider = providerParam ? providerParam.trim() : undefined;
+
   // Build deterministic cache key with every parameter affecting stream resolution
-  const cacheKey = `stream:${id}:${ep}:${title.toLowerCase().trim()}:${audio}:${type || ''}:${anilistParam || ''}`;
+  const cacheKey = `stream:${id}:${ep}:${title.toLowerCase().trim()}:${audio}:${type || ''}:${anilistParam || ''}:${excludeParam || ''}:${providerParam || ''}`;
 
   // 1. Check L1 in-memory LRU Cache (Fastest same-instance hit)
   const cached = streamCache.get(cacheKey);
@@ -505,7 +567,9 @@ export async function GET(request: Request) {
         title,
         type,
         audio,
-        anilistParam
+        anilistParam,
+        excludedProviders,
+        targetProvider
       );
       return streamResult;
     })();
