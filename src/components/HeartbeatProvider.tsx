@@ -7,7 +7,7 @@ import { useAuth } from "@/providers/AuthProvider";
 const HEARTBEAT_INTERVAL_MS = 45000; // 45 seconds
 const VISITOR_ID_KEY = "aniwavex_visitor_id";
 
-function getOrCreateVisitorId(): string {
+function getVisitorId(): string {
   if (typeof window === "undefined") return "guest";
   try {
     let id = localStorage.getItem(VISITOR_ID_KEY);
@@ -24,18 +24,15 @@ function getOrCreateVisitorId(): string {
 export default function HeartbeatProvider() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const visitorIdRef = useRef<string>("");
   const isSendingRef = useRef<boolean>(false);
 
-  useEffect(() => {
-    visitorIdRef.current = getOrCreateVisitorId();
-  }, []);
-
   const sendPing = useCallback(async (isBeacon = false) => {
-    if (typeof window === "undefined" || !visitorIdRef.current || isSendingRef.current) return;
+    if (typeof window === "undefined" || isSendingRef.current) return;
+
+    const vid = getVisitorId();
 
     const payload = {
-      visitorId: visitorIdRef.current,
+      visitorId: vid,
       userId: user?.id || null,
       currentPath: pathname || "/",
       deviceType: window.innerWidth < 768 ? "mobile" : "desktop",
@@ -66,9 +63,7 @@ export default function HeartbeatProvider() {
 
   // 1. Send heartbeat on route change & initial mount
   useEffect(() => {
-    if (visitorIdRef.current) {
-      sendPing();
-    }
+    sendPing();
   }, [pathname, sendPing]);
 
   // 2. Periodic ticker (only active when tab is visible)
