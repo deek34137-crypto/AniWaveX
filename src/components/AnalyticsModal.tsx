@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   Activity, 
   Users, 
@@ -22,6 +22,12 @@ interface AnalyticsData {
   topPages?: { current_path: string; active_count: number }[];
   dailyTrend?: { date: string; unique_users: number }[];
   serverTime?: string;
+}
+
+interface DayTrendItem {
+  date: string;
+  label: string;
+  count: number;
 }
 
 export default function AnalyticsModal({
@@ -71,35 +77,58 @@ export default function AnalyticsModal({
     return () => clearInterval(timer);
   }, [isOpen, autoRefresh, fetchStats]);
 
+  // Generate complete 7-day dates list with zero-fill so chart always displays 7 vertical day bars
+  const full7DayTrend = useMemo<DayTrendItem[]>(() => {
+    const days: DayTrendItem[] = [];
+    const trendMap = new Map<string, number>();
+    (data?.dailyTrend || []).forEach((d: { date: string; unique_users: number }) => {
+      // Normalize YYYY-MM-DD
+      const dateKey = typeof d.date === "string" ? d.date.split("T")[0] : "";
+      if (dateKey) trendMap.set(dateKey, d.unique_users || 0);
+    });
+
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().split("T")[0];
+      const label = d.toLocaleDateString("en-US", { weekday: "short" });
+      days.push({
+        date: iso,
+        label,
+        count: trendMap.get(iso) || (i === 0 ? data?.dailyUniqueUsers || 1 : 0),
+      });
+    }
+    return days;
+  }, [data?.dailyTrend, data?.dailyUniqueUsers]);
+
   if (!isOpen) return null;
 
-  const maxTrendVal = data?.dailyTrend && data.dailyTrend.length > 0 
-    ? Math.max(...data.dailyTrend.map(d => d.unique_users), 5) 
-    : 5;
+  const maxTrendVal = Math.max(...full7DayTrend.map((d: DayTrendItem) => d.count), 5);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-200"
+      className="fixed inset-0 z-[200] overflow-y-auto p-4 sm:p-6 flex items-start justify-center pt-16 sm:pt-20 pb-12 bg-slate-950/85 backdrop-blur-xl animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl bg-slate-900/95 border border-slate-800 rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+        className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col my-auto animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-slate-800 bg-slate-950/40">
+        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-slate-800 bg-slate-950/60 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+            <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 shadow-inner">
               <Activity className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
                 Live Heartbeat &amp; Traffic Stats
               </h2>
               <p className="text-xs text-slate-400">
-                Real-time concurrent users, daily unique visitors, and active page metrics.
+                Real-time concurrent users, daily unique visitors, and active routes.
               </p>
             </div>
           </div>
@@ -123,11 +152,11 @@ export default function AnalyticsModal({
         </div>
 
         {/* Content Body */}
-        <div className="p-5 sm:p-6 space-y-6 max-h-[75vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
+        <div className="p-5 sm:p-6 space-y-6 max-h-[calc(85vh-140px)] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
           {/* Key Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Concurrent Users Card */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-emerald-950/40 to-slate-900 p-4 rounded-2xl border border-emerald-500/30 shadow-lg">
+            <div className="relative overflow-hidden bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-950 p-4 rounded-2xl border border-emerald-500/30 shadow-lg">
               <div className="flex items-center justify-between text-xs text-emerald-400 font-bold mb-2">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -142,7 +171,7 @@ export default function AnalyticsModal({
             </div>
 
             {/* Daily Unique Users Card */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-blue-950/40 to-slate-900 p-4 rounded-2xl border border-blue-500/30 shadow-lg">
+            <div className="relative overflow-hidden bg-gradient-to-br from-blue-950/40 via-slate-900 to-slate-950 p-4 rounded-2xl border border-blue-500/30 shadow-lg">
               <div className="flex items-center justify-between text-xs text-blue-400 font-bold mb-2">
                 <span>Daily Unique (DAU)</span>
                 <Calendar className="w-3.5 h-3.5 opacity-70" />
@@ -154,7 +183,7 @@ export default function AnalyticsModal({
             </div>
 
             {/* Total Unique Users Card */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-purple-950/40 to-slate-900 p-4 rounded-2xl border border-purple-500/30 shadow-lg">
+            <div className="relative overflow-hidden bg-gradient-to-br from-purple-950/40 via-slate-900 to-slate-950 p-4 rounded-2xl border border-purple-500/30 shadow-lg">
               <div className="flex items-center justify-between text-xs text-purple-400 font-bold mb-2">
                 <span>Total Unique Users</span>
                 <Users className="w-3.5 h-3.5 opacity-70" />
@@ -182,7 +211,7 @@ export default function AnalyticsModal({
                     <span className="font-mono text-slate-300 truncate max-w-[320px] sm:max-w-[420px]">
                       {pg.current_path}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30 shrink-0">
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30 shrink-0">
                       {pg.active_count} active
                     </span>
                   </div>
@@ -193,38 +222,42 @@ export default function AnalyticsModal({
             )}
           </div>
 
-          {/* 7-Day Daily Unique User Trend */}
-          {data?.dailyTrend && data.dailyTrend.length > 0 && (
-            <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/10">
-              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-indigo-400" />
-                7-Day Daily Unique Visitors Trend
-              </h3>
-              <div className="flex items-end gap-3 h-28 pt-4 px-2">
-                {data.dailyTrend.map((d, idx) => {
-                  const heightPct = Math.max(15, Math.round((d.unique_users / maxTrendVal) * 100));
-                  const dateLabel = new Date(d.date).toLocaleDateString("en-US", { weekday: "short" });
+          {/* 7-Day Daily Unique User Trend Chart */}
+          <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/10">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-indigo-400" />
+              7-Day Daily Unique Visitors Trend
+            </h3>
+            <div className="flex items-end justify-between gap-2 h-32 pt-6 px-3">
+              {full7DayTrend.map((d: DayTrendItem, idx: number) => {
+                const heightPct = Math.max(12, Math.round((d.count / maxTrendVal) * 100));
+                const isToday = idx === full7DayTrend.length - 1;
 
-                  return (
-                    <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
-                      <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity font-mono">
-                        {d.unique_users}
-                      </span>
-                      <div
-                        className="w-full bg-indigo-600 rounded-t-lg transition-all duration-500 group-hover:bg-indigo-400 shadow-md"
-                        style={{ height: `${heightPct}%` }}
-                      />
-                      <span className="text-[10px] text-slate-400 font-medium">{dateLabel}</span>
-                    </div>
-                  );
-                })}
-              </div>
+                return (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
+                    <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity font-mono font-bold">
+                      {d.count}
+                    </span>
+                    <div
+                      className={`w-7 sm:w-9 max-w-[36px] rounded-t-xl transition-all duration-500 shadow-md ${
+                        isToday 
+                          ? "bg-gradient-to-t from-blue-600 to-cyan-400 shadow-blue-500/30" 
+                          : "bg-gradient-to-t from-indigo-700 to-indigo-500 group-hover:from-indigo-600 group-hover:to-indigo-400"
+                      }`}
+                      style={{ height: `${heightPct}%` }}
+                    />
+                    <span className={`text-[10px] font-semibold ${isToday ? "text-cyan-400" : "text-slate-400"}`}>
+                      {d.label}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 px-6">
+        <div className="p-4 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 px-6 shrink-0">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"

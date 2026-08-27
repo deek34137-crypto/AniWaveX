@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   Activity, 
   Users, 
   Calendar, 
   Globe, 
   RotateCcw, 
-  Radio,
-  BarChart3,
-  TrendingUp,
-  Sparkles
+  Radio, 
+  BarChart3, 
+  TrendingUp, 
+  Sparkles 
 } from "lucide-react";
 
 interface AnalyticsData {
@@ -20,6 +20,12 @@ interface AnalyticsData {
   topPages?: { current_path: string; active_count: number }[];
   dailyTrend?: { date: string; unique_users: number }[];
   serverTime?: string;
+}
+
+interface DayTrendItem {
+  date: string;
+  label: string;
+  count: number;
 }
 
 export default function AnalyticsPageClient({
@@ -123,9 +129,31 @@ export default function AnalyticsPageClient({
     );
   }
 
-  const maxTrendVal = data?.dailyTrend && data.dailyTrend.length > 0 
-    ? Math.max(...data.dailyTrend.map(d => d.unique_users), 5) 
-    : 5;
+  // Generate complete 7-day dates list with zero-fill so chart always displays 7 vertical day bars
+  const full7DayTrend = useMemo<DayTrendItem[]>(() => {
+    const days: DayTrendItem[] = [];
+    const trendMap = new Map<string, number>();
+    (data?.dailyTrend || []).forEach((d: { date: string; unique_users: number }) => {
+      const dateKey = typeof d.date === "string" ? d.date.split("T")[0] : "";
+      if (dateKey) trendMap.set(dateKey, d.unique_users || 0);
+    });
+
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().split("T")[0];
+      const label = d.toLocaleDateString("en-US", { weekday: "short" });
+      days.push({
+        date: iso,
+        label,
+        count: trendMap.get(iso) || (i === 0 ? data?.dailyUniqueUsers || 1 : 0),
+      });
+    }
+    return days;
+  }, [data?.dailyTrend, data?.dailyUniqueUsers]);
+
+  const maxTrendVal = Math.max(...full7DayTrend.map((d: DayTrendItem) => d.count), 5);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -247,31 +275,31 @@ export default function AnalyticsPageClient({
             <BarChart3 className="w-4 h-4 text-indigo-400" />
             7-Day Daily Unique Visitors Trend
           </h2>
-          {data?.dailyTrend && data.dailyTrend.length > 0 ? (
-            <div className="flex items-end gap-3 h-48 pt-6 px-2">
-              {data.dailyTrend.map((d, idx) => {
-                const heightPct = Math.max(15, Math.round((d.unique_users / maxTrendVal) * 100));
-                const dateLabel = new Date(d.date).toLocaleDateString("en-US", { weekday: "short" });
+          <div className="flex items-end justify-between gap-2 h-48 pt-6 px-3">
+            {full7DayTrend.map((d: DayTrendItem, idx: number) => {
+              const heightPct = Math.max(12, Math.round((d.count / maxTrendVal) * 100));
+              const isToday = idx === full7DayTrend.length - 1;
 
-                return (
-                  <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                    <span className="text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity font-mono font-bold">
-                      {d.unique_users}
-                    </span>
-                    <div
-                      className="w-full bg-indigo-600 rounded-t-xl transition-all duration-500 group-hover:bg-indigo-400 shadow-lg shadow-indigo-600/20"
-                      style={{ height: `${heightPct}%` }}
-                    />
-                    <span className="text-[11px] text-slate-400 font-medium">{dateLabel}</span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500 italic py-8 text-center">
-              Historical trend data will populate as daily visits are recorded.
-            </p>
-          )}
+              return (
+                <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
+                  <span className="text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity font-mono font-bold">
+                    {d.count}
+                  </span>
+                  <div
+                    className={`w-9 sm:w-12 max-w-[48px] rounded-t-xl transition-all duration-500 shadow-lg ${
+                      isToday
+                        ? "bg-gradient-to-t from-blue-600 to-cyan-400 shadow-blue-500/30"
+                        : "bg-gradient-to-t from-indigo-700 to-indigo-500 group-hover:from-indigo-600 group-hover:to-indigo-400 shadow-indigo-600/20"
+                    }`}
+                    style={{ height: `${heightPct}%` }}
+                  />
+                  <span className={`text-[11px] font-semibold ${isToday ? "text-cyan-400" : "text-slate-400"}`}>
+                    {d.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
