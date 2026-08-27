@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { 
   Activity, 
   Users, 
@@ -10,9 +11,9 @@ import {
   RotateCcw, 
   Sparkles, 
   Layers, 
-  Eye,
-  Radio,
-  BarChart3
+  Eye, 
+  Radio, 
+  BarChart3 
 } from "lucide-react";
 
 interface AnalyticsData {
@@ -30,6 +31,8 @@ interface DayTrendItem {
   count: number;
 }
 
+const subscribe = () => () => {};
+
 export default function AnalyticsModal({
   isOpen,
   onClose,
@@ -37,6 +40,7 @@ export default function AnalyticsModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const isMounted = useSyncExternalStore(subscribe, () => true, () => false);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -102,11 +106,11 @@ export default function AnalyticsModal({
     return days;
   }, [data?.dailyTrend, data?.dailyUniqueUsers]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !isMounted) return null;
 
   const maxTrendVal = Math.max(...full7DayTrend.map((d: DayTrendItem) => d.count), 5);
 
-  return (
+  const modalContent = (
     <div
       role="dialog"
       aria-modal="true"
@@ -274,4 +278,6 @@ export default function AnalyticsModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
