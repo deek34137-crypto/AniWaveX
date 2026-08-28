@@ -118,16 +118,17 @@ async function resolveAnilistIdRaw(title: string): Promise<number | null> {
       if (matchId) return matchId;
     }
 
-    // High-confidence fallback candidates (capped to at most 2 queries to prevent rate-limiting)
+    // High-confidence fallback candidates (capped to prevent rate-limiting)
     const candidateQueries: string[] = [];
-    const words = cleaned.split(' ').filter(w => w.length > 1);
 
-    // Step 3: Remove season / part numbers (highest confidence)
+    // Step 3: Remove season / part numbers, formats, and honorific suffixes
     const noSeason = cleaned
       .replace(/season \d+/i, '')
       .replace(/\d+(nd|rd|th|st) season/i, '')
       .replace(/part \d+/i, '')
       .replace(/\b(tv|movie|ova|ona|special)\b/i, '')
+      .replace(/-(kun|san|chan|sama|senpai|sensei)\b/gi, '')
+      .replace(/\b(kun|san|chan|sama|senpai|sensei)\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -136,27 +137,37 @@ async function resolveAnilistIdRaw(title: string): Promise<number | null> {
     }
 
     // Step 4: Romanization vowel expansion (e.g. Tomei -> Toumei, Shojo -> Shoujo, etc.)
-    const ouNormalized = cleaned
+    const baseForExpansion = noSeason || cleaned;
+    const ouNormalized = baseForExpansion
       .replace(/\btomei\b/gi, 'Toumei')
       .replace(/\bkyoto\b/gi, 'Kyouto')
       .replace(/\byusha\b/gi, 'Yuusha')
       .replace(/\bshojo\b/gi, 'Shoujo')
-      .replace(/\bshonen\b/gi, 'Shounen');
+      .replace(/\bshonen\b/gi, 'Shounen')
+      .replace(/\bgakuin\b/gi, 'Gakuen')
+      .replace(/\s+/g, ' ')
+      .trim();
 
     if (ouNormalized.toLowerCase() !== cleaned.toLowerCase() && !candidateQueries.includes(ouNormalized)) {
       candidateQueries.push(ouNormalized);
     }
 
-    // Step 5: Significant word prefix
-    if (words.length > 3 && candidateQueries.length < 2) {
-      const prefix = words.slice(0, 3).join(' ');
-      if (!candidateQueries.includes(prefix)) {
-        candidateQueries.push(prefix);
+    // Step 5: Significant word prefix (3-4 words) from normalized string
+    const targetSource = ouNormalized || noSeason || cleaned;
+    const words = targetSource.split(' ').filter(w => w.length > 1);
+    if (words.length >= 3) {
+      const prefix4 = words.slice(0, 4).join(' ');
+      const prefix3 = words.slice(0, 3).join(' ');
+      if (prefix4.length > 5 && !candidateQueries.includes(prefix4)) {
+        candidateQueries.push(prefix4);
+      }
+      if (prefix3.length > 5 && !candidateQueries.includes(prefix3)) {
+        candidateQueries.push(prefix3);
       }
     }
 
-    // Execute at most 2 fallback candidates in parallel
-    const limitedCandidates = candidateQueries.slice(0, 2);
+    // Execute fallback candidates in order
+    const limitedCandidates = candidateQueries.slice(0, 3);
     if (limitedCandidates.length > 0) {
       const batchResults = await Promise.all(
         limitedCandidates.map(q => searchAnilist(q).catch(() => []))

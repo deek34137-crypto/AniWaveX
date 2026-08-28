@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { fetchAniListGraphQL } from "@/lib/schedule";
+import { getAnilistId } from "@/lib/providers/anikoto-wrapper";
 
 function extractCategories(anime: any, included?: any[]): string[] {
   if (!included || !Array.isArray(included) || included.length === 0) {
@@ -263,9 +264,13 @@ export const getAnimeData = cache(async (slug: string) => {
       };
     });
 
+    // Resolve AniList ID for upstream video player and sync
+    const anilistId = await getAnilistId(metadata.title).catch(() => null);
+
     return { 
       ...metadata, 
       animeId: anime.id,
+      anilistId,
       totalEpisodes: totalCount,
       episodes 
     };
