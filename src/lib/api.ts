@@ -265,7 +265,17 @@ export const getAnimeData = cache(async (slug: string) => {
     });
 
     // Resolve AniList ID for upstream video player and sync
-    const anilistId = await getAnilistId(metadata.title).catch(() => null);
+    const rawTitles = anime.attributes?.titles || {};
+    const englishTitle = rawTitles.en || rawTitles.en_us;
+    const japaneseTitle = rawTitles.ja_jp;
+
+    let anilistId = await getAnilistId(metadata.title).catch(() => null);
+    if (!anilistId && englishTitle) {
+      anilistId = await getAnilistId(englishTitle).catch(() => null);
+    }
+    if (!anilistId && japaneseTitle) {
+      anilistId = await getAnilistId(japaneseTitle).catch(() => null);
+    }
 
     return { 
       ...metadata, 

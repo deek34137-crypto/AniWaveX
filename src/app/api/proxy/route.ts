@@ -248,6 +248,10 @@ function isAllowedHost(hostname: string): boolean {
 
   // Allowed specific streaming/CDN domain suffixes
   const allowedSuffixes = [
+    "kryntal.top",
+    "nekostream.site",
+    "animegg.org",
+    "animegg.cc",
     "flixcloud.cc",
     "megacloud.tv",
     "rabbitstream.net",
@@ -352,7 +356,7 @@ function rewriteM3U8Content(
 
 function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
   const host = targetUrl.hostname.toLowerCase();
-  if (host.includes("watching.onl") || host.includes("megaplay.buzz") || host.includes("sugevideo") || host.includes("sugevids")) {
+  if (host.includes("kryntal") || host.includes("watching.onl") || host.includes("megaplay.buzz") || host.includes("sugevideo") || host.includes("sugevids")) {
     return refererParam || "https://megaplay.buzz/";
   }
   if (host.includes("krussdomi")) {

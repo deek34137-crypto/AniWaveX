@@ -300,6 +300,7 @@ export default function InPageVideoPlayer({
 
   const requestIdRef = useRef(0);
   const failedServersRef = useRef<Set<number>>(new Set());
+  const lastFailoverAtRef = useRef(0);
 
   // Helper to trigger temporary server toast notifications
   const showToast = useCallback((msg: string) => {
@@ -623,8 +624,8 @@ export default function InPageVideoPlayer({
     <div ref={playerRef} className="w-full flex flex-col gap-4 bg-slate-950 py-8 scroll-mt-20">
       <div className="w-full max-w-5xl mx-auto">
         {/* Header / Tabs */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-4 gap-4 max-w-full min-w-0">
+          <div className="flex items-center gap-3 shrink-0">
             {onClose && (
               <button
                 onClick={onClose}
@@ -635,38 +636,41 @@ export default function InPageVideoPlayer({
               </button>
             )}
             <div>
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                Episode {episode.id}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-2xl font-bold text-white">
+                  Episode {episode.id}
+                </h2>
                 {resumedBanner && (
-                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-blue-600/30 text-blue-400 rounded-full border border-blue-500/30 animate-in fade-in">
+                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-blue-600/20 text-blue-400 rounded-md border border-blue-500/30 animate-in fade-in">
                     {resumedBanner}
                   </span>
                 )}
                 {serverToast && (
-                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-indigo-600/30 text-indigo-300 rounded-full border border-indigo-500/30 animate-in fade-in">
+                  <span className="text-xs font-medium px-2.5 py-0.5 bg-indigo-950/80 text-indigo-300 rounded-md border border-indigo-500/30 animate-in fade-in flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse shrink-0" />
                     {serverToast}
                   </span>
                 )}
-              </h2>
+              </div>
               <p className="text-slate-400">{episode.title}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap max-w-full min-w-0">
             {/* Server Switcher with Next / Prev Source Controls */}
             {activeSources && activeSources.length > 0 && (
-              <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-lg border border-white/10">
+              <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-lg border border-white/10 max-w-full min-w-0">
                 {activeSources.length > 1 && (
                   <button
                     onClick={handlePrevSource}
-                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
                     title="Previous Source (Shift + S)"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                 )}
 
-                <div className="flex gap-1.5 overflow-x-auto max-w-[320px] sm:max-w-none scrollbar-none py-0.5">
+                <div className="flex gap-1.5 overflow-x-auto max-w-[240px] sm:max-w-[320px] md:max-w-[420px] lg:max-w-[480px] scrollbar-none py-0.5 min-w-0">
                   {activeSources.map((source, idx) => {
                     const latBadge = formatLatencyBadge(serverLatencies[source.url]);
                     return (
@@ -867,6 +871,10 @@ export default function InPageVideoPlayer({
                 onTimeUpdate={handleTimeUpdate}
                 onError={() => {
                   console.warn("Native HLS stream playback failed on server index", validServerIndex);
+                  const now = Date.now();
+                  if (now - lastFailoverAtRef.current < 600) return;
+                  lastFailoverAtRef.current = now;
+
                   failedServersRef.current.add(validServerIndex);
 
                   // 1. Auto-failover to another unfailed HLS server first
@@ -881,7 +889,7 @@ export default function InPageVideoPlayer({
                     handleSelectServer(embedIdx, true);
                     return;
                   }
-                  // All local servers exhausted, show clean fallback UI
+                  // All local servers exhausted, stop switching and show clean fallback UI
                   setPlayerError(true);
                 }}
                 onEnded={() => {
