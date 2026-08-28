@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { fetchAniListGraphQL } from "@/lib/schedule";
 
 function extractCategories(anime: any, included?: any[]): string[] {
   if (!included || !Array.isArray(included) || included.length === 0) {
@@ -191,8 +192,8 @@ export const getAnimeData = cache(async (slug: string) => {
   };
 
   try {
-    // 1. Fetch live metadata from Kitsu using exact slug first (cached 24h)
-    let res = await fetch(`https://kitsu.io/api/edge/anime?filter[slug]=${encodeURIComponent(slug)}&include=categories`, {
+    // 1. Fetch live metadata from Kitsu including categories & episodes in a single combined request
+    let res = await fetch(`https://kitsu.io/api/edge/anime?filter[slug]=${encodeURIComponent(slug)}&include=categories,episodes`, {
       headers,
       signal: AbortSignal.timeout(8000),
       next: { revalidate: 86400 } // 24 hours ISR cache
@@ -201,7 +202,7 @@ export const getAnimeData = cache(async (slug: string) => {
     
     // Fallback to text search if exact slug match is not found
     if (!json.data || json.data.length === 0) {
-      res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(slug)}&include=categories`, {
+      res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(slug)}&include=categories,episodes`, {
         headers,
         signal: AbortSignal.timeout(8000),
         next: { revalidate: 86400 }
@@ -215,36 +216,43 @@ export const getAnimeData = cache(async (slug: string) => {
 
     const anime = json.data[0];
     const metadata = formatAnimeData(anime, json.included);
-    const episodeCount = anime.attributes.episodeCount; // Might be null for airing
+    const episodeCount = anime.attributes.episodeCount;
 
-    // 2. Fetch initial episodes from Kitsu (first 100 episodes, cached 24h)
-    const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=100`, {
-      headers,
-      signal: AbortSignal.timeout(8000),
-      next: { revalidate: 86400 } // 24 hours ISR cache
-    });
-    const epJson = epRes.ok ? await epRes.json() : { data: [], meta: { count: 0 } };
-    const initialEpisodes: any[] = epJson.data || [];
+    // Extract episodes from included array first
+    const includedEpisodes = (json.included || []).filter((inc: any) => inc.type === "episodes");
+    
+    let allEpisodesData = includedEpisodes;
 
-    // 3. Determine totalCount reliably from meta.count or episodeCount
-    const metaCount = epJson.meta?.count || 0;
-    let totalCount = metaCount || episodeCount;
-
-    if (!totalCount) {
-      // If unknown total or currently airing, default to initial episodes length
-      totalCount = initialEpisodes.length > 0 ? (initialEpisodes[initialEpisodes.length - 1].attributes?.number || initialEpisodes.length) : 12;
+    // If anime has more than the included episodes, fetch full first 100 in parallel
+    if (episodeCount && episodeCount > includedEpisodes.length && includedEpisodes.length < 100) {
+      try {
+        const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=100`, {
+          headers,
+          signal: AbortSignal.timeout(6000),
+          next: { revalidate: 86400 }
+        });
+        if (epRes.ok) {
+          const epJson = await epRes.json();
+          if (epJson.data && epJson.data.length > 0) {
+            allEpisodesData = epJson.data;
+          }
+        }
+      } catch {}
     }
 
-    // 4. Map initial 100 episode titles in O(N) linear time
+    // Determine totalCount reliably
+    const totalCount = episodeCount || (allEpisodesData.length > 0 ? (allEpisodesData[allEpisodesData.length - 1].attributes?.number || allEpisodesData.length) : 12);
+
+    // Map initial episode titles in O(N) linear time
     const epMap = new Map<number, any>();
-    for (const ep of initialEpisodes) {
+    for (const ep of allEpisodesData) {
       const num = ep.attributes?.number;
       if (num !== undefined && num !== null) {
         epMap.set(num, ep);
       }
     }
 
-    // 5. Synthesize full episode list instantly (1..totalCount) without N+1 blocking
+    // Synthesize full episode list instantly without N+1 blocking
     const episodes = Array.from({ length: totalCount }, (_, i) => {
       const episodeNum = i + 1;
       const realEpData = epMap.get(episodeNum);
@@ -304,22 +312,13 @@ async function fetchAniListRelations(title: string): Promise<{
       }
     }`;
 
-    const res = await fetch("https://graphql.anilist.co", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ query: gqlQuery, variables: { search: title } }),
-      signal: AbortSignal.timeout(6000),
-      next: { revalidate: 86400 },
-    });
+    const data = await fetchAniListGraphQL<{ Media?: { relations?: { edges?: any[] } } }>(
+      gqlQuery,
+      { search: title },
+      { ttlMs: 24 * 60 * 60 * 1000, retries: 2, timeoutMs: 6000 }
+    );
 
-    if (!res.ok) {
-      if (res.status === 429) {
-        console.warn(`AniList GraphQL rate-limit reached (429) on relations lookup for "${title}".`);
-      }
-      return { nextInSeries: null, franchiseSlugs: [] };
-    }
-    const json = await res.json();
-    const edges: any[] = json.data?.Media?.relations?.edges || [];
+    const edges: any[] = data?.Media?.relations?.edges || [];
 
     // Collect all franchise slugs (to exclude from genre recs)
     const franchiseSlugs: string[] = [];

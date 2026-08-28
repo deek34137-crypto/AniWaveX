@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Server, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Server, ChevronLeft, ChevronRight, RotateCcw, Activity } from "lucide-react";
 import NativePlayer from "./NativePlayer";
 import { useAuth } from "@/providers/AuthProvider";
+import { benchmarkStreamSources, getFastestServerIndex, formatLatencyBadge } from "@/lib/latency-benchmarker";
+import { syncProgressToAniList } from "@/lib/sync/anilist-sync";
 import type { MediaPlayerInstance } from "@vidstack/react";
 
 interface StreamSource {
@@ -58,6 +60,7 @@ export default function InPageVideoPlayer({
   const [currentUser, setCurrentUser] = useState<any>(authUser || initialUser);
   const [resumedBanner, setResumedBanner] = useState<string | null>(null);
   const [serverToast, setServerToast] = useState<string | null>(null);
+  const [serverLatencies, setServerLatencies] = useState<Record<string, number>>({});
   const [fallbackToIframe, setFallbackToIframe] = useState(false);
   const [playerError, setPlayerError] = useState(false);
   const [isScrolledPast, setIsScrolledPast] = useState(false);
@@ -217,8 +220,8 @@ export default function InPageVideoPlayer({
       }
     }
 
-    // Sync to Supabase periodically every 10 seconds during playback
-    if (Math.abs(currentTime - lastSupabaseSyncRef.current) >= 10 && floorTime > 0) {
+    // Sync to Supabase periodically every 35 seconds during continuous playback to avoid DB write flooding
+    if (Math.abs(currentTime - lastSupabaseSyncRef.current) >= 35 && floorTime > 0) {
       lastSupabaseSyncRef.current = currentTime;
       syncToSupabase(floorTime);
     }
@@ -316,6 +319,33 @@ export default function InPageVideoPlayer({
   const isM3U8 = Boolean(selectedSource?.isM3U8 || (currentUrl && currentUrl.includes('.m3u8')));
   const availableEmbedIndex = activeSources?.findIndex((s) => !s.isM3U8 && isValidEmbedUrl(s.url)) ?? -1;
   const hasEmbedOption = availableEmbedIndex !== -1;
+  const isFloatingPiP = isScrolledPast && !isMiniPlayerDismissed && Boolean(currentUrl) && !playerError && !isLoading;
+  const userExplicitlySelectedServerRef = useRef(false);
+  const lastAniListSyncEpRef = useRef<number | null>(null);
+
+  // Smart Server Latency Benchmarker & Auto-Selection
+  useEffect(() => {
+    if (!activeSources || activeSources.length === 0) return;
+    let isCancelled = false;
+
+    benchmarkStreamSources(activeSources).then((latencies) => {
+      if (isCancelled) return;
+      setServerLatencies(latencies);
+
+      // Auto-select lowest latency server if user has not explicitly locked a server
+      if (!userExplicitlySelectedServerRef.current) {
+        const fastestIdx = getFastestServerIndex(activeSources, latencies);
+        if (fastestIdx !== validServerIndex && latencies[activeSources[fastestIdx]?.url] < 400) {
+          setSelectedServerIndex(fastestIdx);
+          setFallbackToIframe(!activeSources[fastestIdx].isM3U8);
+        }
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeSources]);
 
   // Preserve timestamp when switching servers
   const handleSelectServer = useCallback((newIdx: number, isAutoFailover = false) => {
@@ -332,6 +362,7 @@ export default function InPageVideoPlayer({
       lastSavedTimeRef.current = currentProgress;
     }
 
+    userExplicitlySelectedServerRef.current = true;
     setSelectedServerIndex(targetIdx);
     setFallbackToIframe(!targetSource.isM3U8);
     setPlayerError(false);
@@ -476,16 +507,19 @@ export default function InPageVideoPlayer({
     }
   }, [hasPrev, onEpisodeChange, episodes, currentIndex]);
 
-  // Global Keyboard Shortcuts (Guarded against inputs and open dialogs)
-  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is in an input field or any modal dialog/overlay is active
+      // Ignore if user is in an input field or any modal dialog/overlay/palette is active
+      const targetEl = e.target as HTMLElement | null;
       const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      
       if (
         activeTag === 'input' || 
         activeTag === 'textarea' || 
         activeTag === 'select' || 
-        (document.activeElement as HTMLElement)?.isContentEditable ||
+        targetEl?.isContentEditable ||
+        targetEl?.closest('input, textarea, select, [role="dialog"], [aria-modal="true"], .command-palette') ||
+        showShortcuts ||
+        document.body.classList.contains('overflow-hidden') ||
         document.querySelector('[role="dialog"]') ||
         document.querySelector('[aria-modal="true"]') ||
         document.querySelector('.fixed.z-\\[200\\]') ||
@@ -631,21 +665,29 @@ export default function InPageVideoPlayer({
                   </button>
                 )}
 
-                <div className="flex gap-1.5 overflow-x-auto max-w-[280px] sm:max-w-none scrollbar-none py-0.5">
-                  {activeSources.map((source, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleSelectServer(idx)}
-                      className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 ${
-                        validServerIndex === idx 
-                          ? 'bg-indigo-600 text-white shadow-sm' 
-                          : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-white'
-                      }`}
-                    >
-                      <Server className="w-3 h-3 opacity-70" />
-                      {source.quality}
-                    </button>
-                  ))}
+                <div className="flex gap-1.5 overflow-x-auto max-w-[320px] sm:max-w-none scrollbar-none py-0.5">
+                  {activeSources.map((source, idx) => {
+                    const latBadge = formatLatencyBadge(serverLatencies[source.url]);
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleSelectServer(idx)}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                          validServerIndex === idx 
+                            ? 'bg-indigo-600 text-white shadow-sm' 
+                            : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-white'
+                        }`}
+                      >
+                        <Server className="w-3 h-3 opacity-70" />
+                        <span>{source.quality}</span>
+                        {serverLatencies[source.url] !== undefined && (
+                          <span className={`text-[10px] ${latBadge.colorClass}`}>
+                            • {latBadge.text}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {activeSources.length > 1 && (
@@ -703,7 +745,7 @@ export default function InPageVideoPlayer({
         {/* Video Player Container with Dynamic Ambient Cinema Glow */}
         <div className="relative w-full aspect-video">
           {/* Dynamic Ambient Cinema Glow */}
-          {ambientMode && (
+          {ambientMode && !isFloatingPiP && (
             <div 
               className="absolute -inset-4 md:-inset-10 rounded-3xl opacity-40 blur-3xl -z-10 pointer-events-none transition-all duration-1000"
               style={{
@@ -712,7 +754,57 @@ export default function InPageVideoPlayer({
             />
           )}
 
-          <div className="relative w-full h-full bg-black rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-white/10 flex items-center justify-center">
+          {/* Placeholder in document flow when player is undocked into floating PiP mode */}
+          {isFloatingPiP && (
+            <div className="w-full h-full bg-slate-950/80 rounded-2xl border border-white/10 flex flex-col items-center justify-center gap-3 text-slate-400 select-none">
+              <Tv className="w-8 h-8 text-blue-500/70 animate-pulse" />
+              <p className="text-xs sm:text-sm font-medium">Playing in Picture-in-Picture mode</p>
+              <button
+                onClick={() => {
+                  playerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold border border-white/10 transition-colors"
+              >
+                Scroll to Player
+              </button>
+            </div>
+          )}
+
+          {/* Single Unified Video Player Container (Docked or Floating PiP) */}
+          <div 
+            className={`group transition-all duration-300 ${
+              isFloatingPiP
+                ? "fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] md:bottom-6 right-4 sm:right-6 z-50 w-72 sm:w-96 aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-[0_15px_50px_rgba(0,0,0,0.9)] border border-white/20 animate-in slide-in-from-bottom-5"
+                : "relative w-full h-full bg-black rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-white/10 flex items-center justify-center"
+            }`}
+          >
+            {/* Floating Mini Player Controls Overlay */}
+            {isFloatingPiP && (
+              <div className="absolute top-0 left-0 right-0 p-2.5 bg-gradient-to-b from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-between pointer-events-auto z-30">
+                <span className="text-xs font-bold text-white line-clamp-1">
+                  EP {episode.id}: {episode.title}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      playerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    className="p-1.5 bg-black/60 hover:bg-slate-800 text-white rounded-lg transition-colors border border-white/10"
+                    title="Expand to Full Player"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setIsMiniPlayerDismissed(true)}
+                    className="p-1.5 bg-black/60 hover:bg-red-500 text-white rounded-lg transition-colors border border-white/10"
+                    title="Dismiss Mini Player"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {isLoading ? (
               <div className="flex flex-col items-center justify-center gap-4 text-slate-400">
                 <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
@@ -792,6 +884,15 @@ export default function InPageVideoPlayer({
                   setPlayerError(true);
                 }}
                 onEnded={() => {
+                  const anilistToken = typeof window !== 'undefined' ? localStorage.getItem("anilist_token") : null;
+                  if (anilistToken && anilistId && episode?.id && lastAniListSyncEpRef.current !== episode.id) {
+                    lastAniListSyncEpRef.current = episode.id;
+                    syncProgressToAniList(anilistToken, anilistId, episode.id).then((res) => {
+                      if (res.success) {
+                        showToast(`Synced Ep ${episode.id} to AniList ✨`);
+                      }
+                    });
+                  }
                   if (autoplayNext && hasNext) {
                     handleNext();
                   }
@@ -818,6 +919,15 @@ export default function InPageVideoPlayer({
                 onTimeUpdate={handleTimeUpdate}
                 onError={() => setPlayerError(true)}
                 onEnded={() => {
+                  const anilistToken = typeof window !== 'undefined' ? localStorage.getItem("anilist_token") : null;
+                  if (anilistToken && anilistId && episode?.id && lastAniListSyncEpRef.current !== episode.id) {
+                    lastAniListSyncEpRef.current = episode.id;
+                    syncProgressToAniList(anilistToken, anilistId, episode.id).then((res) => {
+                      if (res.success) {
+                        showToast(`Synced Ep ${episode.id} to AniList ✨`);
+                      }
+                    });
+                  }
                   if (autoplayNext && hasNext) {
                     handleNext();
                   }
@@ -998,59 +1108,6 @@ export default function InPageVideoPlayer({
           </div>
         )}
       </div>
-
-      {/* Floating Picture-in-Picture Mini-Player on Scroll */}
-      {isScrolledPast && !isMiniPlayerDismissed && currentUrl && !playerError && !isLoading && (
-        <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-50 w-72 sm:w-96 aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-[0_15px_50px_rgba(0,0,0,0.9)] border border-white/20 animate-in slide-in-from-bottom-5 duration-300 group select-none">
-          <div className="w-full h-full relative">
-            {!fallbackToIframe && isM3U8 ? (
-              <NativePlayer 
-                url={currentUrl} 
-                title={`${animeTitle} - Episode ${episode.id}`}
-                poster={animePosterImage}
-                subtitles={streams?.nativeStream?.subtitles}
-                initialTime={lastSavedTimeRef.current || initialTime}
-                onTimeUpdate={handleTimeUpdate}
-                onEnded={() => {
-                  if (autoplayNext && hasNext) handleNext();
-                }}
-              />
-            ) : isValidEmbedUrl(currentUrl) ? (
-              <iframe 
-                src={currentUrl}
-                className="w-full h-full border-0 bg-black"
-                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            ) : null}
-
-            {/* Mini Player Overlay Header */}
-            <div className="absolute top-0 left-0 right-0 p-2.5 bg-gradient-to-b from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-between pointer-events-auto z-20">
-              <span className="text-xs font-bold text-white line-clamp-1">
-                EP {episode.id}: {episode.title}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => {
-                    playerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  }}
-                  className="p-1.5 bg-black/60 hover:bg-slate-800 text-white rounded-lg transition-colors border border-white/10"
-                  title="Expand to Full Player"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setIsMiniPlayerDismissed(true)}
-                  className="p-1.5 bg-black/60 hover:bg-red-500 text-white rounded-lg transition-colors border border-white/10"
-                  title="Close Mini Player"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

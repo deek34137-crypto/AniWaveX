@@ -44,14 +44,19 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
     >
       {animeList.map((anime, index) => {
         const isActive = index === currentIndex;
+        const isAdjacent = 
+          index === (currentIndex + 1) % animeList.length || 
+          index === (currentIndex - 1 + animeList.length) % animeList.length;
+        const shouldRenderImage = isActive || isAdjacent;
         const imageUrl = anime.backgroundImage || anime.posterImage;
+
         return (
           <div 
             key={anime.id}
             className={`absolute inset-0 transition-opacity duration-1000 ${isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
           >
-            {/* Optimized Background Image */}
-            {imageUrl ? (
+            {/* Virtualized High-Performance Background Image */}
+            {imageUrl && shouldRenderImage ? (
               <div className={`absolute inset-0 transition-transform duration-[10000ms] ${isActive ? 'scale-105' : 'scale-100'}`}>
                 <AnimeImage
                   src={imageUrl}

@@ -8,8 +8,9 @@ import WatchlistGrid from "@/components/profile/WatchlistGrid";
 import AvatarPicker from "@/components/profile/AvatarPicker";
 import PasswordForm from "@/components/profile/PasswordForm";
 import ProfileCustomizer from "@/components/profile/ProfileCustomizer";
+import AniListSyncModal from "@/components/sync/AniListSyncModal";
 import { getAvatarUrl } from "@/lib/avatars";
-import { User, Settings, Sparkles, ExternalLink, Layers } from "lucide-react";
+import { User, Settings, Sparkles, ExternalLink, Layers, RefreshCw } from "lucide-react";
 
 export default function ProfileClient({
   user,
@@ -21,6 +22,7 @@ export default function ProfileClient({
   bookmarks: any[];
 }) {
   const [activeTab, setActiveTab] = useState<"stuff" | "customize" | "settings">("stuff");
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   const meta = user.user_metadata || {};
   const username = meta.username || user.email?.split("@")[0] || "User";
@@ -28,6 +30,12 @@ export default function ProfileClient({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <AniListSyncModal 
+        isOpen={showSyncModal} 
+        onClose={() => setShowSyncModal(false)} 
+        onImportComplete={() => window.location.reload()} 
+      />
+
       {/* Profile Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-12">
         <div className="flex items-center gap-6">
@@ -49,8 +57,16 @@ export default function ProfileClient({
           </div>
         </div>
 
-        {/* Public Profile & Tier List Link Buttons */}
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        {/* Public Profile, Tier List & AniList Sync Buttons */}
+        <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
+          <button
+            onClick={() => setShowSyncModal(true)}
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl font-bold text-xs sm:text-sm transition-all shadow-lg hover:scale-105"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Sync AniList
+          </button>
+
           <Link
             href="/tier-list"
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white rounded-2xl font-bold text-xs sm:text-sm transition-all border border-white/10 shadow-lg hover:scale-105"
@@ -61,10 +77,10 @@ export default function ProfileClient({
 
           <Link
             href={`/user/${encodeURIComponent(username)}`}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-xs sm:text-sm transition-all shadow-lg hover:scale-105"
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white rounded-2xl font-bold text-xs sm:text-sm transition-all border border-white/10 shadow-lg hover:scale-105"
           >
             <ExternalLink className="w-4 h-4" />
-            View Public Profile
+            Public Profile
           </Link>
         </div>
       </div>

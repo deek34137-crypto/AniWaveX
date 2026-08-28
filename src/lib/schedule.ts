@@ -35,6 +35,136 @@ function generateSlug(title: string): string {
     .replace(/^-|-$/g, "");
 }
 
+// ── Resilient AniList GraphQL Client with LRU Cache & 429 Exponential Backoff ──
+interface AniListCacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+class AniListLRUCache {
+  private cache = new Map<string, AniListCacheEntry<any>>();
+  private readonly max = 300;
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return null;
+    }
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.data;
+  }
+
+  set<T>(key: string, data: T, ttlMs: number): void {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.max) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
+    this.cache.set(key, { data, expiresAt: Date.now() + ttlMs });
+  }
+}
+
+const anilistMemoryCache = new AniListLRUCache();
+const inFlightAniListRequests = new Map<string, Promise<any>>();
+
+export interface AniListOptions {
+  ttlMs?: number;
+  retries?: number;
+  timeoutMs?: number;
+}
+
+export async function fetchAniListGraphQL<T = any>(
+  query: string,
+  variables: Record<string, any> = {},
+  options: AniListOptions = {}
+): Promise<T | null> {
+  const {
+    ttlMs = 30 * 60 * 1000,
+    retries = 2,
+    timeoutMs = 7000,
+  } = options;
+
+  const cacheKey = `anilist:${JSON.stringify({ q: query.replace(/\s+/g, " ").trim(), v: variables })}`;
+
+  const cached = anilistMemoryCache.get<T>(cacheKey);
+  if (cached) return cached;
+
+  if (inFlightAniListRequests.has(cacheKey)) {
+    return inFlightAniListRequests.get(cacheKey) as Promise<T | null>;
+  }
+
+  const queryPromise = (async () => {
+    let attempt = 0;
+    let delayMs = 600;
+
+    while (attempt <= retries) {
+      try {
+        const res = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          },
+          body: JSON.stringify({ query, variables }),
+          signal: AbortSignal.timeout(timeoutMs),
+          next: { revalidate: Math.floor(ttlMs / 1000) },
+        });
+
+        if (res.status === 429) {
+          attempt++;
+          if (attempt > retries) {
+            console.warn(`[AniList 429] Rate limit reached after ${retries} retries.`);
+            return null;
+          }
+
+          const retryAfter = res.headers.get("Retry-After");
+          const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delayMs + Math.random() * 300;
+          console.warn(`[AniList 429] Backing off for ${Math.round(waitTime)}ms (attempt ${attempt}/${retries})...`);
+          await new Promise((r) => setTimeout(r, waitTime));
+          delayMs *= 2;
+          continue;
+        }
+
+        if (!res.ok) {
+          console.warn(`[AniList Error] HTTP ${res.status}: ${res.statusText}`);
+          return null;
+        }
+
+        const json = await res.json();
+        if (json.errors && json.errors.length > 0) {
+          console.warn("[AniList GraphQL Error]", json.errors[0]?.message);
+          return null;
+        }
+
+        const data = json.data;
+        if (data) {
+          anilistMemoryCache.set(cacheKey, data, ttlMs);
+        }
+        return data as T;
+      } catch (err: any) {
+        attempt++;
+        if (attempt <= retries) {
+          await new Promise((r) => setTimeout(r, delayMs));
+          delayMs *= 2;
+        }
+      }
+    }
+    return null;
+  })().finally(() => {
+    inFlightAniListRequests.delete(cacheKey);
+  });
+
+  inFlightAniListRequests.set(cacheKey, queryPromise);
+  return queryPromise;
+}
+
 async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
   const normalizedMap = new Map<number, AiringAnimeScheduleItem>();
   const now = Math.floor(Date.now() / 1000);
@@ -88,33 +218,19 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
         }
       `;
 
-      const res = await fetch("https://graphql.anilist.co", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      const data = await fetchAniListGraphQL<{ Page?: { airingSchedules?: any[] } }>(
+        query,
+        {
+          page,
+          perPage: 50,
+          airingAt_greater: startOfWeek,
+          airingAt_lesser: endOfWeek,
         },
-        body: JSON.stringify({
-          query,
-          variables: {
-            page,
-            perPage: 50,
-            airingAt_greater: startOfWeek,
-            airingAt_lesser: endOfWeek,
-          },
-        }),
-        signal: AbortSignal.timeout(6000),
-      });
+        { ttlMs: 30 * 60 * 1000, retries: 2, timeoutMs: 6000 }
+      );
 
-      if (res.status === 429) {
-        console.warn(`AniList GraphQL rate-limit reached (429) on schedule page ${page}. Falling back to secondary engine.`);
-        break;
-      }
-
-      if (res.ok) {
-        const json = await res.json();
-        const schedules = json.data?.Page?.airingSchedules || [];
+      const schedules = data?.Page?.airingSchedules || [];
+      if (schedules.length === 0) break;
 
         for (const s of schedules) {
           const media = s.media;

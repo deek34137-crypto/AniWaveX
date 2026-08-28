@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
+import { createSignedProxyUrl } from '@/lib/proxy-security';
 import { getAnikotoStream, getAnilistId } from "@/lib/providers/anikoto-wrapper";
 import { unstable_cache } from "next/cache";
 
@@ -54,6 +55,72 @@ const STREAM_CACHE_TTL_MS = 3 * 60 * 1000;
 
 // In-flight request deduplication Map
 const inFlightRequests = new Map<string, Promise<any>>();
+
+// Provider Circuit-Breaker & Adaptive Health Prioritizer
+interface ProviderMetrics {
+  failures: number;
+  successes: number;
+  lastFailureAt: number;
+  avgLatencyMs: number;
+  isCircuitOpen: boolean;
+}
+
+class ProviderCircuitBreaker {
+  private metrics = new Map<string, ProviderMetrics>();
+  private readonly FAILURE_THRESHOLD = 3;
+  private readonly COOLDOWN_MS = 60 * 1000; // 1 minute cooldown after consecutive failures
+
+  recordSuccess(provider: string, latencyMs: number) {
+    const m = this.getOrCreate(provider);
+    m.successes++;
+    m.failures = 0;
+    m.isCircuitOpen = false;
+    m.avgLatencyMs = m.avgLatencyMs === 0 ? latencyMs : Math.round(m.avgLatencyMs * 0.7 + latencyMs * 0.3);
+  }
+
+  recordFailure(provider: string) {
+    const m = this.getOrCreate(provider);
+    m.failures++;
+    m.lastFailureAt = Date.now();
+    if (m.failures >= this.FAILURE_THRESHOLD) {
+      m.isCircuitOpen = true;
+    }
+  }
+
+  isAvailable(provider: string): boolean {
+    const m = this.metrics.get(provider);
+    if (!m) return true;
+    if (!m.isCircuitOpen) return true;
+    if (Date.now() - m.lastFailureAt > this.COOLDOWN_MS) {
+      return true; // Half-open test window
+    }
+    return false;
+  }
+
+  sortProvidersByHealth(providers: string[]): string[] {
+    return [...providers].sort((a, b) => {
+      const mA = this.metrics.get(a);
+      const mB = this.metrics.get(b);
+      const openA = mA?.isCircuitOpen && (Date.now() - (mA?.lastFailureAt || 0) <= this.COOLDOWN_MS) ? 1 : 0;
+      const openB = mB?.isCircuitOpen && (Date.now() - (mB?.lastFailureAt || 0) <= this.COOLDOWN_MS) ? 1 : 0;
+      if (openA !== openB) return openA - openB;
+      const latA = mA?.avgLatencyMs || 1000;
+      const latB = mB?.avgLatencyMs || 1000;
+      return latA - latB;
+    });
+  }
+
+  private getOrCreate(provider: string): ProviderMetrics {
+    let m = this.metrics.get(provider);
+    if (!m) {
+      m = { failures: 0, successes: 0, lastFailureAt: 0, avgLatencyMs: 0, isCircuitOpen: false };
+      this.metrics.set(provider, m);
+    }
+    return m;
+  }
+}
+
+const providerCircuitBreaker = new ProviderCircuitBreaker();
 
 interface ExtractedStreamResult {
   sources: any[];
@@ -139,7 +206,7 @@ function extractWorkerSources(
         const ref = getRefererForStream(s.url, s, data);
         const serverName = s.server ? `${providerLabel} (${s.server})` : providerLabel;
         sources.push({
-          url: `/api/proxy?url=${encodeURIComponent(s.url)}&referer=${encodeURIComponent(ref)}`,
+          url: createSignedProxyUrl(s.url, 7200, ref),
           quality: `${serverName} [${langTag}]`,
           isM3U8: true,
         });
@@ -167,7 +234,7 @@ function extractWorkerSources(
   const directHls = data.stream_url;
   if (directHls && typeof directHls === 'string') {
     const ref = getRefererForStream(directHls, null, data);
-    const proxyUrl = `/api/proxy?url=${encodeURIComponent(directHls)}&referer=${encodeURIComponent(ref)}`;
+    const proxyUrl = createSignedProxyUrl(directHls, 7200, ref);
     if (!sources.some(s => s.url === proxyUrl)) {
       sources.unshift({
         url: proxyUrl,
@@ -199,7 +266,7 @@ function extractWorkerSources(
       const ref = getRefererForStream(sub.url, null, data);
       return {
         ...sub,
-        url: `/api/proxy?url=${encodeURIComponent(sub.url)}&referer=${encodeURIComponent(ref)}`
+        url: createSignedProxyUrl(sub.url, 7200, ref),
       };
     }
     return sub;
@@ -344,9 +411,10 @@ async function multiProviderProbeEngine(
     // Global hard ceiling timeout
     const globalTimeout = setTimeout(finishAndResolve, 5000);
 
-    const onProviderSuccess = (provider: string, result: ExtractedStreamResult) => {
+    const onProviderSuccess = (provider: string, result: ExtractedStreamResult, latencyMs = 0) => {
       if (isCompleted || completedProviders.has(provider)) return;
       completedProviders.add(provider);
+      providerCircuitBreaker.recordSuccess(provider, latencyMs);
       gatheredResults.push(result);
 
       // If we reached the target count (e.g. 3 providers), finish immediately
@@ -363,6 +431,10 @@ async function multiProviderProbeEngine(
 
     const tryProvider = async (provider: string, pAudio: 'sub' | 'dub' | 'hindi', timeoutMs = 2500) => {
       if (isCompleted || excluded.has(provider) || (target && target !== provider)) return;
+      // Skip if circuit is open unless explicitly requested
+      if (!target && !providerCircuitBreaker.isAvailable(provider)) return;
+
+      const startTime = Date.now();
       try {
         const res = await fetchWorkerProvider(
           externalApi,
@@ -374,15 +446,19 @@ async function multiProviderProbeEngine(
           timeoutMs
         );
         if (res && res.sources.length > 0) {
-          onProviderSuccess(provider, res);
+          const latency = Date.now() - startTime;
+          onProviderSuccess(provider, res, latency);
+        } else {
+          providerCircuitBreaker.recordFailure(provider);
         }
       } catch {
-        // Continue probing other candidates
+        providerCircuitBreaker.recordFailure(provider);
       }
     };
 
     const tryLocalAnikoto = async () => {
       if (isCompleted || audio === 'hindi' || excluded.has('local-anikoto') || (target && target !== 'local-anikoto')) return;
+      const startTime = Date.now();
       try {
         const anikotoRes = await getAnikotoStream(title, parsedEp, audio as 'sub' | 'dub', resolvedAnilistId);
         if (anikotoRes) {
@@ -410,7 +486,8 @@ async function multiProviderProbeEngine(
           }
 
           if (sources.length > 0) {
-            onProviderSuccess('local-anikoto', { sources, subtitles });
+            const latency = Date.now() - startTime;
+            onProviderSuccess('local-anikoto', { sources, subtitles }, latency);
           }
         }
       } catch {
@@ -418,34 +495,43 @@ async function multiProviderProbeEngine(
       }
     };
 
-    // Non-canceling Escalation Pipeline:
+    // Dynamically sort provider candidates by circuit health and historical latency
     if (audio === 'hindi') {
+      const hindiProviders = providerCircuitBreaker.sortProvidersByHealth(['anibd']);
+      const dubFallbackProviders = providerCircuitBreaker.sortProvidersByHealth(['reanime', 'justanime', 'anikoto', 'kaa']);
+
       // t = 0ms: Primary Hindi provider
-      ['anibd'].forEach(p => tryProvider(p, 'hindi', 2500));
+      hindiProviders.forEach(p => tryProvider(p, 'hindi', 2500));
 
       // t = 500ms: Concurrently launch Eng dub fallback providers
       setTimeout(() => {
         if (!isCompleted) {
-          ['reanime', 'justanime', 'anikoto', 'kaa'].forEach(p => tryProvider(p, 'dub', 2500));
+          dubFallbackProviders.forEach(p => tryProvider(p, 'dub', 2500));
         }
       }, 500);
     } else {
-      // t = 0ms: Tier 1 high-speed providers (reanime, justanime, anikoto)
-      ['reanime', 'justanime', 'anikoto'].forEach(p => tryProvider(p, audio, 2500));
+      const allTier1 = ['reanime', 'justanime', 'anikoto'];
+      const allTier2 = ['kaa', 'animegg', 'anineko', 'anibd', 'animenosub'];
 
-      // t = 400ms: Tier 2 providers launched in parallel without canceling Tier 1
+      const sortedTier1 = providerCircuitBreaker.sortProvidersByHealth(allTier1);
+      const sortedTier2 = providerCircuitBreaker.sortProvidersByHealth(allTier2);
+
+      // t = 0ms: Launch Tier 1 providers sorted by health
+      sortedTier1.forEach(p => tryProvider(p, audio, 2500));
+
+      // t = 350ms: Launch Tier 2 providers in parallel without canceling Tier 1
       setTimeout(() => {
         if (!isCompleted) {
-          ['kaa', 'animegg', 'anineko', 'anibd', 'animenosub'].forEach(p => tryProvider(p, audio, 2500));
+          sortedTier2.forEach(p => tryProvider(p, audio, 2500));
         }
-      }, 400);
+      }, 350);
 
-      // t = 800ms: Local Anikoto resolver launched in parallel if needed
+      // t = 700ms: Local Anikoto resolver launched in parallel if needed
       setTimeout(() => {
         if (!isCompleted && gatheredResults.length === 0) {
           tryLocalAnikoto();
         }
-      }, 800);
+      }, 700);
     }
   });
 }

@@ -26,7 +26,6 @@ export default function AnimeImage({
   unoptimized,
 }: AnimeImageProps) {
   const [hasError, setHasError] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
 
   // If no source is provided or image failed to load, render stylish placeholder
   if (!src || hasError) {
@@ -62,10 +61,7 @@ export default function AnimeImage({
       sizes={sizes || "(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"}
       priority={priority}
       quality={quality}
-      className={`${className} transition-opacity duration-300 ${
-        isLoaded ? "opacity-100" : "opacity-0"
-      }`}
-      onLoad={() => setIsLoaded(true)}
+      className={className}
       onError={() => setHasError(true)}
       unoptimized={unoptimized !== undefined ? unoptimized : src.startsWith("http://")}
     />

@@ -125,38 +125,59 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
   useEffect(() => {
     if (!listId) return;
-    try {
-      let foundList: any = null;
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith("aniwavex_tierlists_")) {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-              const match = parsed.find((tl: any) => tl.id === listId);
-              if (match) {
-                foundList = match;
-                break;
+
+    // 1. Try fetching from Supabase first
+    supabase
+      .from("tier_lists")
+      .select("*")
+      .eq("id", listId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          if (data.title) setTitle(data.title);
+          if (data.rows && Array.isArray(data.rows) && data.rows.length > 0) {
+            setRows(data.rows);
+          }
+          if (data.unranked_pool && Array.isArray(data.unranked_pool)) {
+            setPool(data.unranked_pool);
+          }
+          return;
+        }
+
+        // 2. Fallback to localStorage
+        try {
+          let foundList: any = null;
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("aniwavex_tierlists_")) {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                  const match = parsed.find((tl: any) => tl.id === listId);
+                  if (match) {
+                    foundList = match;
+                    break;
+                  }
+                }
               }
             }
           }
-        }
-      }
 
-      if (foundList) {
-        if (foundList.title) setTitle(foundList.title);
-        if (foundList.rows && Array.isArray(foundList.rows) && foundList.rows.length > 0) {
-          setRows(foundList.rows);
+          if (foundList) {
+            if (foundList.title) setTitle(foundList.title);
+            if (foundList.rows && Array.isArray(foundList.rows) && foundList.rows.length > 0) {
+              setRows(foundList.rows);
+            }
+            if (foundList.unrankedPool && Array.isArray(foundList.unrankedPool)) {
+              setPool(foundList.unrankedPool);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to load saved tier list by id:", err);
         }
-        if (foundList.unrankedPool && Array.isArray(foundList.unrankedPool)) {
-          setPool(foundList.unrankedPool);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load saved tier list by id:", err);
-    }
-  }, [listId]);
+      });
+  }, [listId, supabase]);
 
   // Search anime with debounce
   useEffect(() => {
@@ -396,39 +417,69 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
   };
 
   // Save Tier List
-  const handleSaveTierList = () => {
-    const username = user?.user_metadata?.username || user?.email?.split("@")[0] || "guest";
+  const handleSaveTierList = async () => {
+    let activeUser = user;
+    if (!activeUser) {
+      const { data: { user: liveUser } } = await supabase.auth.getUser();
+      if (liveUser) activeUser = liveUser;
+    }
+
+    const username = activeUser?.user_metadata?.username || activeUser?.email?.split("@")[0] || "guest";
+    const tierListId = listId || `tierlist_${Date.now()}`;
     const tierListObj: AnimeTierList = {
-      id: `tierlist_${Date.now()}`,
+      id: tierListId,
       title: title.trim() || "My Anime Tier List",
       description: "",
       username,
-      userId: user?.id,
+      userId: activeUser?.id,
       rows,
       unrankedPool: pool,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
 
+    // 1. Save to Supabase
+    try {
+      await supabase
+        .from("tier_lists")
+        .upsert({
+          id: tierListId,
+          user_id: activeUser?.id || null,
+          username: username,
+          title: tierListObj.title,
+          description: tierListObj.description || "",
+          rows: tierListObj.rows,
+          unranked_pool: tierListObj.unrankedPool,
+          updated_at: new Date().toISOString()
+        });
+    } catch (err) {
+      console.error("Failed to sync tier list to Supabase", err);
+    }
+
+    // 2. Save to localStorage
     try {
       const key = `aniwavex_tierlists_${username.toLowerCase()}`;
       const raw = localStorage.getItem(key);
-      const list = raw ? JSON.parse(raw) : [];
-      list.unshift(tierListObj);
+      let list = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(list)) list = [];
+      list = [tierListObj, ...list.filter((tl: any) => tl.id !== tierListId)];
       localStorage.setItem(key, JSON.stringify(list.slice(0, 15)));
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3000);
-      alert("Tier list saved to your profile!");
     } catch (err) {
-      console.error("Failed to save tier list:", err);
+      console.error("Failed to save tier list locally:", err);
     }
+
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+    alert("Tier list saved to your profile!");
   };
 
   // Helper to load image for canvas export using blob proxy to NEVER taint canvas
-  const loadCanvasImage = async (src: string): Promise<HTMLImageElement | null> => {
+  const loadCanvasImage = async (
+    src: string,
+    createdBlobUrls: string[]
+  ): Promise<HTMLImageElement | null> => {
     if (!src) return null;
 
-    // 1. Try to fetch as Blob via /api/proxy or direct CORS
     let objectUrl: string | null = null;
     try {
       const proxyUrl = `/api/proxy?url=${encodeURIComponent(src)}`;
@@ -436,6 +487,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       if (res.ok) {
         const blob = await res.blob();
         objectUrl = URL.createObjectURL(blob);
+        createdBlobUrls.push(objectUrl);
       }
     } catch {}
 
@@ -445,6 +497,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
         if (res.ok) {
           const blob = await res.blob();
           objectUrl = URL.createObjectURL(blob);
+          createdBlobUrls.push(objectUrl);
         }
       } catch {}
     }
@@ -458,19 +511,14 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       });
     }
 
-    // 2. Safe fallback: crossOrigin anonymous only (never fallback to regular non-CORS image!)
-    return new Promise((resolve) => {
-      const img = new window.Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
-      img.src = src;
-    });
+    // If both proxy and direct CORS fail, return null so canvas does NOT get tainted
+    return null;
   };
 
   // Export as High-Resolution Image (Ultra HD 2400px Width)
   const handleExportImage = async () => {
     setIsExporting(true);
+    const createdBlobUrls: string[] = [];
     try {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -517,13 +565,13 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       ctx.font = "bold 26px system-ui, -apple-system, sans-serif";
       ctx.fillText("AniWaveX • aniwavex.bond", width - 420, 92);
 
-      // Preload all images across all rows
+      // Preload all images across all rows via CORS blob proxy
       const allItemsToLoad = rows.flatMap((r) => r.items || []);
       const loadedImageMap = new Map<string, HTMLImageElement | null>();
       await Promise.all(
         allItemsToLoad.map(async (it) => {
           if (it.posterImage && !loadedImageMap.has(it.posterImage)) {
-            const img = await loadCanvasImage(it.posterImage);
+            const img = await loadCanvasImage(it.posterImage, createdBlobUrls);
             loadedImageMap.set(it.posterImage, img);
           }
         })
@@ -626,6 +674,11 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       console.error("Export error:", err);
       alert("Failed to export image: " + err.message);
     } finally {
+      createdBlobUrls.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {}
+      });
       setIsExporting(false);
     }
   };
@@ -696,6 +749,21 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               <RotateCcw className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        {/* View Switcher Tabs */}
+        <div className="flex items-center gap-2 mt-8 border-t border-white/10 pt-4">
+          <div className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-md flex items-center gap-2">
+            <Layers className="w-3.5 h-3.5" />
+            Tier List Maker
+          </div>
+          <Link
+            href="/tier-list/community"
+            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+            Community Showcase
+          </Link>
         </div>
       </div>
 

@@ -32,6 +32,7 @@ interface PublicProfileClientProps {
   user: any;
   bookmarks: any[];
   history: any[];
+  initialTierLists?: any[];
 }
 
 export default function PublicProfileClient({
@@ -39,12 +40,28 @@ export default function PublicProfileClient({
   user,
   bookmarks: initialBookmarks,
   history: initialHistory,
+  initialTierLists,
 }: PublicProfileClientProps) {
   const [bookmarks, setBookmarks] = useState<any[]>(initialBookmarks || []);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<"showcase" | "watchlist" | "tierlists">("showcase");
   const [watchlistFilter, setWatchlistFilter] = useState("all");
-  const [tierLists, setTierLists] = useState<AnimeTierList[]>([]);
+  const [tierLists, setTierLists] = useState<AnimeTierList[]>(() => {
+    if (initialTierLists && initialTierLists.length > 0) {
+      return initialTierLists.map((tl: any) => ({
+        id: tl.id,
+        title: tl.title,
+        description: tl.description || "",
+        username: tl.username,
+        userId: tl.user_id,
+        rows: Array.isArray(tl.rows) ? tl.rows : [],
+        unrankedPool: Array.isArray(tl.unranked_pool) ? tl.unranked_pool : [],
+        createdAt: tl.created_at ? new Date(tl.created_at).getTime() : (tl.createdAt || Date.now()),
+        updatedAt: tl.updated_at ? new Date(tl.updated_at).getTime() : (tl.updatedAt || Date.now()),
+      }));
+    }
+    return [];
+  });
 
   const meta = user?.user_metadata || {};
   const bio = meta.bio || "Passionate anime fan exploring the finest series and movies on AniWaveX.";
@@ -57,12 +74,19 @@ export default function PublicProfileClient({
   const isOwner = authUser?.id === user?.id || 
     (authUser?.user_metadata?.username || authUser?.email?.split("@")[0])?.toLowerCase() === username.toLowerCase();
 
-  const handleDeleteTierList = (id: string) => {
+  const handleDeleteTierList = async (id: string) => {
     if (confirm("Are you sure you want to remove this tier list?")) {
-      const key = `aniwavex_tierlists_${username.toLowerCase()}`;
       const updated = tierLists.filter((tl) => tl.id !== id);
       setTierLists(updated);
+
       try {
+        await supabase.from("tier_lists").delete().eq("id", id);
+      } catch (err) {
+        console.error("Failed to delete tier list from Supabase", err);
+      }
+
+      try {
+        const key = `aniwavex_tierlists_${username.toLowerCase()}`;
         localStorage.setItem(key, JSON.stringify(updated));
       } catch {}
     }
@@ -71,52 +95,93 @@ export default function PublicProfileClient({
   const bannerPreset =
     PROFILE_BANNER_PRESETS.find((p) => p.id === bannerPresetId) || PROFILE_BANNER_PRESETS[0];
 
-  // Load user's saved tier lists from localStorage
+  // Load user's saved tier lists from Supabase and localStorage
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`aniwavex_tierlists_${username.toLowerCase()}`);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setTierLists(parsed);
+    if (initialTierLists && initialTierLists.length > 0) {
+      const mapped = initialTierLists.map((tl: any) => ({
+        id: tl.id,
+        title: tl.title,
+        description: tl.description || "",
+        username: tl.username,
+        userId: tl.user_id,
+        rows: Array.isArray(tl.rows) ? tl.rows : [],
+        unrankedPool: Array.isArray(tl.unranked_pool) ? tl.unranked_pool : [],
+        createdAt: tl.created_at ? new Date(tl.created_at).getTime() : (tl.createdAt || Date.now()),
+        updatedAt: tl.updated_at ? new Date(tl.updated_at).getTime() : (tl.updatedAt || Date.now()),
+      }));
+      setTierLists(mapped);
+      return;
+    }
+
+    supabase
+      .from("tier_lists")
+      .select("*")
+      .ilike("username", username)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const mapped = data.map((tl: any) => ({
+            id: tl.id,
+            title: tl.title,
+            description: tl.description || "",
+            username: tl.username,
+            userId: tl.user_id,
+            rows: Array.isArray(tl.rows) ? tl.rows : [],
+            unrankedPool: Array.isArray(tl.unranked_pool) ? tl.unranked_pool : [],
+            createdAt: tl.created_at ? new Date(tl.created_at).getTime() : Date.now(),
+            updatedAt: tl.updated_at ? new Date(tl.updated_at).getTime() : Date.now(),
+          }));
+          setTierLists(mapped);
+          return;
         }
-      }
-    } catch {}
-  }, [username]);
+
+        try {
+          const raw = localStorage.getItem(`aniwavex_tierlists_${username.toLowerCase()}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              setTierLists(parsed);
+            }
+          }
+        } catch {}
+      });
+  }, [username, initialTierLists, supabase]);
 
   // Hydrate bookmarks from localStorage & Supabase
   useEffect(() => {
-    try {
-      const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
-      if (localWatchlist.length > 0) {
-        setBookmarks((prev) => {
-          const map = new Map();
-          [...localWatchlist, ...prev].forEach((item) => {
-            if (item?.anime_slug) map.set(item.anime_slug, item);
-          });
-          return Array.from(map.values());
-        });
-      }
-    } catch {}
-
-    if (authUser && isOwner) {
-      supabase
-        .from("bookmarks")
-        .select("*")
-        .eq("user_id", authUser.id)
-        .order("created_at", { ascending: false })
-        .then((fetchRes: any) => {
-          const data = fetchRes?.data;
-          if (data && data.length > 0) {
-            setBookmarks((prev) => {
-              const map = new Map();
-              [...data, ...prev].forEach((item) => {
-                if (item?.anime_slug) map.set(item.anime_slug, item);
-              });
-              return Array.from(map.values());
+    if (isOwner) {
+      try {
+        const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+        if (localWatchlist.length > 0) {
+          setBookmarks((prev) => {
+            const map = new Map();
+            [...localWatchlist, ...prev].forEach((item) => {
+              if (item?.anime_slug) map.set(item.anime_slug, item);
             });
-          }
-        });
+            return Array.from(map.values());
+          });
+        }
+      } catch {}
+
+      if (authUser) {
+        supabase
+          .from("bookmarks")
+          .select("*")
+          .eq("user_id", authUser.id)
+          .order("created_at", { ascending: false })
+          .then((fetchRes: any) => {
+            const data = fetchRes?.data;
+            if (data && data.length > 0) {
+              setBookmarks((prev) => {
+                const map = new Map();
+                [...data, ...prev].forEach((item) => {
+                  if (item?.anime_slug) map.set(item.anime_slug, item);
+                });
+                return Array.from(map.values());
+              });
+            }
+          });
+      }
     }
   }, [authUser, isOwner, supabase]);
 

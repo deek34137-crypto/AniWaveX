@@ -60,10 +60,17 @@ export default function ProfileCustomizer({ user }: { user: any }) {
     } catch {}
   }, [username]);
 
-  const handleDeleteTierList = (id: string) => {
+  const handleDeleteTierList = async (id: string) => {
     if (confirm("Are you sure you want to remove this tier list from your profile?")) {
       const updated = savedTierLists.filter((tl) => tl.id !== id);
       setSavedTierLists(updated);
+
+      try {
+        await supabase.from("tier_lists").delete().eq("id", id);
+      } catch (err) {
+        console.error("Failed to delete tier list from Supabase", err);
+      }
+
       try {
         const key = `aniwavex_tierlists_${username.toLowerCase()}`;
         localStorage.setItem(key, JSON.stringify(updated));
@@ -127,16 +134,27 @@ export default function ProfileCustomizer({ user }: { user: any }) {
     setSavedSuccess(false);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        data: {
+      const usernameVal = meta.username || user?.email?.split("@")[0] || "User";
+      await Promise.all([
+        supabase.auth.updateUser({
+          data: {
+            bio: bio.trim(),
+            banner_preset: bannerPreset,
+            custom_banner_url: customBannerUrl.trim(),
+            top_five_anime: topFive,
+          },
+        }),
+        supabase.from("profiles").upsert({
+          id: user.id,
+          username: usernameVal,
           bio: bio.trim(),
           banner_preset: bannerPreset,
           custom_banner_url: customBannerUrl.trim(),
           top_five_anime: topFive,
-        },
-      });
+          updated_at: new Date().toISOString(),
+        })
+      ]);
 
-      if (error) throw error;
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3000);
     } catch (err: any) {

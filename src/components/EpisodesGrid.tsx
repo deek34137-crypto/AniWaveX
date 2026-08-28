@@ -67,20 +67,27 @@ export default function EpisodesGrid({
     return chunks;
   }, [episodes]);
 
+  // Clamped valid range index
+  const safeRangeIndex = useMemo(() => {
+    if (rangeChunks.length === 0) return 0;
+    return Math.max(0, Math.min(selectedRangeIndex, rangeChunks.length - 1));
+  }, [selectedRangeIndex, rangeChunks.length]);
+
   // If active episode changes and is outside current range, select its range
   useEffect(() => {
-    if (activeEpisodeId && rangeChunks.length > 0) {
-      const chunkIdx = Math.floor((activeEpisodeId - 1) / CHUNK_SIZE);
+    const targetEp = activeEpisodeId || lastWatchedEpisode;
+    if (targetEp && rangeChunks.length > 0) {
+      const chunkIdx = Math.floor((targetEp - 1) / CHUNK_SIZE);
       if (chunkIdx >= 0 && chunkIdx < rangeChunks.length) {
         setSelectedRangeIndex(chunkIdx);
       }
     }
-  }, [activeEpisodeId, rangeChunks.length]);
+  }, [activeEpisodeId, lastWatchedEpisode, rangeChunks.length]);
 
   // On-demand chunk metadata hydration for episodes > 100
   useEffect(() => {
     if (!rangeChunks || rangeChunks.length === 0 || !animeSlug) return;
-    const currentChunk = rangeChunks[selectedRangeIndex];
+    const currentChunk = rangeChunks[safeRangeIndex];
     if (!currentChunk) return;
 
     // If chunk starts > 100, check if we need to hydrate titles from API
@@ -109,7 +116,7 @@ export default function EpisodesGrid({
           // Ignore hydration network errors gracefully
         });
     }
-  }, [selectedRangeIndex, rangeChunks, animeSlug, animeId]);
+  }, [safeRangeIndex, rangeChunks, animeSlug, animeId]);
 
   // Filtered episodes based on search query or selected range chunk
   const displayedEpisodes = useMemo(() => {
@@ -134,14 +141,14 @@ export default function EpisodesGrid({
 
     // 2. If range chunks exist, show selected chunk
     if (rangeChunks.length > 0) {
-      const chunk = rangeChunks[selectedRangeIndex];
+      const chunk = rangeChunks[safeRangeIndex];
       if (chunk) {
         return mapped.slice(chunk.start - 1, chunk.end);
       }
     }
 
     return mapped;
-  }, [episodes, searchQuery, rangeChunks, selectedRangeIndex, hydratedTitles]);
+  }, [episodes, searchQuery, rangeChunks, safeRangeIndex, hydratedTitles]);
 
   return (
     <div className="w-full mt-16 px-2">

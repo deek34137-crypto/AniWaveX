@@ -30,12 +30,17 @@ export default async function PublicProfilePage({ params }: Props) {
     data: { user: currentUser },
   } = await supabase.auth.getUser();
 
-  // Try to find bookmarks and history for the user
-  let bookmarks: any[] = [];
-  let history: any[] = [];
-  let profileUser: any = null;
+  // 1. Fetch public profile record by username (case-insensitive)
+  const { data: profileRecord } = await supabase
+    .from("profiles")
+    .select("*")
+    .ilike("username", decodedUsername)
+    .maybeSingle();
 
-  if (currentUser) {
+  // 2. Determine target user ID
+  let targetUserId = profileRecord?.id;
+  
+  if (!targetUserId && currentUser) {
     const currentUsername = (
       currentUser.user_metadata?.username ||
       currentUser.email?.split("@")[0] ||
@@ -43,25 +48,66 @@ export default async function PublicProfilePage({ params }: Props) {
     ).toLowerCase();
 
     if (currentUsername === decodedUsername.toLowerCase()) {
-      profileUser = currentUser;
-
-      const [{ data: bData }, { data: hData }] = await Promise.all([
-        supabase
-          .from("bookmarks")
-          .select("*")
-          .eq("user_id", currentUser.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("watch_history")
-          .select("*")
-          .eq("user_id", currentUser.id)
-          .order("updated_at", { ascending: false }),
-      ]);
-
-      bookmarks = bData || [];
-      history = hData || [];
+      targetUserId = currentUser.id;
     }
   }
+
+  // 3. Fetch bookmarks, watch history, and public tier lists
+  let bookmarks: any[] = [];
+  let history: any[] = [];
+  let tierLists: any[] = [];
+
+  if (targetUserId) {
+    const [bRes, hRes, tRes] = await Promise.all([
+      supabase
+        .from("bookmarks")
+        .select("*")
+        .eq("user_id", targetUserId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("watch_history")
+        .select("*")
+        .eq("user_id", targetUserId)
+        .order("updated_at", { ascending: false }),
+      supabase
+        .from("tier_lists")
+        .select("*")
+        .or(`user_id.eq.${targetUserId},username.ilike.${decodedUsername}`)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    bookmarks = bRes.data || [];
+    history = hRes.data || [];
+    tierLists = tRes.data || [];
+  } else {
+    // If user profile has not been created yet in DB, check tier_lists table by username
+    const { data: tData } = await supabase
+      .from("tier_lists")
+      .select("*")
+      .ilike("username", decodedUsername)
+      .order("created_at", { ascending: false });
+
+    tierLists = tData || [];
+  }
+
+  // 4. Construct normalized user profile object
+  const profileUser = profileRecord
+    ? {
+        id: profileRecord.id,
+        user_metadata: {
+          username: profileRecord.username,
+          bio: profileRecord.bio,
+          avatar_id: profileRecord.avatar_id,
+          banner_preset: profileRecord.banner_preset,
+          custom_banner_url: profileRecord.custom_banner_url,
+          top_five_anime: profileRecord.top_five_anime || [],
+        },
+      }
+    : currentUser &&
+      (currentUser.user_metadata?.username || currentUser.email?.split("@")[0] || "").toLowerCase() ===
+        decodedUsername.toLowerCase()
+    ? currentUser
+    : null;
 
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
@@ -70,10 +116,11 @@ export default async function PublicProfilePage({ params }: Props) {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <PublicProfileClient
-          username={decodedUsername}
+          username={profileRecord?.username || decodedUsername}
           user={profileUser}
           bookmarks={bookmarks}
           history={history}
+          initialTierLists={tierLists}
         />
       </div>
     </main>

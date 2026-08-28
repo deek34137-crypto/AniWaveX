@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyProxySignature, generateProxySignature } from "@/lib/proxy-security";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
@@ -315,6 +316,7 @@ function rewriteM3U8Content(
   const lines = text.split("\n");
 
   const proxyBase = `${proxyOrigin}/api/proxy`;
+  const tokenExpiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour token validity for stream segments
 
   return lines.map((line) => {
     const t = line.trim();
@@ -329,7 +331,8 @@ function rewriteM3U8Content(
         } catch {
           absUri = new URL(uri, basePath).href;
         }
-        return `URI="${proxyBase}?url=${encodeURIComponent(absUri)}&referer=${encodeURIComponent(referer)}"`;
+        const sig = generateProxySignature(absUri, tokenExpiry);
+        return `URI="${proxyBase}?url=${encodeURIComponent(absUri)}&exp=${tokenExpiry}&sig=${sig}&referer=${encodeURIComponent(referer)}"`;
       });
     }
 
@@ -341,7 +344,8 @@ function rewriteM3U8Content(
       absUrl = new URL(t, basePath).href;
     }
 
-    return `${proxyBase}?url=${encodeURIComponent(absUrl)}&referer=${encodeURIComponent(referer)}`;
+    const sig = generateProxySignature(absUrl, tokenExpiry);
+    return `${proxyBase}?url=${encodeURIComponent(absUrl)}&exp=${tokenExpiry}&sig=${sig}&referer=${encodeURIComponent(referer)}`;
   }).join("\n");
 }
 
@@ -391,17 +395,27 @@ function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
 
 export async function GET(request: NextRequest) {
   const corsHeaders = getCorsHeaders(request);
-
-  // Validate caller origin to prevent open proxy relay abuse
-  if (!isCallerAllowed(request)) {
-    return NextResponse.json({ error: "Access denied from this origin" }, { status: 403, headers: corsHeaders });
-  }
-
   const { searchParams } = new URL(request.url);
   const target = searchParams.get("url");
+  const exp = searchParams.get("exp");
+  const sig = searchParams.get("sig");
 
   if (!target) {
     return NextResponse.json({ error: "Missing required ?url= parameter" }, { status: 400, headers: corsHeaders });
+  }
+
+  // If request contains HMAC signature, verify it
+  const isSigned = Boolean(exp && sig);
+  if (isSigned) {
+    const isValid = verifyProxySignature(target, exp, sig);
+    if (!isValid) {
+      return NextResponse.json({ error: "Invalid or expired proxy signature token" }, { status: 403, headers: corsHeaders });
+    }
+  } else {
+    // Validate caller origin for unsigned requests to prevent open proxy relay abuse
+    if (!isCallerAllowed(request)) {
+      return NextResponse.json({ error: "Access denied from this origin" }, { status: 403, headers: corsHeaders });
+    }
   }
 
   let targetUrl: URL;
