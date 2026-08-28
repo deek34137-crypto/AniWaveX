@@ -275,7 +275,6 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
             });
           }
         }
-      }
     } catch (err: any) {
       console.warn(`AniList page ${page} schedule fetch unavailable (${err?.message || "timeout"}). Using fallback.`);
     }

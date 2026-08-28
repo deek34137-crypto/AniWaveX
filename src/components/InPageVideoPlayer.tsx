@@ -507,6 +507,7 @@ export default function InPageVideoPlayer({
     }
   }, [hasPrev, onEpisodeChange, episodes, currentIndex]);
 
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is in an input field or any modal dialog/overlay/palette is active
       const targetEl = e.target as HTMLElement | null;

@@ -118,7 +118,7 @@ export default function PublicProfileClient({
       .select("*")
       .ilike("username", username)
       .order("created_at", { ascending: false })
-      .then(({ data }) => {
+      .then(({ data }: { data: any }) => {
         if (data && data.length > 0) {
           const mapped = data.map((tl: any) => ({
             id: tl.id,

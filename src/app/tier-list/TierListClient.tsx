@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { 
   Download, 
   Plus, 
@@ -132,7 +133,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       .select("*")
       .eq("id", listId)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data }: { data: any }) => {
         if (data) {
           if (data.title) setTitle(data.title);
           if (data.rows && Array.isArray(data.rows) && data.rows.length > 0) {
