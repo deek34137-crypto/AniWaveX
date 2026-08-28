@@ -136,7 +136,17 @@ function rewriteM3U8(text, baseUrl, workerOrigin, referer) {
 
 function resolveReferer(targetUrl, refererParam) {
   const host = targetUrl.hostname.toLowerCase();
-  if (host.includes("kryntal") || host.includes("watching.onl") || host.includes("megaplay.buzz") || host.includes("sugevideo") || host.includes("sugevids")) {
+  if (
+    host.includes("anivideo") ||
+    host.includes("cloudbuzz") ||
+    host.includes("vaelith") ||
+    host.includes("orphiq") ||
+    host.includes("kryntal") ||
+    host.includes("watching.onl") ||
+    host.includes("megaplay.buzz") ||
+    host.includes("sugevideo") ||
+    host.includes("sugevids")
+  ) {
     return refererParam || "https://megaplay.buzz/";
   }
   if (host.includes("krussdomi")) {

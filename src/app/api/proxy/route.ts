@@ -203,7 +203,7 @@ function convertAssToVtt(assText: string, cacheKey?: string): string {
  * Domain allowlist to prevent SSRF and proxy abuse.
  * Rejects private subnets, loopbacks, and unapproved external hosts.
  */
-function isAllowedHost(hostname: string): boolean {
+function isAllowedHost(hostname: string, isSigned = false): boolean {
   if (!hostname) return false;
   const host = hostname.toLowerCase();
 
@@ -230,9 +230,16 @@ function isAllowedHost(hostname: string): boolean {
     host.startsWith("172.29.") ||
     host.startsWith("172.30.") ||
     host.startsWith("172.31.") ||
-    host.startsWith("169.254.")
+    host.startsWith("169.254.") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".local")
   ) {
     return false;
+  }
+
+  // If request contains verified cryptographic HMAC signature, permit public media domains
+  if (isSigned) {
+    return true;
   }
 
   // Exact pinned hosts on multi-tenant platforms
@@ -248,6 +255,10 @@ function isAllowedHost(hostname: string): boolean {
 
   // Allowed specific streaming/CDN domain suffixes
   const allowedSuffixes = [
+    "anivideo.sbs",
+    "cloudbuzz.lol",
+    "vaelith.top",
+    "orphiq.top",
     "kryntal.top",
     "nekostream.site",
     "animegg.org",
@@ -356,7 +367,17 @@ function rewriteM3U8Content(
 
 function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
   const host = targetUrl.hostname.toLowerCase();
-  if (host.includes("kryntal") || host.includes("watching.onl") || host.includes("megaplay.buzz") || host.includes("sugevideo") || host.includes("sugevids")) {
+  if (
+    host.includes("anivideo") ||
+    host.includes("cloudbuzz") ||
+    host.includes("vaelith") ||
+    host.includes("orphiq") ||
+    host.includes("kryntal") ||
+    host.includes("watching.onl") ||
+    host.includes("megaplay.buzz") ||
+    host.includes("sugevideo") ||
+    host.includes("sugevids")
+  ) {
     return refererParam || "https://megaplay.buzz/";
   }
   if (host.includes("krussdomi")) {
@@ -436,7 +457,7 @@ export async function GET(request: NextRequest) {
   }
 
   // 2. SSRF Host Validation
-  if (!isAllowedHost(targetUrl.hostname)) {
+  if (!isAllowedHost(targetUrl.hostname, isSigned)) {
     return NextResponse.json({ error: "Host not permitted by proxy policy" }, { status: 403, headers: corsHeaders });
   }
 
