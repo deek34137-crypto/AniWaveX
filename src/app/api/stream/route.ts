@@ -467,7 +467,7 @@ async function multiProviderProbeEngine(
 
           if (anikotoRes.stream_url) {
             sources.push({
-              url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
+              url: createSignedProxyUrl(anikotoRes.stream_url, 7200, "https://flixcloud.cc/"),
               quality: "MegaCloud (HD-1)",
               isM3U8: true,
             });
@@ -556,7 +556,7 @@ async function resolveStreamRaw(
         const anikotoRes = await getAnikotoStream(title, parsedEp, audio as 'sub' | 'dub');
         if (anikotoRes && anikotoRes.stream_url) {
           const sources = [{
-            url: `/api/proxy?url=${encodeURIComponent(anikotoRes.stream_url)}&referer=${encodeURIComponent("https://flixcloud.cc/")}`,
+            url: createSignedProxyUrl(anikotoRes.stream_url, 7200, "https://flixcloud.cc/"),
             quality: "MegaCloud (HD-1)",
             isM3U8: true,
           }];

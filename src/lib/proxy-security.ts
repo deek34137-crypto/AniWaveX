@@ -22,6 +22,17 @@ export function generateProxySignature(url: string, exp: number): string {
 }
 
 /**
+ * Get proxy base URL (Cloudflare Worker or Vercel API route)
+ */
+export function getProxyBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_PROXY_URL || process.env.STREAM_PROXY_URL || process.env.CLOUDFLARE_PROXY_URL;
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, "");
+  }
+  return "/api/proxy";
+}
+
+/**
  * Generate a signed proxy URL
  * @param targetUrl Target stream or image URL
  * @param expiresInSeconds Duration in seconds before signature expires (default 30 mins)
@@ -33,8 +44,9 @@ export function createSignedProxyUrl(
 ): string {
   const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
   const sig = generateProxySignature(targetUrl, exp);
+  const base = getProxyBaseUrl();
 
-  let signedUrl = `/api/proxy?url=${encodeURIComponent(targetUrl)}&exp=${exp}&sig=${sig}`;
+  let signedUrl = `${base}?url=${encodeURIComponent(targetUrl)}&exp=${exp}&sig=${sig}`;
   if (referer) {
     signedUrl += `&referer=${encodeURIComponent(referer)}`;
   }

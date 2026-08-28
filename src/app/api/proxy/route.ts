@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyProxySignature, generateProxySignature } from "@/lib/proxy-security";
+import { verifyProxySignature, generateProxySignature, getProxyBaseUrl } from "@/lib/proxy-security";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
@@ -315,7 +315,8 @@ function rewriteM3U8Content(
   const basePath = base.origin + base.pathname.substring(0, base.pathname.lastIndexOf("/") + 1);
   const lines = text.split("\n");
 
-  const proxyBase = `${proxyOrigin}/api/proxy`;
+  const configuredBase = getProxyBaseUrl();
+  const proxyBase = configuredBase.startsWith("http") ? configuredBase : `${proxyOrigin}${configuredBase}`;
   const tokenExpiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour token validity for stream segments
 
   return lines.map((line) => {
@@ -545,7 +546,7 @@ export async function GET(request: NextRequest) {
     const responseHeaders: Record<string, string> = {
       ...corsHeaders,
       "Content-Type": contentType || "video/MP2T",
-      "Cache-Control": "public, max-age=31536000, immutable",
+      "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable",
       "Accept-Ranges": "bytes",
     };
 
