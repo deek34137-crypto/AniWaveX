@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createSignedProxyUrl } from '@/lib/proxy-security';
 import { getAnikotoStream, getAnilistId } from "@/lib/providers/anikoto-wrapper";
 import { unstable_cache } from "next/cache";
@@ -206,7 +206,7 @@ function extractWorkerSources(
         const ref = getRefererForStream(s.url, s, data);
         const serverName = s.server ? `${providerLabel} (${s.server})` : providerLabel;
         sources.push({
-          url: createSignedProxyUrl(s.url, 7200, ref),
+          url: createSignedProxyUrl(s.url, 86400, ref),
           quality: `${serverName} [${langTag}]`,
           isM3U8: true,
         });
@@ -234,7 +234,7 @@ function extractWorkerSources(
   const directHls = data.stream_url;
   if (directHls && typeof directHls === 'string') {
     const ref = getRefererForStream(directHls, null, data);
-    const proxyUrl = createSignedProxyUrl(directHls, 7200, ref);
+    const proxyUrl = createSignedProxyUrl(directHls, 86400, ref);
     if (!sources.some(s => s.url === proxyUrl)) {
       sources.unshift({
         url: proxyUrl,
@@ -266,7 +266,7 @@ function extractWorkerSources(
       const ref = getRefererForStream(sub.url, null, data);
       return {
         ...sub,
-        url: createSignedProxyUrl(sub.url, 7200, ref),
+        url: createSignedProxyUrl(sub.url, 86400, ref),
       };
     }
     return sub;
@@ -467,7 +467,7 @@ async function multiProviderProbeEngine(
 
           if (anikotoRes.stream_url) {
             sources.push({
-              url: createSignedProxyUrl(anikotoRes.stream_url, 7200, "https://flixcloud.cc/"),
+              url: createSignedProxyUrl(anikotoRes.stream_url, 86400, "https://flixcloud.cc/"),
               quality: "MegaCloud (HD-1)",
               isM3U8: true,
             });
@@ -500,18 +500,18 @@ async function multiProviderProbeEngine(
       const hindiProviders = providerCircuitBreaker.sortProvidersByHealth(['anibd']);
       const dubFallbackProviders = providerCircuitBreaker.sortProvidersByHealth(['reanime', 'justanime', 'anikoto', 'kaa']);
 
-      // t = 0ms: Primary Hindi provider
-      hindiProviders.forEach(p => tryProvider(p, 'hindi', 2500));
+      // t = 0ms: Primary Hindi provider with short 1000ms timeout to prevent hanging
+      hindiProviders.forEach(p => tryProvider(p, 'hindi', 1000));
 
-      // t = 500ms: Concurrently launch Eng dub fallback providers
+      // t = 250ms: Concurrently launch Eng dub fallback providers if Hindi source is slow or unavailable
       setTimeout(() => {
         if (!isCompleted) {
           dubFallbackProviders.forEach(p => tryProvider(p, 'dub', 2500));
         }
-      }, 500);
+      }, 250);
     } else {
       const allTier1 = ['reanime', 'justanime', 'anikoto'];
-      const allTier2 = ['kaa', 'animegg', 'anineko', 'anibd', 'animenosub'];
+      const allTier2 = ['kaa', 'animegg', 'animenosub'];
 
       const sortedTier1 = providerCircuitBreaker.sortProvidersByHealth(allTier1);
       const sortedTier2 = providerCircuitBreaker.sortProvidersByHealth(allTier2);
@@ -556,7 +556,7 @@ async function resolveStreamRaw(
         const anikotoRes = await getAnikotoStream(title, parsedEp, audio as 'sub' | 'dub');
         if (anikotoRes && anikotoRes.stream_url) {
           const sources = [{
-            url: createSignedProxyUrl(anikotoRes.stream_url, 7200, "https://flixcloud.cc/"),
+            url: createSignedProxyUrl(anikotoRes.stream_url, 86400, "https://flixcloud.cc/"),
             quality: "MegaCloud (HD-1)",
             isM3U8: true,
           }];

@@ -332,7 +332,7 @@ function rewriteM3U8Content(
 
   const configuredBase = getProxyBaseUrl();
   const proxyBase = configuredBase.startsWith("http") ? configuredBase : `${proxyOrigin}${configuredBase}`;
-  const tokenExpiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour token validity for stream segments
+  const tokenExpiry = Math.floor(Date.now() / 1000) + 86400; // 24 hours token validity for stream segments
 
   return lines.map((line) => {
     const t = line.trim();
@@ -430,20 +430,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing required ?url= parameter" }, { status: 400, headers: corsHeaders });
   }
 
-  // If request contains HMAC signature, verify it
-  const isSigned = Boolean(exp && sig);
-  if (isSigned) {
-    const isValid = verifyProxySignature(target, exp, sig);
-    if (!isValid) {
-      return NextResponse.json({ error: "Invalid or expired proxy signature token" }, { status: 403, headers: corsHeaders });
-    }
-  } else {
-    // Validate caller origin for unsigned requests to prevent open proxy relay abuse
-    if (!isCallerAllowed(request)) {
-      return NextResponse.json({ error: "Access denied from this origin" }, { status: 403, headers: corsHeaders });
-    }
-  }
-
   let targetUrl: URL;
   try {
     targetUrl = new URL(target);
@@ -456,8 +442,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid protocol: only http and https allowed" }, { status: 400, headers: corsHeaders });
   }
 
-  // 2. SSRF Host Validation
-  if (!isAllowedHost(targetUrl.hostname, isSigned)) {
+  // 2. Cryptographic and Origin Authorization
+  const isSigned = Boolean(exp && sig);
+  let isAuthorized = false;
+
+  if (isSigned && verifyProxySignature(target, exp, sig)) {
+    isAuthorized = true;
+  } else if (isCallerAllowed(request) && isAllowedHost(targetUrl.hostname, false)) {
+    isAuthorized = true;
+  }
+
+  if (!isAuthorized) {
+    return NextResponse.json({ error: "Access denied from this origin or invalid token" }, { status: 403, headers: corsHeaders });
+  }
+
+  // 3. SSRF Host Validation
+  if (!isAllowedHost(targetUrl.hostname, isSigned && isAuthorized)) {
     return NextResponse.json({ error: "Host not permitted by proxy policy" }, { status: 403, headers: corsHeaders });
   }
 

@@ -32,6 +32,7 @@ function useAutoScrollOnDrag() {
   const rafId = useRef<number | null>(null);
   const pointerY = useRef<number | null>(null);
   const isDragging = useRef(false);
+  const loopRef = useRef<() => void>(() => {});
 
   const loop = useCallback(() => {
     if (!isDragging.current || pointerY.current === null) return;
@@ -46,8 +47,12 @@ function useAutoScrollOnDrag() {
       window.scrollBy(0, Math.round(MAX_SCROLL_SPEED * factor));
     }
 
-    rafId.current = requestAnimationFrame(loop);
+    rafId.current = requestAnimationFrame(loopRef.current);
   }, []);
+
+  useEffect(() => {
+    loopRef.current = loop;
+  }, [loop]);
 
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
@@ -55,7 +60,7 @@ function useAutoScrollOnDrag() {
       if (!isDragging.current) {
         isDragging.current = true;
         if (rafId.current) cancelAnimationFrame(rafId.current);
-        rafId.current = requestAnimationFrame(loop);
+        rafId.current = requestAnimationFrame(loopRef.current);
       }
     };
 
@@ -339,7 +344,8 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
   // Add anime from search modal (can specify targetRowId or defaults to "pool")
   const handleAddCustomAnime = (anime: any, targetRowId: string | "pool" = "pool") => {
-    const slug = anime.slug || anime.id?.toString() || `anime-${Date.now()}`;
+    const cleanTitle = (anime.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const slug = anime.slug || anime.id?.toString() || cleanTitle || "custom-anime";
     const newItem: TierItem = {
       id: anime.id || slug,
       slug,

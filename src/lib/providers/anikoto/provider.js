@@ -9,21 +9,44 @@ export class AnikotoProvider {
     ]);
     const alMap = {};
     for (const m of alResults) alMap[m.id] = m;
-    return reanime.map((r) => {
-      const slug = r.anime_id ?? r.slug ?? r.id;
-      const al = alMap[r.anilist_id ?? r.anime_id] ?? {};
+
+    if (reanime && reanime.length > 0) {
+      return reanime.map((r) => {
+        const slug = r.anime_id ?? r.slug ?? r.id;
+        const al = alMap[r.anilist_id ?? r.anime_id] ?? {};
+        const t = al.title ?? {};
+        const rawTitle = r.title ?? r.name ?? null;
+        function pickTitle(src) {
+          if (!src) return "Unknown";
+          if (typeof src === "string") return src;
+          return src.english ?? src.romaji ?? src["x-jat"] ?? JSON.stringify(src);
+        }
+        return {
+          slug: String(slug),
+          anilistId: r.anilist_id ?? null,
+          malId: al.idMal ?? null,
+          title: pickTitle(rawTitle),
+          titles: { en: t.english ?? null, jp: t.native ?? null, romaji: t.romaji ?? null },
+          year: al.seasonYear ?? null,
+          type: al.format ?? null,
+          status: al.status ?? null,
+          episodes: al.episodes ?? null,
+          score: al.averageScore ?? null,
+          image: al.coverImage?.large ?? null,
+          url: `https://reanime.to/anime/${slug}`
+        };
+      }).filter((r) => r.anilistId || r.title);
+    }
+
+    // Direct AniList fallback if ReAnime search API is unavailable
+    return alResults.map((al) => {
       const t = al.title ?? {};
-      const rawTitle = r.title ?? r.name ?? null;
-      function pickTitle(src) {
-        if (!src) return "Unknown";
-        if (typeof src === "string") return src;
-        return src.english ?? src.romaji ?? src["x-jat"] ?? JSON.stringify(src);
-      }
+      const title = t.english || t.romaji || t.native || "Unknown";
       return {
-        slug: String(slug),
-        anilistId: r.anilist_id ?? null,
+        slug: String(al.id),
+        anilistId: al.id,
         malId: al.idMal ?? null,
-        title: pickTitle(rawTitle),
+        title,
         titles: { en: t.english ?? null, jp: t.native ?? null, romaji: t.romaji ?? null },
         year: al.seasonYear ?? null,
         type: al.format ?? null,
@@ -31,9 +54,9 @@ export class AnikotoProvider {
         episodes: al.episodes ?? null,
         score: al.averageScore ?? null,
         image: al.coverImage?.large ?? null,
-        url: `https://reanime.to/anime/${slug}`
+        url: `https://anilist.co/anime/${al.id}`
       };
-    }).filter((r) => r.anilistId || r.title);
+    });
   }
 
   async getEpisodes(anilistId) {

@@ -8,9 +8,7 @@ import {
   Globe, 
   RotateCcw, 
   Radio, 
-  BarChart3, 
-  TrendingUp, 
-  Sparkles 
+  BarChart3 
 } from "lucide-react";
 
 interface AnalyticsData {
@@ -75,6 +73,32 @@ export default function AnalyticsPageClient({
     return () => clearInterval(timer);
   }, [isAdmin, autoRefresh, fetchStats]);
 
+  // Generate complete 7-day dates list with zero-fill so chart always displays 7 vertical day bars
+  const full7DayTrend = useMemo<DayTrendItem[]>(() => {
+    const days: DayTrendItem[] = [];
+    const trendMap = new Map<string, number>();
+    (data?.dailyTrend || []).forEach((d: { date: string; unique_users: number }) => {
+      const dateKey = typeof d.date === "string" ? d.date.split("T")[0] : "";
+      if (dateKey) trendMap.set(dateKey, d.unique_users || 0);
+    });
+
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().split("T")[0];
+      const label = d.toLocaleDateString("en-US", { weekday: "short" });
+      days.push({
+        date: iso,
+        label,
+        count: trendMap.get(iso) || (i === 0 ? data?.dailyUniqueUsers || 1 : 0),
+      });
+    }
+    return days;
+  }, [data?.dailyTrend, data?.dailyUniqueUsers]);
+
+  const maxTrendVal = Math.max(...full7DayTrend.map((d: DayTrendItem) => d.count), 5);
+
   if (!isAdmin) {
     return (
       <div className="max-w-md mx-auto py-16 text-center space-y-6 animate-in fade-in duration-300">
@@ -128,32 +152,6 @@ export default function AnalyticsPageClient({
       </div>
     );
   }
-
-  // Generate complete 7-day dates list with zero-fill so chart always displays 7 vertical day bars
-  const full7DayTrend = useMemo<DayTrendItem[]>(() => {
-    const days: DayTrendItem[] = [];
-    const trendMap = new Map<string, number>();
-    (data?.dailyTrend || []).forEach((d: { date: string; unique_users: number }) => {
-      const dateKey = typeof d.date === "string" ? d.date.split("T")[0] : "";
-      if (dateKey) trendMap.set(dateKey, d.unique_users || 0);
-    });
-
-    const now = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const iso = d.toISOString().split("T")[0];
-      const label = d.toLocaleDateString("en-US", { weekday: "short" });
-      days.push({
-        date: iso,
-        label,
-        count: trendMap.get(iso) || (i === 0 ? data?.dailyUniqueUsers || 1 : 0),
-      });
-    }
-    return days;
-  }, [data?.dailyTrend, data?.dailyUniqueUsers]);
-
-  const maxTrendVal = Math.max(...full7DayTrend.map((d: DayTrendItem) => d.count), 5);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">

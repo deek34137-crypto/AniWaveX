@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
 import Link from "next/link";
 import {
-  Calendar,
   Clock,
   Star,
   Play,
@@ -105,7 +104,13 @@ const AiringAnimeCard = memo(function AiringAnimeCard({
   todayId: string;
 }) {
   const isToday = anime.dayOfWeek.toString() === todayId;
-  const isLive = Boolean(anime.airingAt && anime.airingAt <= Math.floor(Date.now() / 1000));
+  const [isLive, setIsLive] = useState(() => Boolean(anime.airingAt && anime.timeUntilAiring === 0));
+
+  useEffect(() => {
+    if (anime.airingAt) {
+      setIsLive(anime.airingAt <= Math.floor(Date.now() / 1000));
+    }
+  }, [anime.airingAt]);
 
   return (
     <Link
