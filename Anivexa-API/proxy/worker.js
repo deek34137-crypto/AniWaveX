@@ -119,7 +119,11 @@ function rewriteM3U8(text, baseUrl, workerOrigin, referer) {
         } catch {
           absUri = new URL(uri, basePath).href;
         }
-        return `URI="${workerOrigin}/?url=${encodeURIComponent(absUri)}&referer=${encodeURIComponent(referer)}"`;
+        let childReferer = referer;
+        try {
+          childReferer = resolveReferer(new URL(absUri), referer);
+        } catch {}
+        return `URI="${workerOrigin}/?url=${encodeURIComponent(absUri)}&referer=${encodeURIComponent(childReferer)}"`;
       });
     }
 
@@ -130,13 +134,22 @@ function rewriteM3U8(text, baseUrl, workerOrigin, referer) {
       absUrl = new URL(t, basePath).href;
     }
 
-    return `${workerOrigin}/?url=${encodeURIComponent(absUrl)}&referer=${encodeURIComponent(referer)}`;
+    let childReferer = referer;
+    try {
+      childReferer = resolveReferer(new URL(absUrl), referer);
+    } catch {}
+    return `${workerOrigin}/?url=${encodeURIComponent(absUrl)}&referer=${encodeURIComponent(childReferer)}`;
   }).join("\n");
 }
 
 function resolveReferer(targetUrl, refererParam) {
   const host = targetUrl.hostname.toLowerCase();
   if (
+    host.includes("streamzone") ||
+    host.includes("imgnex") ||
+    host.includes("akirax.buzz") ||
+    host.includes("shiora.top") ||
+    host.includes("mikora.top") ||
     host.includes("anivideo") ||
     host.includes("cloudbuzz") ||
     host.includes("vaelith") ||
@@ -147,12 +160,12 @@ function resolveReferer(targetUrl, refererParam) {
     host.includes("sugevideo") ||
     host.includes("sugevids")
   ) {
-    return refererParam || "https://megaplay.buzz/";
+    return "https://megaplay.buzz/";
   }
   if (host.includes("krussdomi")) {
     return "https://krussdomi.com/";
   }
-  if (host.includes("vidtube.site") || host.includes("akirax.buzz") || host.includes("shiora.top") || host.includes("mikora.top")) {
+  if (host.includes("vidtube.site")) {
     return "https://vidtube.site/";
   }
   if (host.includes("animeapps.top")) {
@@ -231,13 +244,44 @@ export default {
     }
 
     try {
-      const upstreamRes = await fetch(target, {
+      let upstreamRes = await fetch(target, {
         headers: upstreamHeaders,
         cf: {
           cacheEverything: true,
           cacheTtl: 86400,
         },
       });
+
+      // Smart 403 Forbidden failover recovery:
+      if (upstreamRes.status === 403) {
+        const alternateReferers = [];
+        if (referer !== "https://megaplay.buzz/") alternateReferers.push("https://megaplay.buzz/");
+        if (referer !== "https://vidtube.site/") alternateReferers.push("https://vidtube.site/");
+        const targetOrigin = targetUrl.origin + "/";
+        if (referer !== targetOrigin) alternateReferers.push(targetOrigin);
+        alternateReferers.push("");
+
+        for (const altRef of alternateReferers) {
+          try {
+            const retryHeaders = { ...upstreamHeaders };
+            if (altRef) {
+              retryHeaders["Referer"] = altRef;
+              retryHeaders["Origin"] = new URL(altRef).origin;
+            } else {
+              delete retryHeaders["Referer"];
+              delete retryHeaders["Origin"];
+            }
+            const retryRes = await fetch(target, {
+              headers: retryHeaders,
+              cf: { cacheEverything: true, cacheTtl: 86400 }
+            });
+            if (retryRes.ok || retryRes.status === 206) {
+              upstreamRes = retryRes;
+              break;
+            }
+          } catch {}
+        }
+      }
 
       if (!upstreamRes.ok && upstreamRes.status !== 206) {
         return new Response(await upstreamRes.text(), {

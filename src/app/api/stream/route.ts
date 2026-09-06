@@ -134,13 +134,28 @@ function getRefererForStream(url: string, streamObj?: any, data?: any): string {
   if (data?.headers?.Referer) return data.headers.Referer;
 
   const lower = url.toLowerCase();
-  if (lower.includes("watching.onl") || lower.includes("megaplay.buzz")) {
+  if (
+    lower.includes("streamzone") ||
+    lower.includes("imgnex") ||
+    lower.includes("akirax.buzz") ||
+    lower.includes("shiora.top") ||
+    lower.includes("mikora.top") ||
+    lower.includes("watching.onl") ||
+    lower.includes("megaplay.buzz") ||
+    lower.includes("anivideo") ||
+    lower.includes("cloudbuzz") ||
+    lower.includes("vaelith") ||
+    lower.includes("orphiq") ||
+    lower.includes("kryntal") ||
+    lower.includes("sugevideo") ||
+    lower.includes("sugevids")
+  ) {
     return "https://megaplay.buzz/";
   }
   if (lower.includes("krussdomi")) {
     return "https://krussdomi.com/";
   }
-  if (lower.includes("vidtube.site") || lower.includes("akirax.buzz") || lower.includes("shiora.top") || lower.includes("mikora.top")) {
+  if (lower.includes("vidtube.site")) {
     return "https://vidtube.site/";
   }
   if (lower.includes("bibiemb.xyz") || lower.includes("vibevibe.workers.dev")) {

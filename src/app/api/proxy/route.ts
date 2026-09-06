@@ -17,6 +17,8 @@ function getCorsHeaders(request: NextRequest): Record<string, string> {
         originHost.includes("localhost") ||
         originHost.includes("127.0.0.1") ||
         originHost.endsWith("aniwavex.com") ||
+        originHost.endsWith("aniwavex.bond") ||
+        originHost.endsWith("aniwavex.to") ||
         originHost.endsWith("vercel.app")
       ) {
         allowOrigin = origin;
@@ -37,6 +39,7 @@ function isCallerAllowed(request: NextRequest): boolean {
   const origin = request.headers.get("origin");
   const referer = request.headers.get("referer");
   const host = request.headers.get("host");
+  const forwardedHost = request.headers.get("x-forwarded-host");
 
   // Media requests (e.g. video elements or HLS segment loads) might not include Origin or Referer
   if (!origin && !referer) {
@@ -47,10 +50,13 @@ function isCallerAllowed(request: NextRequest): boolean {
     try {
       const parsedHost = new URL(urlString).host.toLowerCase();
       if (host && parsedHost === host.toLowerCase()) return true;
+      if (forwardedHost && parsedHost === forwardedHost.toLowerCase()) return true;
       if (
         parsedHost.includes("localhost") ||
         parsedHost.includes("127.0.0.1") ||
         parsedHost.endsWith("aniwavex.com") ||
+        parsedHost.endsWith("aniwavex.bond") ||
+        parsedHost.endsWith("aniwavex.to") ||
         parsedHost.endsWith("vercel.app")
       ) {
         return true;
@@ -255,6 +261,9 @@ function isAllowedHost(hostname: string, isSigned = false): boolean {
 
   // Allowed specific streaming/CDN domain suffixes
   const allowedSuffixes = [
+    "streamzone1.site",
+    "streamzone.site",
+    "imgnex.top",
     "anivideo.sbs",
     "cloudbuzz.lol",
     "vaelith.top",
@@ -347,8 +356,12 @@ function rewriteM3U8Content(
         } catch {
           absUri = new URL(uri, basePath).href;
         }
+        let childReferer = referer;
+        try {
+          childReferer = resolveReferer(new URL(absUri), referer);
+        } catch {}
         const sig = generateProxySignature(absUri, tokenExpiry);
-        return `URI="${proxyBase}?url=${encodeURIComponent(absUri)}&exp=${tokenExpiry}&sig=${sig}&referer=${encodeURIComponent(referer)}"`;
+        return `URI="${proxyBase}?url=${encodeURIComponent(absUri)}&exp=${tokenExpiry}&sig=${sig}&referer=${encodeURIComponent(childReferer)}"`;
       });
     }
 
@@ -360,14 +373,23 @@ function rewriteM3U8Content(
       absUrl = new URL(t, basePath).href;
     }
 
+    let childReferer = referer;
+    try {
+      childReferer = resolveReferer(new URL(absUrl), referer);
+    } catch {}
     const sig = generateProxySignature(absUrl, tokenExpiry);
-    return `${proxyBase}?url=${encodeURIComponent(absUrl)}&exp=${tokenExpiry}&sig=${sig}&referer=${encodeURIComponent(referer)}`;
+    return `${proxyBase}?url=${encodeURIComponent(absUrl)}&exp=${tokenExpiry}&sig=${sig}&referer=${encodeURIComponent(childReferer)}`;
   }).join("\n");
 }
 
 function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
   const host = targetUrl.hostname.toLowerCase();
   if (
+    host.includes("streamzone") ||
+    host.includes("imgnex") ||
+    host.includes("akirax.buzz") ||
+    host.includes("shiora.top") ||
+    host.includes("mikora.top") ||
     host.includes("anivideo") ||
     host.includes("cloudbuzz") ||
     host.includes("vaelith") ||
@@ -378,12 +400,12 @@ function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
     host.includes("sugevideo") ||
     host.includes("sugevids")
   ) {
-    return refererParam || "https://megaplay.buzz/";
+    return "https://megaplay.buzz/";
   }
   if (host.includes("krussdomi")) {
     return "https://krussdomi.com/";
   }
-  if (host.includes("vidtube.site") || host.includes("akirax.buzz") || host.includes("shiora.top") || host.includes("mikora.top")) {
+  if (host.includes("vidtube.site")) {
     return "https://vidtube.site/";
   }
   if (host.includes("animeapps.top")) {
@@ -489,9 +511,47 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const upstreamRes = await fetch(target, {
+    let upstreamRes = await fetch(target, {
       headers: upstreamHeaders,
     });
+
+    // Smart 403 Forbidden failover recovery:
+    // If the upstream CDN rejects the request (e.g. strict Referer/Origin WAF check),
+    // probe with alternative known streaming referers or direct origin before returning error.
+    if (upstreamRes.status === 403) {
+      const alternateReferers: string[] = [];
+      if (referer !== "https://megaplay.buzz/") {
+        alternateReferers.push("https://megaplay.buzz/");
+      }
+      if (referer !== "https://vidtube.site/") {
+        alternateReferers.push("https://vidtube.site/");
+      }
+      const targetOrigin = targetUrl.origin + "/";
+      if (referer !== targetOrigin) {
+        alternateReferers.push(targetOrigin);
+      }
+      alternateReferers.push(""); // Direct fetch without referer
+
+      for (const altRef of alternateReferers) {
+        try {
+          const retryHeaders = { ...upstreamHeaders };
+          if (altRef) {
+            retryHeaders["Referer"] = altRef;
+            retryHeaders["Origin"] = new URL(altRef).origin;
+          } else {
+            delete retryHeaders["Referer"];
+            delete retryHeaders["Origin"];
+          }
+          const retryRes = await fetch(target, { headers: retryHeaders });
+          if (retryRes.ok || retryRes.status === 206) {
+            upstreamRes = retryRes;
+            break;
+          }
+        } catch {
+          // Continue to next alternate
+        }
+      }
+    }
 
     if (!upstreamRes.ok && upstreamRes.status !== 206) {
       return new NextResponse(await upstreamRes.text(), {
