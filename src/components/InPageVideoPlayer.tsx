@@ -125,7 +125,7 @@ export default function InPageVideoPlayer({
       const { error } = await supabase
         .from('watch_history')
         .upsert(payload, {
-          onConflict: 'user_id, anime_slug'
+          onConflict: 'user_id,anime_slug'
         });
 
       if (error) console.error("Failed to sync watch history", error);
