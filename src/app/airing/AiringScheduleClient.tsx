@@ -58,14 +58,16 @@ const AiringCountdownBadge = memo(function AiringCountdownBadge({
 
   useEffect(() => {
     if (!airingAt) return;
-    const diff = airingAt - Math.floor(Date.now() / 1000);
-    if (diff <= 0) return; // already live, no interval needed
+    if (airingAt - Math.floor(Date.now() / 1000) <= 0) return; // already live
 
-    // If less than 1 hour, tick every second; otherwise update once every minute
-    const intervalMs = diff < 3600 ? 1000 : 60000;
+    // Always tick every second so the display stays accurate and correctly
+    // switches from "Xh Ym" to "Xm Ys" as the show approaches its air time,
+    // without needing to restart the interval at the 1-hour boundary.
     const t = setInterval(() => {
+      const remaining = airingAt - Math.floor(Date.now() / 1000);
       setNowSec(Math.floor(Date.now() / 1000));
-    }, intervalMs);
+      if (remaining <= 0) clearInterval(t); // stop ticking once live
+    }, 1000);
 
     return () => clearInterval(t);
   }, [airingAt]);
@@ -221,7 +223,8 @@ export default function AiringScheduleClient({
 }: {
   animeList: AiringAnimeScheduleItem[];
 }) {
-  const todayId = new Date().getDay().toString();
+  // Use UTC day to match the UTC-based dayOfWeek stored in schedule data
+  const todayId = new Date().getUTCDay().toString();
   const [selectedDay, setSelectedDay] = useState<string>(todayId);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("all");

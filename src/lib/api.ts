@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { fetchAniListGraphQL } from "@/lib/schedule";
 import { getAnilistId } from "@/lib/providers/anikoto-wrapper";
+import { resolveAnilistIdFromKitsu } from "@/lib/kitsu-mapper";
 
 function extractCategories(anime: any, included?: any[]): string[] {
   if (!included || !Array.isArray(included) || included.length === 0) {
@@ -264,17 +265,21 @@ export const getAnimeData = cache(async (slug: string) => {
       };
     });
 
-    // Resolve AniList ID for upstream video player and sync
-    const rawTitles = anime.attributes?.titles || {};
-    const englishTitle = rawTitles.en || rawTitles.en_us;
-    const japaneseTitle = rawTitles.ja_jp;
+    // Resolve AniList ID deterministically via ARM & AniZip cross-referencing
+    let anilistId = await resolveAnilistIdFromKitsu(anime.id, metadata.title).catch(() => null);
 
-    let anilistId = await getAnilistId(metadata.title).catch(() => null);
-    if (!anilistId && englishTitle) {
-      anilistId = await getAnilistId(englishTitle).catch(() => null);
-    }
-    if (!anilistId && japaneseTitle) {
-      anilistId = await getAnilistId(japaneseTitle).catch(() => null);
+    // Fallback to title resolution if ARM / AniZip did not match
+    if (!anilistId) {
+      const rawTitles = anime.attributes?.titles || {};
+      const englishTitle = rawTitles.en || rawTitles.en_us;
+      const japaneseTitle = rawTitles.ja_jp;
+
+      if (englishTitle) {
+        anilistId = await getAnilistId(englishTitle).catch(() => null);
+      }
+      if (!anilistId && japaneseTitle) {
+        anilistId = await getAnilistId(japaneseTitle).catch(() => null);
+      }
     }
 
     return { 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSignedProxyUrl } from '@/lib/proxy-security';
 import { getAnikotoStream, getAnilistId } from "@/lib/providers/anikoto-wrapper";
+import { resolveAnilistIdFromSlugOrKitsu } from "@/lib/kitsu-mapper";
 import { unstable_cache } from "next/cache";
 
 interface CacheEntry {
@@ -562,7 +563,7 @@ async function resolveStreamRaw(
   targetProvider?: string
 ) {
   const parsedEp = parseInt(ep, 10);
-  const resolvedAnilistId = anilistParam ? Number(anilistParam) : await getAnilistId(title);
+  const resolvedAnilistId = anilistParam ? Number(anilistParam) : await resolveAnilistIdFromSlugOrKitsu(id, title);
 
   if (!resolvedAnilistId) {
     // Fallback directly to local Anikoto if AniList ID is completely missing

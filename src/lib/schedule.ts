@@ -1,4 +1,3 @@
-import { cache } from "react";
 import { unstable_cache } from "next/cache";
 
 export interface AiringAnimeScheduleItem {
@@ -168,11 +167,17 @@ export async function fetchAniListGraphQL<T = any>(
 async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
   const normalizedMap = new Map<number, AiringAnimeScheduleItem>();
   const now = Math.floor(Date.now() / 1000);
-  const startOfWeek = now - 86400; // From yesterday to next 7 days
-  const endOfWeek = now + 86400 * 7;
+
+  // Start from Sunday 00:00:00 UTC of the current week, so all shows for
+  // the week are always visible regardless of which day you load the page.
+  const nowDate = new Date();
+  const dayOfCurrentWeek = nowDate.getUTCDay(); // 0 = Sunday
+  const startOfWeek = now - dayOfCurrentWeek * 86400 - (nowDate.getUTCHours() * 3600 + nowDate.getUTCMinutes() * 60 + nowDate.getUTCSeconds());
+  const endOfWeek = startOfWeek + 86400 * 7; // Full week window
 
   // 1. Primary Engine: AniList GraphQL for Authentic Japanese Anime Schedules
-  for (let page = 1; page <= 2; page++) {
+  // Fetch 3 pages × 50 = up to 150 shows, enough for busy seasons.
+  for (let page = 1; page <= 3; page++) {
     try {
       const query = `
         query ($page: Int, $perPage: Int, $airingAt_greater: Int, $airingAt_lesser: Int) {
@@ -242,10 +247,12 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
           const title = media.title?.english || media.title?.romaji || media.title?.native || "Unknown";
           const slug = generateSlug(title);
           const airingAt = s.airingAt;
+          // Use UTC methods so dayOfWeek and airTimeStr are timezone-agnostic
+          // and consistent regardless of the server's local timezone.
           const date = new Date(airingAt * 1000);
-          const dayOfWeek = date.getDay();
-          const hours = date.getHours().toString().padStart(2, "0");
-          const minutes = date.getMinutes().toString().padStart(2, "0");
+          const dayOfWeek = date.getUTCDay();
+          const hours = date.getUTCHours().toString().padStart(2, "0");
+          const minutes = date.getUTCMinutes().toString().padStart(2, "0");
 
           if (!normalizedMap.has(media.id)) {
             normalizedMap.set(media.id, {
@@ -369,11 +376,9 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
   return Array.from(normalizedMap.values()).sort((a, b) => a.airingAt - b.airingAt);
 }
 
-// Cached schedule with 30-minute TTL
-export const getUnifiedAiringSchedule = cache(async (): Promise<AiringAnimeScheduleItem[]> => {
-  return unstable_cache(
-    async () => fetchScheduleFromEngines(),
-    ["aniwavex_pure_japanese_airing_schedule_v2"],
-    { revalidate: 1800, tags: ["airing_schedule"] }
-  )();
-});
+// Cached schedule with 30-minute TTL (cross-request, cross-deployment cache)
+export const getUnifiedAiringSchedule = unstable_cache(
+  async () => fetchScheduleFromEngines(),
+  ["aniwavex_pure_japanese_airing_schedule_v2"],
+  { revalidate: 1800, tags: ["airing_schedule"] }
+);
