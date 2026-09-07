@@ -163,22 +163,47 @@ export async function fetchKitsuEpisodeRange(animeId: string, offset: number = 0
   };
 
   try {
-    const res = await fetch(
-      `https://kitsu.io/api/edge/anime/${encodeURIComponent(animeId)}/episodes?page[limit]=${limit}&page[offset]=${offset}`,
-      {
-        headers,
-        signal: AbortSignal.timeout(8000),
-        next: { revalidate: 86400 } // 24 hours ISR cache
-      }
+    // Kitsu API enforces a strict max page limit of 20 per request.
+    // Partition the requested range into 20-item sub-pages.
+    const effectiveLimit = Math.max(1, limit);
+    const pageSize = 20;
+    const pageOffsets: number[] = [];
+    for (let current = offset; current < offset + effectiveLimit; current += pageSize) {
+      pageOffsets.push(current);
+    }
+
+    const pageResults = await Promise.all(
+      pageOffsets.map(async (pageOff) => {
+        try {
+          const res = await fetch(
+            `https://kitsu.io/api/edge/anime/${encodeURIComponent(animeId)}/episodes?page[limit]=20&page[offset]=${pageOff}&sort=number`,
+            {
+              headers,
+              signal: AbortSignal.timeout(8000),
+              next: { revalidate: 86400 } // 24 hours ISR cache
+            }
+          );
+          if (!res.ok) return { data: [], count: 0 };
+          const json = await res.json();
+          return {
+            data: json.data || [],
+            count: json.meta?.count || 0
+          };
+        } catch {
+          return { data: [], count: 0 };
+        }
+      })
     );
-    if (!res.ok) return { data: [], meta: { count: 0 } };
-    const json = await res.json();
+
+    const totalCount = pageResults[0]?.count || 0;
+    const allData = pageResults.flatMap(r => r.data);
+
     return {
-      data: (json.data || []).map((ep: any) => ({
+      data: allData.map((ep: any) => ({
         id: ep.attributes?.number ?? ep.id,
         title: ep.attributes?.canonicalTitle || `Episode ${ep.attributes?.number ?? ep.id}`,
       })),
-      meta: json.meta || { count: 0 }
+      meta: { count: totalCount || allData.length }
     };
   } catch (err) {
     console.error(`Failed to fetch episode range for anime ${animeId}:`, err);

@@ -43,7 +43,13 @@ async function getMedia(id) {
       const q = `query($id:Int){Media(id:$id,type:ANIME){id idMal title{romaji english native}format status startDate{year month day}seasonYear episodes duration genres averageScore coverImage{large} bannerImage}}`;
       const r = await fetch(API, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Origin: "https://anilist.co",
+          Referer: "https://anilist.co/",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        },
         body: JSON.stringify({ query: q, variables: { id } }),
         signal: AbortSignal.timeout(6000)
       });
@@ -81,7 +87,13 @@ async function searchAnilist(query) {
       const q = `query($s:String){Page(perPage:20){media(search:$s,type:ANIME,sort:[SEARCH_MATCH,POPULARITY_DESC]){id idMal popularity title{romaji english native}format status startDate{year month day}seasonYear episodes genres averageScore coverImage{large}}}}`;
       const r = await fetch(API, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Origin: "https://anilist.co",
+          Referer: "https://anilist.co/",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        },
         body: JSON.stringify({ query: q, variables: { s: query } }),
         signal: AbortSignal.timeout(6000)
       });
