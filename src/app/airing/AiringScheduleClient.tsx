@@ -223,6 +223,28 @@ export default function AiringScheduleClient({
 }: {
   animeList: AiringAnimeScheduleItem[];
 }) {
+  const [items, setItems] = useState<AiringAnimeScheduleItem[]>(animeList || []);
+  const [isLoading, setIsLoading] = useState(animeList?.length === 0);
+
+  // Client-side fallback: if SSR passed empty list, fetch from /api/schedule
+  useEffect(() => {
+    if (animeList && animeList.length > 0) {
+      setItems(animeList);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+      fetch("/api/schedule")
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data.schedule) && data.schedule.length > 0) {
+            setItems(data.schedule);
+          }
+        })
+        .catch(console.error)
+        .finally(() => setIsLoading(false));
+    }
+  }, [animeList]);
+
   // Use UTC day to match the UTC-based dayOfWeek stored in schedule data
   const todayId = new Date().getUTCDay().toString();
   const [selectedDay, setSelectedDay] = useState<string>(todayId);
@@ -260,13 +282,13 @@ export default function AiringScheduleClient({
   // All unique genres
   const allGenres = useMemo(() => {
     const set = new Set<string>();
-    animeList.forEach((a) => a.genres?.forEach((g) => set.add(g)));
+    items.forEach((a) => a.genres?.forEach((g) => set.add(g)));
     return Array.from(set).sort();
-  }, [animeList]);
+  }, [items]);
 
   // Filtered list
   const filteredAnime = useMemo(() => {
-    return animeList.filter((anime) => {
+    return items.filter((anime) => {
       if (selectedDay !== "all" && anime.dayOfWeek.toString() !== selectedDay)
         return false;
       if (selectedGenre !== "all" && !anime.genres?.includes(selectedGenre))
@@ -283,17 +305,17 @@ export default function AiringScheduleClient({
       }
       return true;
     });
-  }, [animeList, selectedDay, selectedGenre, searchQuery]);
+  }, [items, selectedDay, selectedGenre, searchQuery]);
 
   // Count per day for badge numbers
   const countByDay = useMemo(() => {
-    const map: Record<string, number> = { all: animeList.length };
-    animeList.forEach((a) => {
+    const map: Record<string, number> = { all: items.length };
+    items.forEach((a) => {
       const k = a.dayOfWeek.toString();
       map[k] = (map[k] || 0) + 1;
     });
     return map;
-  }, [animeList]);
+  }, [items]);
 
   // ── Shared Tab Strip ────────────────────────────────────────────────────────
   const renderTabStrip = useCallback(
@@ -453,7 +475,20 @@ export default function AiringScheduleClient({
       </div>
 
       {/* ── Anime Grid ── */}
-      {filteredAnime.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
+          {Array.from({ length: 12 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-2.5 space-y-3 animate-pulse"
+            >
+              <div className="aspect-[3/4] bg-slate-800/60 rounded-xl" />
+              <div className="h-4 bg-slate-800/80 rounded w-3/4" />
+              <div className="h-3 bg-slate-800/40 rounded w-1/2" />
+            </div>
+          ))}
+        </div>
+      ) : filteredAnime.length === 0 ? (
         <div className="w-full text-center py-24 bg-slate-900/30 border border-slate-800 rounded-3xl text-slate-400">
           <Clock className="w-12 h-12 mx-auto text-slate-600 mb-3" />
           <h3 className="text-lg font-bold text-white mb-1">

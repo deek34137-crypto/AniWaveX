@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   description: "Track upcoming anime broadcasts, release schedules, and simulcasts with live countdowns.",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AiringPage() {
   const airingAnime = await getUnifiedAiringSchedule();
 

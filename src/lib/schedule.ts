@@ -317,6 +317,43 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
                 existing.streamingPlatforms = validPlatforms;
               }
             }
+          } else if (item.nextEpisode?.airingAt) {
+            const airingAt = item.nextEpisode.airingAt;
+            const date = new Date(airingAt * 1000);
+            const dayOfWeek = date.getUTCDay();
+            const hours = date.getUTCHours().toString().padStart(2, "0");
+            const minutes = date.getUTCMinutes().toString().padStart(2, "0");
+            const title = item.title?.english || item.title?.romaji || item.title?.native || "Unknown";
+            const slug = generateSlug(title);
+
+            const validPlatforms = (item.streamingOn || []).filter(
+              (st: any) => !["Tencent Video", "iQIYI", "WeTV", "Youku", "Bilibili"].includes(st.site)
+            );
+
+            normalizedMap.set(item.id, {
+              id: item.id,
+              anilistId: item.id,
+              slug,
+              title,
+              romajiTitle: item.title?.romaji,
+              nativeTitle: item.title?.native,
+              posterImage: item.coverImage?.large || item.coverImage?.medium || "",
+              bannerImage: item.bannerImage || undefined,
+              rating: item.averageScore ? (item.averageScore / 10).toFixed(1) : "N/A",
+              genres: item.genres || [],
+              format: item.format || "TV",
+              totalEpisodes: item.episodes,
+              nextEpisodeNumber: item.nextEpisode.episode || 1,
+              airingAt,
+              airingAtIso: date.toISOString(),
+              timeUntilAiring: Math.max(0, airingAt - now),
+              dayOfWeek,
+              airTimeStr: `${hours}:${minutes}`,
+              airType: item.nextEpisode.airType || "sub",
+              studio: Array.isArray(item.studios) ? item.studios[0] : undefined,
+              streamingPlatforms: validPlatforms,
+              countryOfOrigin: item.countryOfOrigin || "JP",
+            });
           }
         }
       }
@@ -329,7 +366,7 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
   if (normalizedMap.size === 0) {
     try {
       const res = await fetch(
-        "https://kitsu.io/api/edge/anime?filter[status]=current&sort=-user_count&page[limit]=40&include=categories",
+        "https://kitsu.io/api/edge/anime?filter[status]=current&sort=-userCount&page[limit]=40",
         {
           headers: {
             Accept: "application/vnd.api+json",
@@ -381,6 +418,6 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
 // Cached schedule with 30-minute TTL (cross-request, cross-deployment cache)
 export const getUnifiedAiringSchedule = unstable_cache(
   async () => fetchScheduleFromEngines(),
-  ["aniwavex_pure_japanese_airing_schedule_v2"],
+  ["aniwavex_pure_japanese_airing_schedule_v3"],
   { revalidate: 1800, tags: ["airing_schedule"] }
 );
