@@ -563,7 +563,18 @@ async function resolveStreamRaw(
   targetProvider?: string
 ) {
   const parsedEp = parseInt(ep, 10);
-  const resolvedAnilistId = anilistParam ? Number(anilistParam) : await resolveAnilistIdFromSlugOrKitsu(id, title);
+  if (isNaN(parsedEp) || parsedEp <= 0) return null;
+
+  let resolvedAnilistId: number | null = null;
+  if (anilistParam) {
+    const num = Number(anilistParam);
+    if (!isNaN(num) && num > 0) {
+      resolvedAnilistId = num;
+    }
+  }
+  if (!resolvedAnilistId) {
+    resolvedAnilistId = await resolveAnilistIdFromSlugOrKitsu(id, title);
+  }
 
   if (!resolvedAnilistId) {
     // Fallback directly to local Anikoto if AniList ID is completely missing
@@ -638,6 +649,18 @@ export async function GET(request: Request) {
 
   if (!id || !ep || !title) {
     return NextResponse.json({ error: "Missing required parameters (id, ep, title)" }, { status: 400 });
+  }
+
+  const parsedEp = parseInt(ep, 10);
+  if (isNaN(parsedEp) || parsedEp <= 0) {
+    return NextResponse.json({ error: "Invalid episode parameter (must be positive integer)" }, { status: 400 });
+  }
+
+  if (anilistParam) {
+    const parsedAnilistId = Number(anilistParam);
+    if (isNaN(parsedAnilistId) || parsedAnilistId <= 0) {
+      return NextResponse.json({ error: "Invalid anilistId parameter (must be positive integer)" }, { status: 400 });
+    }
   }
 
   const excludedProviders = excludeParam ? excludeParam.split(",").map(p => p.trim()).filter(Boolean) : [];

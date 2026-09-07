@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Trash2, ChevronDown } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
@@ -12,7 +12,14 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
   const [selectedTab, setSelectedTab] = useState<WatchlistStatus | "all">("all");
   const [toastItem, setToastItem] = useState<any | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const { user, supabase } = useAuth();
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     // 1. Initial hydration from localStorage
@@ -42,7 +49,7 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
           if (data && data.length > 0) {
             setItems((prev) => {
               const map = new Map();
-              [...data, ...prev].forEach((item) => {
+              [...prev, ...data].forEach((item) => {
                 if (item?.anime_slug) map.set(item.anime_slug, item);
               });
               return Array.from(map.values());
@@ -78,8 +85,10 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
     setToastItem(item);
 
     // Auto-hide toast after 5 seconds
-    setTimeout(() => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
       setToastItem(null);
+      toastTimerRef.current = null;
     }, 5000);
 
     try {
@@ -198,12 +207,16 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
             const isEditingThis = editingItemId === item.id;
 
             return (
-              <Link 
-                href={`/anime/${item.anime_slug}`} 
+              <div 
                 key={item.id}
-                className="group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105 shadow-lg"
+                className="group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105 shadow-lg"
               >
-                <div className="aspect-[2/3] relative">
+                {/* Media & Title Link */}
+                <Link 
+                  href={`/anime/${item.anime_slug}`} 
+                  className="block aspect-[2/3] relative cursor-pointer"
+                  aria-label={`View ${item.anime_title}`}
+                >
                   <AnimeImage 
                     src={item.poster_image} 
                     alt={item.anime_title} 
@@ -212,67 +225,72 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent pointer-events-none" />
                   
-                  {/* Status Badge */}
-                  <div className="absolute top-2 left-2 z-20">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setEditingItemId(isEditingThis ? null : item.id);
-                      }}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border shadow-md backdrop-blur-md transition-all hover:scale-105 ${statusConfig.badgeBg} ${statusConfig.badgeText} ${statusConfig.badgeBorder}`}
-                      title="Click to change status"
-                    >
-                      {statusConfig.label}
-                      <ChevronDown className="w-3 h-3" />
-                    </button>
-
-                    {/* In-Card Status Menu */}
-                    {isEditingThis && (
-                      <div 
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute left-0 top-full mt-1 w-36 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95"
-                      >
-                        {Object.values(WATCHLIST_STATUSES).map((st) => (
-                          <button
-                            key={st.id}
-                            onClick={(e) => handleUpdateStatus(e, item, st.id as WatchlistStatus)}
-                            className={`w-full px-3 py-1.5 text-xs text-left font-medium transition-colors hover:bg-slate-800 ${
-                              itemStatus === st.id ? "text-blue-400 font-bold bg-blue-500/10" : "text-slate-200"
-                            }`}
-                          >
-                            {st.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   {/* Play Overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     <div className="w-14 h-14 bg-blue-600/90 rounded-full flex items-center justify-center backdrop-blur-sm shadow-xl">
-                      <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M8 5v14l11-7z" />
                       </svg>
                     </div>
                   </div>
-
-                  {/* Delete Button */}
-                  <button
-                    onClick={(e) => handleDelete(e, item)}
-                    className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-red-500/90 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all border border-white/10 z-20"
-                    title="Remove from watchlist"
-                  >
-                    <Trash2 className="w-4 h-4 text-white" />
-                  </button>
                   
-                  <div className="absolute bottom-0 left-0 w-full p-4">
+                  <div className="absolute bottom-0 left-0 w-full p-4 pointer-events-none">
                     <h3 className="text-white font-bold text-sm truncate" title={item.anime_title}>
                       {item.anime_title}
                     </h3>
                   </div>
+                </Link>
+
+                {/* Status Badge */}
+                <div className="absolute top-2 left-2 z-20">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setEditingItemId(isEditingThis ? null : item.id);
+                    }}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border shadow-md backdrop-blur-md transition-all hover:scale-105 ${statusConfig.badgeBg} ${statusConfig.badgeText} ${statusConfig.badgeBorder}`}
+                    title="Click to change status"
+                    aria-label={`Change status for ${item.anime_title}, currently ${statusConfig.label}`}
+                  >
+                    {statusConfig.label}
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+
+                  {/* In-Card Status Menu */}
+                  {isEditingThis && (
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute left-0 top-full mt-1 w-36 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95"
+                    >
+                      {Object.values(WATCHLIST_STATUSES).map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={(e) => handleUpdateStatus(e, item, st.id as WatchlistStatus)}
+                          className={`w-full px-3 py-1.5 text-xs text-left font-medium transition-colors hover:bg-slate-800 ${
+                            itemStatus === st.id ? "text-blue-400 font-bold bg-blue-500/10" : "text-slate-200"
+                          }`}
+                        >
+                          {st.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </Link>
+
+                {/* Delete Button */}
+                <button
+                  type="button"
+                  onClick={(e) => handleDelete(e, item)}
+                  className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-red-500/90 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all border border-white/10 z-20"
+                  title="Remove from watchlist"
+                  aria-label={`Remove ${item.anime_title} from watchlist`}
+                >
+                  <Trash2 className="w-4 h-4 text-white" />
+                </button>
+              </div>
             );
           })}
         </div>

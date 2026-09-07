@@ -508,6 +508,21 @@ export default function InPageVideoPlayer({
     }
   }, [hasPrev, onEpisodeChange, episodes, currentIndex]);
 
+  const handleEnded = useCallback(() => {
+    const anilistToken = typeof window !== 'undefined' ? localStorage.getItem("anilist_token") : null;
+    if (anilistToken && anilistId && episode?.id && lastAniListSyncEpRef.current !== episode.id) {
+      lastAniListSyncEpRef.current = episode.id;
+      syncProgressToAniList(anilistToken, anilistId, episode.id).then((res) => {
+        if (res.success) {
+          showToast(`Synced Ep ${episode.id} to AniList ✨`);
+        }
+      });
+    }
+    if (autoplayNext && hasNext) {
+      handleNext();
+    }
+  }, [anilistId, episode?.id, autoplayNext, hasNext, handleNext, showToast]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is in an input field or any modal dialog/overlay/palette is active
@@ -892,20 +907,7 @@ export default function InPageVideoPlayer({
                   // All local servers exhausted, stop switching and show clean fallback UI
                   setPlayerError(true);
                 }}
-                onEnded={() => {
-                  const anilistToken = typeof window !== 'undefined' ? localStorage.getItem("anilist_token") : null;
-                  if (anilistToken && anilistId && episode?.id && lastAniListSyncEpRef.current !== episode.id) {
-                    lastAniListSyncEpRef.current = episode.id;
-                    syncProgressToAniList(anilistToken, anilistId, episode.id).then((res) => {
-                      if (res.success) {
-                        showToast(`Synced Ep ${episode.id} to AniList ✨`);
-                      }
-                    });
-                  }
-                  if (autoplayNext && hasNext) {
-                    handleNext();
-                  }
-                }}
+                onEnded={handleEnded}
               />
             ) : isValidEmbedUrl(currentUrl) ? (
               <iframe 
@@ -927,20 +929,7 @@ export default function InPageVideoPlayer({
                 initialTime={initialTime}
                 onTimeUpdate={handleTimeUpdate}
                 onError={() => setPlayerError(true)}
-                onEnded={() => {
-                  const anilistToken = typeof window !== 'undefined' ? localStorage.getItem("anilist_token") : null;
-                  if (anilistToken && anilistId && episode?.id && lastAniListSyncEpRef.current !== episode.id) {
-                    lastAniListSyncEpRef.current = episode.id;
-                    syncProgressToAniList(anilistToken, anilistId, episode.id).then((res) => {
-                      if (res.success) {
-                        showToast(`Synced Ep ${episode.id} to AniList ✨`);
-                      }
-                    });
-                  }
-                  if (autoplayNext && hasNext) {
-                    handleNext();
-                  }
-                }}
+                onEnded={handleEnded}
               />
             ) : (
               <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/80">

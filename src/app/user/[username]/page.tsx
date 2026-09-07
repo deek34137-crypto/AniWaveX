@@ -24,6 +24,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PublicProfilePage({ params }: Props) {
   const { username } = await params;
   const decodedUsername = decodeURIComponent(username);
+  // Sanitize username to alphanumeric, underscore, and hyphen to prevent PostgREST filter injection
+  const sanitizedUsername = decodedUsername.replace(/[^a-zA-Z0-9_-]/g, "");
   const supabase = await createClient();
 
   const {
@@ -31,11 +33,13 @@ export default async function PublicProfilePage({ params }: Props) {
   } = await supabase.auth.getUser();
 
   // 1. Fetch public profile record by username (case-insensitive)
-  const { data: profileRecord } = await supabase
-    .from("profiles")
-    .select("*")
-    .ilike("username", decodedUsername)
-    .maybeSingle();
+  const { data: profileRecord } = sanitizedUsername
+    ? await supabase
+        .from("profiles")
+        .select("*")
+        .ilike("username", sanitizedUsername)
+        .maybeSingle()
+    : { data: null };
 
   // 2. Determine target user ID
   let targetUserId = profileRecord?.id;
@@ -72,7 +76,11 @@ export default async function PublicProfilePage({ params }: Props) {
       supabase
         .from("tier_lists")
         .select("*")
-        .or(`user_id.eq.${targetUserId},username.ilike.${decodedUsername}`)
+        .or(
+          sanitizedUsername
+            ? `user_id.eq.${targetUserId},username.ilike.${sanitizedUsername}`
+            : `user_id.eq.${targetUserId}`
+        )
         .order("created_at", { ascending: false }),
     ]);
 
@@ -81,11 +89,13 @@ export default async function PublicProfilePage({ params }: Props) {
     tierLists = tRes.data || [];
   } else {
     // If user profile has not been created yet in DB, check tier_lists table by username
-    const { data: tData } = await supabase
-      .from("tier_lists")
-      .select("*")
-      .ilike("username", decodedUsername)
-      .order("created_at", { ascending: false });
+    const { data: tData } = sanitizedUsername
+      ? await supabase
+          .from("tier_lists")
+          .select("*")
+          .ilike("username", sanitizedUsername)
+          .order("created_at", { ascending: false })
+      : { data: [] };
 
     tierLists = tData || [];
   }

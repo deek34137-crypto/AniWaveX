@@ -19,8 +19,15 @@ export async function GET(req: NextRequest) {
         filtered = filtered.filter((item) => item.dayOfWeek === dayNum);
       }
     } else if (dateParam) {
-      const targetDate = new Date(dateParam).toDateString();
-      filtered = filtered.filter((item) => new Date(item.airingAt * 1000).toDateString() === targetDate);
+      // Normalize to YYYY-MM-DD in UTC to prevent server local timezone off-by-one errors
+      const parsed = new Date(dateParam);
+      if (!isNaN(parsed.getTime())) {
+        const targetIsoDate = parsed.toISOString().split("T")[0];
+        filtered = filtered.filter((item) => {
+          const itemIsoDate = new Date(item.airingAt * 1000).toISOString().split("T")[0];
+          return itemIsoDate === targetIsoDate;
+        });
+      }
     }
 
     return NextResponse.json(

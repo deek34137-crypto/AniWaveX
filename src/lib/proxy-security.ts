@@ -3,13 +3,25 @@
  * Prevents open proxy relay abuse and SSRF through cryptographically signed short-lived tokens.
  */
 
-import { createHmac } from "crypto";
+import { createHmac, randomBytes } from "crypto";
 
-const PROXY_SECRET = 
-  process.env.PROXY_SECRET || 
-  process.env.NEXTAUTH_SECRET || 
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 
-  "aniwavex_secure_proxy_hmac_secret_2026";
+const RUNTIME_SECRET = randomBytes(32).toString("hex");
+
+function getProxySecret(): string {
+  const configured = 
+    process.env.PROXY_SECRET || 
+    process.env.NEXTAUTH_SECRET || 
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (configured) return configured;
+
+  if (process.env.NODE_ENV === "production") {
+    console.warn("[SECURITY WARNING] PROXY_SECRET is not configured in environment variables. Falling back to an ephemeral in-memory runtime secret.");
+    return RUNTIME_SECRET;
+  }
+
+  return "aniwavex_dev_proxy_hmac_secret";
+}
 
 const DEFAULT_EXPIRY_SECONDS = 24 * 60 * 60; // 24 hours
 
@@ -18,7 +30,7 @@ const DEFAULT_EXPIRY_SECONDS = 24 * 60 * 60; // 24 hours
  */
 export function generateProxySignature(url: string, exp: number): string {
   const payload = `${url}:${exp}`;
-  return createHmac("sha256", PROXY_SECRET).update(payload).digest("hex");
+  return createHmac("sha256", getProxySecret()).update(payload).digest("hex");
 }
 
 /**

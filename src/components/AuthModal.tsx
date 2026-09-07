@@ -67,15 +67,22 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   const modalContent = (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8">
+      <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8"
+      >
         <button 
+          type="button"
+          aria-label="Close authentication modal"
           onClick={onClose}
           className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white transition-colors rounded-full hover:bg-slate-800"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="text-2xl font-bold text-white mb-6">
+        <h2 id="auth-modal-title" className="text-2xl font-bold text-white mb-6">
           {isLogin ? "Welcome back" : "Create an account"}
         </h2>
 

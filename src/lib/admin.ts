@@ -19,7 +19,6 @@ export function isAdminUser(user: User | null | undefined): boolean {
   const adminEmails = getAdminEmails();
 
   if (adminEmails.includes(email)) return true;
-  if (user.user_metadata?.is_admin === true) return true;
   if (user.app_metadata?.is_admin === true) return true;
   return false;
 }

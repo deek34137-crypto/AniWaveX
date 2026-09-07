@@ -1,7 +1,7 @@
 "use client";
 
 import { Bell, User, LogOut, Activity, Shield } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AuthModal from "./AuthModal";
 import UsernameModal from "./UsernameModal";
 import LivePulseBadge from "./LivePulseBadge";
@@ -21,6 +21,9 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isUsernameModalOpen, setIsUsernameModalOpen] = useState(false);
   
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -28,6 +31,30 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
       setIsUsernameModalOpen(true);
     }
   }, [currentUser]);
+
+  // Click outside to close notifications and user menu dropdowns
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      if (isNotificationsOpen && notificationsRef.current && !notificationsRef.current.contains(target)) {
+        setIsNotificationsOpen(false);
+      }
+
+      if (isMenuOpen && menuRef.current && !menuRef.current.contains(target)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    if (isNotificationsOpen || isMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isNotificationsOpen, isMenuOpen]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -44,7 +71,7 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
       {/* Real-time Live Concurrency Pulse Badge (Only visible to Admin) */}
       <LivePulseBadge />
 
-      <div className="relative hidden sm:block">
+      <div ref={notificationsRef} className="relative hidden sm:block">
         <button 
           onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
           className="p-2 hover:bg-white/10 rounded-full transition-colors relative"
@@ -89,7 +116,7 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
       </div>
 
       {currentUser ? (
-        <div className="relative">
+        <div ref={menuRef} className="relative">
           <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="ml-2 w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center border border-white/20 overflow-hidden hover:scale-105 transition-transform relative"

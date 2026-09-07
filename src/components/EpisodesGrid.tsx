@@ -248,10 +248,12 @@ export default function EpisodesGrid({
             const isCompleted = progressPct >= 90 || (lastWatchedEpisode && episode.id < lastWatchedEpisode);
 
             return (
-              <div 
+              <button 
+                type="button"
                 key={episode.id}
                 onClick={() => onPlay?.(episode)}
-                className={`group relative flex items-start p-5 glass transition-all duration-300 rounded-2xl cursor-pointer overflow-hidden border ${
+                aria-label={`Play Episode ${episode.id}: ${episode.title}`}
+                className={`group relative flex items-start text-left w-full p-5 glass transition-all duration-300 rounded-2xl cursor-pointer overflow-hidden border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   isActive 
                     ? 'border-blue-500/80 bg-blue-600/10 shadow-[0_0_25px_rgba(37,99,235,0.25)] ring-1 ring-blue-500/50' 
                     : isCompleted
@@ -284,7 +286,7 @@ export default function EpisodesGrid({
                   </h3>
                 </div>
                 
-                <button className={`flex-shrink-0 w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-300 z-10 ${
+                <span aria-hidden="true" className={`flex-shrink-0 w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-300 z-10 ${
                   isActive 
                     ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.6)] scale-105' 
                     : isCompleted
@@ -296,7 +298,7 @@ export default function EpisodesGrid({
                   ) : (
                     <Play className="w-4 h-4 fill-current ml-0.5" />
                   )}
-                </button>
+                </span>
 
                 {/* In-progress percentage bar on episode card */}
                 {progressPct > 0 && progressPct < 90 && (
@@ -307,7 +309,7 @@ export default function EpisodesGrid({
                     />
                   </div>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>

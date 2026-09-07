@@ -49,8 +49,13 @@ export default function UsernameModal({ isOpen, onClose }: UsernameModalProps) {
 
   const modalContent = (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 animate-in zoom-in-95 duration-200">
-        <h2 className="text-2xl font-bold text-white mb-2">
+      <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="username-modal-title"
+        className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 animate-in zoom-in-95 duration-200"
+      >
+        <h2 id="username-modal-title" className="text-2xl font-bold text-white mb-2">
           Choose a Username
         </h2>
         <p className="text-slate-400 mb-6 text-sm">

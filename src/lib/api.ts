@@ -242,8 +242,15 @@ export const getAnimeData = cache(async (slug: string) => {
       } catch {}
     }
 
-    // Determine totalCount reliably
-    const totalCount = episodeCount || (allEpisodesData.length > 0 ? (allEpisodesData[allEpisodesData.length - 1].attributes?.number || allEpisodesData.length) : 12);
+    // Determine totalCount reliably: movies and specials default to 1, series without episode data default to 1 instead of 12 dummy episodes
+    const isSingleEpisodeType = 
+      anime.attributes.subtype?.toLowerCase() === "movie" || 
+      anime.attributes.subtype?.toLowerCase() === "special";
+    
+    const fallbackCount = isSingleEpisodeType ? 1 : (allEpisodesData.length || 1);
+    const totalCount = episodeCount || (allEpisodesData.length > 0 
+      ? (allEpisodesData[allEpisodesData.length - 1].attributes?.number || allEpisodesData.length) 
+      : fallbackCount);
 
     // Map initial episode titles in O(N) linear time
     const epMap = new Map<number, any>();

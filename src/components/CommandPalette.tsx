@@ -161,6 +161,10 @@ export default function CommandPalette() {
     } else {
       document.body.style.overflow = "";
     }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen]);
 
   // Live search debounced query

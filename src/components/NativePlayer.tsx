@@ -38,12 +38,6 @@ export default function NativePlayer({
   const internalRef = useRef<MediaPlayerInstance>(null);
   const player = externalRef || internalRef;
 
-  // Seek to initialTime once media is ready
-  useEffect(() => {
-    if (initialTime > 0 && player.current) {
-      player.current.currentTime = initialTime;
-    }
-  }, [initialTime, player]);
 
   // Automatically lock screen orientation to horizontal (landscape) on mobile when entering fullscreen
   useEffect(() => {

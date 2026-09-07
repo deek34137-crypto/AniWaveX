@@ -5,6 +5,7 @@ import { Play, Bookmark, Star, Calendar, Clock, ChevronDown, Check } from "lucid
 import { useAuth } from "@/providers/AuthProvider";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
 import AnimeImage from "@/components/AnimeImage";
+import AuthModal from "./AuthModal";
 
 interface HeroProps {
   anime: any;
@@ -29,6 +30,7 @@ export default function Hero({
   const [currentStatus, setCurrentStatus] = useState<WatchlistStatus>(initialBookmarkStatus || 'watching');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const handleSetStatus = async (status: WatchlistStatus) => {
     let activeUser = currentUser;
@@ -40,7 +42,8 @@ export default function Hero({
     }
 
     if (!activeUser) {
-      alert("Please log in to save bookmarks!");
+      setIsDropdownOpen(false);
+      setIsAuthModalOpen(true);
       return;
     }
 
@@ -336,6 +339,7 @@ export default function Hero({
           </div>
         </div>
       </div>
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   );
 }

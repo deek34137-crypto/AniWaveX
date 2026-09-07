@@ -511,9 +511,50 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    let upstreamRes = await fetch(target, {
-      headers: upstreamHeaders,
-    });
+    let currentTarget = target;
+    let currentTargetUrl = targetUrl;
+    let redirectCount = 0;
+    const MAX_REDIRECTS = 3;
+    let upstreamRes: Response;
+
+    while (true) {
+      upstreamRes = await fetch(currentTarget, {
+        headers: upstreamHeaders,
+        redirect: "manual",
+      });
+
+      // Securely handle redirects with host validation to prevent SSRF
+      if ([301, 302, 303, 307, 308].includes(upstreamRes.status)) {
+        const location = upstreamRes.headers.get("location");
+        if (!location || redirectCount >= MAX_REDIRECTS) {
+          return NextResponse.json(
+            { error: "Too many redirects or missing location header" },
+            { status: 502, headers: corsHeaders }
+          );
+        }
+
+        const nextUrl = new URL(location, currentTarget);
+        if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
+          return NextResponse.json(
+            { error: "Invalid redirect protocol: only http and https allowed" },
+            { status: 403, headers: corsHeaders }
+          );
+        }
+
+        if (!isAllowedHost(nextUrl.hostname, isSigned && isAuthorized)) {
+          return NextResponse.json(
+            { error: "Redirect host not permitted by proxy policy" },
+            { status: 403, headers: corsHeaders }
+          );
+        }
+
+        currentTarget = nextUrl.href;
+        currentTargetUrl = nextUrl;
+        redirectCount++;
+        continue;
+      }
+      break;
+    }
 
     // Smart 403 Forbidden failover recovery:
     // If the upstream CDN rejects the request (e.g. strict Referer/Origin WAF check),
@@ -526,7 +567,7 @@ export async function GET(request: NextRequest) {
       if (referer !== "https://vidtube.site/") {
         alternateReferers.push("https://vidtube.site/");
       }
-      const targetOrigin = targetUrl.origin + "/";
+      const targetOrigin = currentTargetUrl.origin + "/";
       if (referer !== targetOrigin) {
         alternateReferers.push(targetOrigin);
       }
@@ -542,7 +583,7 @@ export async function GET(request: NextRequest) {
             delete retryHeaders["Referer"];
             delete retryHeaders["Origin"];
           }
-          const retryRes = await fetch(target, { headers: retryHeaders });
+          const retryRes = await fetch(currentTarget, { headers: retryHeaders, redirect: "manual" });
           if (retryRes.ok || retryRes.status === 206) {
             upstreamRes = retryRes;
             break;
@@ -567,13 +608,13 @@ export async function GET(request: NextRequest) {
     const isM3U8 =
       contentType.includes("mpegurl") ||
       contentType.includes("x-mpegurl") ||
-      targetUrl.pathname.endsWith(".m3u8") ||
-      targetUrl.pathname.endsWith(".m3u");
+      currentTargetUrl.pathname.endsWith(".m3u8") ||
+      currentTargetUrl.pathname.endsWith(".m3u");
 
     if (isM3U8) {
       const text = await upstreamRes.text();
       const origin = new URL(request.url).origin;
-      const rewritten = rewriteM3U8Content(text, target, origin, referer);
+      const rewritten = rewriteM3U8Content(text, currentTarget, origin, referer);
 
       return new NextResponse(rewritten, {
         status: 200,
@@ -589,12 +630,12 @@ export async function GET(request: NextRequest) {
     const isAssOrSsa =
       contentType.includes("text/x-ssa") ||
       contentType.includes("text/x-ass") ||
-      targetUrl.pathname.endsWith(".ass") ||
-      targetUrl.pathname.endsWith(".ssa");
+      currentTargetUrl.pathname.endsWith(".ass") ||
+      currentTargetUrl.pathname.endsWith(".ssa");
 
     if (isAssOrSsa) {
       const rawText = await upstreamRes.text();
-      const vtt = convertAssToVtt(rawText, target);
+      const vtt = convertAssToVtt(rawText, currentTarget);
       return new NextResponse(vtt, {
         status: 200,
         headers: {
@@ -609,7 +650,7 @@ export async function GET(request: NextRequest) {
     const isVtt =
       contentType.includes("text/vtt") ||
       contentType.includes("application/vtt") ||
-      targetUrl.pathname.endsWith(".vtt");
+      currentTargetUrl.pathname.endsWith(".vtt");
 
     if (isVtt) {
       const rawText = await upstreamRes.text();

@@ -73,6 +73,11 @@ export default function ContinueWatchingRow() {
             setLoading(false);
             return;
           }
+
+          // User is authenticated but has no history records in database
+          setItems([]);
+          setLoading(false);
+          return;
         }
 
         // 2. Fallback to localStorage for guests

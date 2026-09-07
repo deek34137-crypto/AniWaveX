@@ -41,11 +41,18 @@ export default function ProfileCustomizer({ user }: { user: any }) {
   
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; type: "error" | "info" } | null>(null);
   const { supabase } = useAuth();
+
+  const showFeedback = (text: string, type: "error" | "info" = "error") => {
+    setFeedbackMessage({ text, type });
+    setTimeout(() => setFeedbackMessage(null), 4000);
+  };
 
   // Saved Tier Lists for management
   const username = meta.username || user?.email?.split("@")[0] || "User";
   const [savedTierLists, setSavedTierLists] = useState<any[]>([]);
+  const [deletingTierListId, setDeletingTierListId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -60,57 +67,70 @@ export default function ProfileCustomizer({ user }: { user: any }) {
     } catch {}
   }, [username]);
 
-  const handleDeleteTierList = async (id: string) => {
-    if (confirm("Are you sure you want to remove this tier list from your profile?")) {
-      const updated = savedTierLists.filter((tl) => tl.id !== id);
-      setSavedTierLists(updated);
+  const confirmDeleteTierList = async (id: string) => {
+    setDeletingTierListId(null);
+    const updated = savedTierLists.filter((tl) => tl.id !== id);
+    setSavedTierLists(updated);
 
-      try {
-        await supabase.from("tier_lists").delete().eq("id", id);
-      } catch (err) {
-        console.error("Failed to delete tier list from Supabase", err);
-      }
-
-      try {
-        const key = `aniwavex_tierlists_${username.toLowerCase()}`;
-        localStorage.setItem(key, JSON.stringify(updated));
-      } catch {}
+    try {
+      await supabase.from("tier_lists").delete().eq("id", id);
+      showFeedback("Tier list removed from your profile.", "info");
+    } catch (err) {
+      console.error("Failed to delete tier list from Supabase", err);
+      showFeedback("Failed to delete tier list from server", "error");
     }
+
+    try {
+      const key = `aniwavex_tierlists_${username.toLowerCase()}`;
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch {}
   };
 
-  // Debounced search for anime
+  // Debounced search for anime with AbortController
   useEffect(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
+
+    const controller = new AbortController();
 
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=20`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=20`, {
+          signal: controller.signal,
+        });
         if (res.ok) {
           const data = await res.json();
           setSearchResults(Array.isArray(data) ? data : data.anime || []);
         }
-      } catch (err) {
-        console.error("Search failed:", err);
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          console.error("Search failed:", err);
+        }
       } finally {
-        setIsSearching(false);
+        if (!controller.signal.aborted) {
+          setIsSearching(false);
+        }
       }
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [searchQuery]);
 
   const handleAddFavorite = (anime: any) => {
     if (topFive.length >= 5) {
-      alert("You can select up to 5 favorite anime.");
+      showFeedback("You can select up to 5 favorite anime.", "error");
       return;
     }
     const slug = anime.slug || anime.id?.toString();
     if (topFive.some((a) => a.slug === slug)) {
-      alert("This anime is already in your top 5.");
+      showFeedback("This anime is already in your top 5.", "error");
       return;
     }
 
@@ -159,7 +179,7 @@ export default function ProfileCustomizer({ user }: { user: any }) {
       setTimeout(() => setSavedSuccess(false), 3000);
     } catch (err: any) {
       console.error("Failed to update profile:", err);
-      alert(err.message || "Failed to update profile customizations");
+      showFeedback(err.message || "Failed to update profile customizations", "error");
     } finally {
       setIsSaving(false);
     }
@@ -167,6 +187,27 @@ export default function ProfileCustomizer({ user }: { user: any }) {
 
   return (
     <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-8 backdrop-blur-xl shadow-2xl">
+      {feedbackMessage && (
+        <div
+          role="alert"
+          className={`p-4 rounded-2xl text-sm font-medium border flex items-center justify-between transition-all ${
+            feedbackMessage.type === "error"
+              ? "bg-red-500/10 border-red-500/30 text-red-400"
+              : "bg-blue-500/10 border-blue-500/30 text-blue-400"
+          }`}
+        >
+          <span>{feedbackMessage.text}</span>
+          <button
+            type="button"
+            onClick={() => setFeedbackMessage(null)}
+            className="text-xs opacity-70 hover:opacity-100 ml-2 p-1"
+            aria-label="Dismiss alert"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between border-b border-white/5 pb-4">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
@@ -359,14 +400,34 @@ export default function ProfileCustomizer({ user }: { user: any }) {
                   </span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleDeleteTierList(tl.id)}
-                  className="p-2 bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white rounded-xl border border-red-500/20 transition-colors shrink-0"
-                  title="Remove this tier list"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {deletingTierListId === tl.id ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => confirmDeleteTierList(tl.id)}
+                      className="px-2.5 py-1 text-xs font-semibold bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
+                    >
+                      Remove
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingTierListId(null)}
+                      className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setDeletingTierListId(tl.id)}
+                    className="p-2 bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white rounded-xl border border-red-500/20 transition-colors shrink-0"
+                    title="Remove this tier list"
+                    aria-label={`Remove tier list ${tl.title || ""}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -376,13 +437,20 @@ export default function ProfileCustomizer({ user }: { user: any }) {
       {/* Anime Search Modal */}
       {showSearchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 flex flex-col gap-4 animate-in zoom-in-95 max-h-[80vh]">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="favorite-anime-search-title"
+            className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 flex flex-col gap-4 animate-in zoom-in-95 max-h-[80vh]"
+          >
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <h3 id="favorite-anime-search-title" className="text-lg font-bold text-white flex items-center gap-2">
                 <Search className="w-4 h-4 text-blue-400" />
                 Select Favorite Anime ({topFive.length}/5)
               </h3>
               <button
+                type="button"
+                aria-label="Close search"
                 onClick={() => {
                   setShowSearchModal(false);
                   setSearchQuery("");

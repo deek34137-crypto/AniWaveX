@@ -55,6 +55,7 @@ function BottomNavContent() {
             <Link
               key={item.label}
               href={item.href}
+              aria-current={item.isActive ? "page" : undefined}
               className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 ${
                 item.isActive
                   ? "text-blue-400 font-bold"
