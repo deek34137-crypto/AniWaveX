@@ -114,6 +114,7 @@ export default function AnalyticsModal({
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby="analytics-modal-title"
       className="fixed inset-0 z-[200] overflow-y-auto p-4 sm:p-6 flex items-start justify-center pt-16 sm:pt-20 pb-12 bg-slate-950/85 backdrop-blur-xl animate-in fade-in duration-200"
       onClick={onClose}
     >
@@ -128,7 +129,7 @@ export default function AnalyticsModal({
               <Activity className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+              <h2 id="analytics-modal-title" className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
                 Live Heartbeat &amp; Traffic Stats
               </h2>
               <p className="text-xs text-slate-400">
@@ -143,12 +144,14 @@ export default function AnalyticsModal({
               disabled={isLoading}
               className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors border border-white/10"
               title="Refresh Stats"
+              aria-label="Refresh Stats"
             >
               <RotateCcw className={`w-4 h-4 ${isLoading ? "animate-spin text-blue-400" : ""}`} />
             </button>
             <button
               onClick={onClose}
               className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors border border-white/10"
+              aria-label="Close Analytics Modal"
             >
               <X className="w-4 h-4" />
             </button>

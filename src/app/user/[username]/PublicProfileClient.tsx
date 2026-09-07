@@ -73,23 +73,23 @@ export default function PublicProfileClient({
   const { user: authUser, supabase } = useAuth();
   const isOwner = authUser?.id === user?.id || 
     (authUser?.user_metadata?.username || authUser?.email?.split("@")[0])?.toLowerCase() === username.toLowerCase();
+  const [deletingTierListId, setDeletingTierListId] = useState<string | null>(null);
 
-  const handleDeleteTierList = async (id: string) => {
-    if (confirm("Are you sure you want to remove this tier list?")) {
-      const updated = tierLists.filter((tl) => tl.id !== id);
-      setTierLists(updated);
+  const confirmDeleteTierList = async (id: string) => {
+    setDeletingTierListId(null);
+    const updated = tierLists.filter((tl) => tl.id !== id);
+    setTierLists(updated);
 
-      try {
-        await supabase.from("tier_lists").delete().eq("id", id);
-      } catch (err) {
-        console.error("Failed to delete tier list from Supabase", err);
-      }
-
-      try {
-        const key = `aniwavex_tierlists_${username.toLowerCase()}`;
-        localStorage.setItem(key, JSON.stringify(updated));
-      } catch {}
+    try {
+      await supabase.from("tier_lists").delete().eq("id", id);
+    } catch (err) {
+      console.error("Failed to delete tier list from Supabase", err);
     }
+
+    try {
+      const key = `aniwavex_tierlists_${username.toLowerCase()}`;
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch {}
   };
 
   const bannerPreset =
@@ -113,10 +113,13 @@ export default function PublicProfileClient({
       return;
     }
 
+    const sanitizedUsername = (username || "").replace(/[^a-zA-Z0-9_-]/g, "");
+    if (!sanitizedUsername) return;
+
     supabase
       .from("tier_lists")
       .select("*")
-      .ilike("username", username)
+      .eq("username", sanitizedUsername)
       .order("created_at", { ascending: false })
       .then(({ data }: { data: any }) => {
         if (data && data.length > 0) {
@@ -174,7 +177,7 @@ export default function PublicProfileClient({
             if (data && data.length > 0) {
               setBookmarks((prev) => {
                 const map = new Map();
-                [...data, ...prev].forEach((item) => {
+                [...prev, ...data].forEach((item) => {
                   if (item?.anime_slug) map.set(item.anime_slug, item);
                 });
                 return Array.from(map.values());
@@ -600,14 +603,34 @@ export default function PublicProfileClient({
                       )}
                     </div>
                     {isOwner && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteTierList(tl.id)}
-                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
-                        title="Remove this tier list"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      deletingTierListId === tl.id ? (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => confirmDeleteTierList(tl.id)}
+                            className="px-2 py-0.5 text-xs font-semibold bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingTierListId(null)}
+                            className="px-2 py-0.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setDeletingTierListId(tl.id)}
+                          className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
+                          title="Remove this tier list"
+                          aria-label={`Remove tier list ${tl.title || ""}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )
                     )}
                   </div>
 

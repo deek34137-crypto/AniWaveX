@@ -116,7 +116,12 @@ export default function AniListSyncModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col">
+      <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="anilist-sync-modal-title"
+        className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col"
+      >
         {/* Header */}
         <div className="p-6 pb-4 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-blue-950/60 to-slate-900">
           <div className="flex items-center gap-3">
@@ -124,7 +129,7 @@ export default function AniListSyncModal({
               <RefreshCw className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <h3 id="anilist-sync-modal-title" className="text-lg font-bold text-white flex items-center gap-2">
                 AniList Watchlist Sync
               </h3>
               <p className="text-xs text-slate-400">
@@ -134,6 +139,8 @@ export default function AniListSyncModal({
           </div>
 
           <button
+            type="button"
+            aria-label="Close AniList sync modal"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
           >

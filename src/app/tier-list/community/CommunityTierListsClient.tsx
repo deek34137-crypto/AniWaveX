@@ -18,6 +18,7 @@ import {
   Plus
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
+import AuthModal from "@/components/AuthModal";
 import { useAuth } from "@/providers/AuthProvider";
 
 interface CommunityTierListsClientProps {
@@ -36,13 +37,14 @@ export default function CommunityTierListsClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"popular" | "latest">("popular");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const { user, supabase } = useAuth();
 
   // Upvote / Like Handler with optimistic update
   const handleToggleLike = async (tierListId: string) => {
     if (!user) {
-      alert("Please log in to like and upvote community tier lists!");
+      setIsAuthModalOpen(true);
       return;
     }
 
@@ -355,6 +357,13 @@ export default function CommunityTierListsClient({
             );
           })}
         </div>
+      )}
+
+      {isAuthModalOpen && (
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+        />
       )}
     </div>
   );

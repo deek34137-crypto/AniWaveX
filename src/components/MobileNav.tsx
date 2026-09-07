@@ -32,6 +32,8 @@ export default function MobileNav() {
   return (
     <>
       <button 
+        type="button"
+        aria-label="Open mobile navigation menu"
         onClick={() => setIsOpen(true)}
         className="p-2 hover:bg-white/10 rounded-full transition-colors md:hidden"
       >
@@ -48,12 +50,19 @@ export default function MobileNav() {
           />
           
           {/* Drawer */}
-          <div className="absolute top-0 left-0 bottom-0 w-64 bg-slate-950 border-r border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-left">
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-label="Mobile Navigation Menu"
+            className="absolute top-0 left-0 bottom-0 w-64 bg-slate-950 border-r border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-left"
+          >
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <span className="text-xl font-black tracking-tighter bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
                 AniWaveX
               </span>
               <button 
+                type="button"
+                aria-label="Close mobile navigation menu"
                 onClick={() => setIsOpen(false)}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors"
               >

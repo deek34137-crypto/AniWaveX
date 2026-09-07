@@ -119,6 +119,14 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
   // Save / Export state
   const [isExporting, setIsExporting] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [toastFeedback, setToastFeedback] = useState<{ message: string; type?: "info" | "error" } | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const showToast = (message: string, type: "info" | "error" = "info") => {
+    setToastFeedback({ message, type });
+    setTimeout(() => setToastFeedback(null), 3500);
+  };
+
   const { user, supabase } = useAuth();
   const tierGridRef = useRef<HTMLDivElement>(null);
 
@@ -185,29 +193,41 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       });
   }, [listId, supabase]);
 
-  // Search anime with debounce
+  // Search anime with debounce + AbortController to prevent race conditions
   useEffect(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
+
+    const controller = new AbortController();
 
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=20`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=20`, {
+          signal: controller.signal,
+        });
         if (res.ok) {
           const data = await res.json();
           setSearchResults(Array.isArray(data) ? data : data.anime || []);
         }
-      } catch (err) {
-        console.error("Search failed:", err);
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          console.error("Search failed:", err);
+        }
       } finally {
-        setIsSearching(false);
+        if (!controller.signal.aborted) {
+          setIsSearching(false);
+        }
       }
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [searchQuery]);
 
   // Import Watchlist
@@ -230,9 +250,8 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
             rating: r.rating,
           }));
         }
-      }
-
-      if (imported.length === 0) {
+      } else {
+        // Only fall through to guest watch history if user is not authenticated
         const raw = localStorage.getItem("aniwavex_recent_watches");
         if (raw) {
           const list = JSON.parse(raw);
@@ -254,9 +273,9 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
         ]);
         const unique = imported.filter((it) => !existingSlugs.has(it.slug));
         setPool((prev) => [...prev, ...unique]);
-        alert(`Imported ${unique.length} anime from your watchlist!`);
+        showToast(`Imported ${unique.length} anime from your watchlist!`, "info");
       } else {
-        alert("No watchlist items found to import.");
+        showToast("No watchlist items found to import.", "info");
       }
     } catch (err) {
       console.error("Failed to import watchlist:", err);
@@ -415,12 +434,12 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
   };
 
   const handleReset = () => {
-    if (confirm("Reset tier list back to default?")) {
-      const allItems = [...rows.flatMap((r) => r.items), ...pool];
-      setRows(DEFAULT_TIER_ROWS);
-      setPool(allItems);
-      setSelectedItem(null);
-    }
+    const allItems = [...rows.flatMap((r) => r.items), ...pool];
+    setRows(DEFAULT_TIER_ROWS);
+    setPool(allItems);
+    setSelectedItem(null);
+    setShowResetConfirm(false);
+    showToast("Tier list reset to default.", "info");
   };
 
   // Save Tier List
@@ -477,7 +496,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
-    alert("Tier list saved to your profile!");
+    showToast("Tier list saved to your profile!", "info");
   };
 
   // Helper to load image for canvas export using blob proxy to NEVER taint canvas
@@ -679,7 +698,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       link.click();
     } catch (err: any) {
       console.error("Export error:", err);
-      alert("Failed to export image: " + err.message);
+      showToast("Failed to export image: " + (err?.message || "Unknown error"), "error");
     } finally {
       createdBlobUrls.forEach((url) => {
         try {
@@ -748,13 +767,35 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               <span>Download Image</span>
             </button>
 
-            <button
-              onClick={handleReset}
-              className="p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl transition-all border border-white/10"
-              title="Reset Tier List"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
+            {showResetConfirm ? (
+              <div className="flex items-center gap-1 bg-slate-900 border border-red-500/30 rounded-2xl p-1 animate-in fade-in">
+                <span className="text-[11px] text-slate-300 px-2 font-medium">Reset?</span>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-colors"
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirm(false)}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-colors"
+                >
+                  No
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(true)}
+                className="p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl transition-all border border-white/10"
+                title="Reset Tier List"
+                aria-label="Reset tier list to default"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -1027,13 +1068,20 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       {/* Search Modal */}
       {showSearchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 flex flex-col gap-4 animate-in zoom-in-95 max-h-[80vh]">
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-anime-modal-title"
+            className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 flex flex-col gap-4 animate-in zoom-in-95 max-h-[80vh]"
+          >
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <h3 id="add-anime-modal-title" className="text-lg font-bold text-white flex items-center gap-2">
                 <Search className="w-4 h-4 text-blue-400" />
                 Add Anime to Tier List
               </h3>
               <button
+                type="button"
+                aria-label="Close search modal"
                 onClick={() => {
                   setShowSearchModal(false);
                   setSearchQuery("");
@@ -1153,6 +1201,29 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastFeedback && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border text-sm font-medium animate-in fade-in slide-in-from-bottom-4 ${
+            toastFeedback.type === "error"
+              ? "bg-red-950/90 border-red-500/40 text-red-200"
+              : "bg-slate-900/90 border-blue-500/40 text-blue-200"
+          }`}
+        >
+          <span>{toastFeedback.message}</span>
+          <button
+            type="button"
+            onClick={() => setToastFeedback(null)}
+            className="text-xs opacity-70 hover:opacity-100 ml-2"
+            aria-label="Dismiss toast"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

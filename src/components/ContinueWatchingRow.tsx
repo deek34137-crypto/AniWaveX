@@ -151,13 +151,16 @@ export default function ContinueWatchingRow() {
           const pct = Math.min(100, Math.round((progSec / totalSec) * 100));
 
           return (
-            <Link
+            <div
               key={item.animeSlug}
-              href={`/anime/${item.animeSlug}?ep=${item.episodeId}`}
               className="snap-start shrink-0 w-[155px] sm:w-[185px] md:w-[205px] group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] hover:scale-[1.02]"
             >
-              {/* Vertical Aspect Container (aspect-[2/3]) */}
-              <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950">
+              {/* Media & Title Link */}
+              <Link
+                href={`/anime/${item.animeSlug}?ep=${item.episodeId}`}
+                className="block relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer"
+                aria-label={`Continue watching ${item.animeTitle} Episode ${item.episodeId}`}
+              >
                 <AnimeImage
                   src={item.posterImage}
                   alt={item.animeTitle}
@@ -168,20 +171,11 @@ export default function ContinueWatchingRow() {
                 {/* Dark Gradient Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent pointer-events-none" />
 
-                {/* Top Badges */}
-                <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+                {/* Top Badge */}
+                <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
                   <span className="px-2 py-0.5 bg-blue-600/90 text-white text-[10px] font-extrabold uppercase tracking-wider rounded-md backdrop-blur-md shadow-sm">
                     EP {item.episodeId}
                   </span>
-
-                  {/* Remove Button */}
-                  <button
-                    onClick={(e) => handleRemove(e, item.animeSlug)}
-                    className="p-1 bg-black/70 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm border border-white/10"
-                    title="Remove from Continue Watching"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
                 </div>
 
                 {/* Play Hover Button */}
@@ -192,7 +186,7 @@ export default function ContinueWatchingRow() {
                 </div>
 
                 {/* Bottom Title & Progress Info Overlay */}
-                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
+                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
                   <h3
                     className="text-white font-bold text-sm line-clamp-1 mb-1 group-hover:text-blue-400 transition-colors drop-shadow-md"
                     title={item.animeTitle}
@@ -212,8 +206,19 @@ export default function ContinueWatchingRow() {
                     />
                   </div>
                 </div>
-              </div>
-            </Link>
+              </Link>
+
+              {/* Remove Button (Sibling overlay, NOT inside Link) */}
+              <button
+                type="button"
+                onClick={(e) => handleRemove(e, item.animeSlug)}
+                className="absolute top-2.5 right-2.5 z-20 p-1 bg-black/70 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm border border-white/10"
+                title="Remove from Continue Watching"
+                aria-label={`Remove ${item.animeTitle} from continue watching`}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           );
         })}
       </div>

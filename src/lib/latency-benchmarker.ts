@@ -9,9 +9,22 @@ export interface ServerPingResult {
   status: "fast" | "medium" | "slow" | "offline";
 }
 
-// Client-side in-memory latency cache (5-minute TTL)
+// Client-side in-memory latency cache (5-minute TTL, max 100 entries)
+const MAX_LATENCY_CACHE_SIZE = 100;
 const clientLatencyCache = new Map<string, { latency: number; expiresAt: number }>();
 const LATENCY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function setLatencyCache(url: string, latency: number, ttlMs: number) {
+  if (clientLatencyCache.has(url)) {
+    clientLatencyCache.delete(url);
+  } else if (clientLatencyCache.size >= MAX_LATENCY_CACHE_SIZE) {
+    const oldestKey = clientLatencyCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      clientLatencyCache.delete(oldestKey);
+    }
+  }
+  clientLatencyCache.set(url, { latency, expiresAt: Date.now() + ttlMs });
+}
 
 /**
  * Measure latency to a specific stream server endpoint
@@ -38,11 +51,11 @@ export async function measureServerLatency(url: string, timeoutMs = 2000): Promi
     });
 
     const duration = Math.round(performance.now() - start);
-    clientLatencyCache.set(url, { latency: duration, expiresAt: Date.now() + LATENCY_CACHE_TTL_MS });
+    setLatencyCache(url, duration, LATENCY_CACHE_TTL_MS);
     return duration;
   } catch {
     // If HEAD failed, default to offline without triggering full GET fallbacks to save invocations
-    clientLatencyCache.set(url, { latency: 9999, expiresAt: Date.now() + 60000 });
+    setLatencyCache(url, 9999, 60000);
     return 9999;
   }
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Star, Play, Plus, Check } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
+import AuthModal from "@/components/AuthModal";
 import { useAuth } from "@/providers/AuthProvider";
 import { WatchlistStatus } from "@/lib/watchlist";
 
@@ -35,6 +36,7 @@ export default function AnimeCard({
 }: AnimeCardProps) {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isBookmarking, setIsBookmarking] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const { user, supabase } = useAuth();
 
   // Check initial bookmark status from localStorage & Supabase
@@ -70,7 +72,7 @@ export default function AnimeCard({
     }
 
     if (!activeUser) {
-      alert("Please sign in to save anime to your watchlist.");
+      setIsAuthModalOpen(true);
       return;
     }
 
@@ -162,13 +164,17 @@ export default function AnimeCard({
   const bgImg = anime.posterImage || anime.backgroundImage;
 
   return (
-    <div className={`relative group rounded-2xl cursor-pointer ${className}`}>
-      <Link href={`/anime/${anime.slug}`} className="block w-full h-full">
-        {/* Base Vertical Rectangle Card */}
-        <div
-          className={`relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 transition-all duration-300 group-hover:border-blue-500/60 group-hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] group-hover:scale-[1.03] ${
-            aspectRatio === "poster" ? "aspect-[2/3]" : "aspect-video"
-          }`}
+    <div className={`relative group rounded-2xl ${className}`}>
+      {/* Base Vertical Rectangle Card */}
+      <div
+        className={`relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 transition-all duration-300 group-hover:border-blue-500/60 group-hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] group-hover:scale-[1.03] ${
+          aspectRatio === "poster" ? "aspect-[2/3]" : "aspect-video"
+        }`}
+      >
+        <Link 
+          href={`/anime/${anime.slug}`} 
+          className="block w-full h-full relative cursor-pointer"
+          aria-label={`View ${anime.title}`}
         >
           {/* Cover Poster Image */}
           <AnimeImage
@@ -207,32 +213,14 @@ export default function AnimeCard({
           </div>
 
           {/* Bottom Title & Details Overlay */}
-          <div className="absolute bottom-0 left-0 right-0 p-3.5 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent transform translate-y-0 transition-transform duration-300">
-            <div className="flex items-start justify-between gap-1.5 mb-1">
+          <div className="absolute bottom-0 left-0 right-0 p-3.5 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
+            <div className="flex items-start justify-between gap-1.5 mb-1 pr-7">
               <h3
                 className="text-white font-bold text-sm line-clamp-1 leading-snug drop-shadow-md group-hover:text-blue-400 transition-colors"
                 title={anime.title}
               >
                 {anime.title}
               </h3>
-
-              {/* Quick Bookmark Button */}
-              <button
-                onClick={handleQuickBookmark}
-                disabled={isBookmarking}
-                className={`shrink-0 p-1 rounded-md transition-all opacity-0 group-hover:opacity-100 ${
-                  isBookmarked
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-black/60 hover:bg-blue-600 text-slate-300 hover:text-white border border-white/10"
-                }`}
-                title={isBookmarked ? "In Watchlist" : "Add to Watchlist"}
-              >
-                {isBookmarked ? (
-                  <Check className="w-3 h-3" />
-                ) : (
-                  <Plus className="w-3 h-3" />
-                )}
-              </button>
             </div>
 
             <div className="flex items-center justify-between text-xs font-medium text-slate-300">
@@ -244,8 +232,35 @@ export default function AnimeCard({
               )}
             </div>
           </div>
-        </div>
-      </Link>
+        </Link>
+
+        {/* Quick Bookmark Button (Sibling overlay, NOT inside Link) */}
+        <button
+          type="button"
+          onClick={handleQuickBookmark}
+          disabled={isBookmarking}
+          aria-label={isBookmarked ? `Remove ${anime.title} from watchlist` : `Add ${anime.title} to watchlist`}
+          className={`absolute bottom-[34px] right-3.5 z-20 shrink-0 p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 backdrop-blur-sm ${
+            isBookmarked
+              ? "bg-blue-600 text-white shadow-sm"
+              : "bg-black/60 hover:bg-blue-600 text-slate-300 hover:text-white border border-white/10"
+          }`}
+          title={isBookmarked ? "In Watchlist" : "Add to Watchlist"}
+        >
+          {isBookmarked ? (
+            <Check className="w-3.5 h-3.5" />
+          ) : (
+            <Plus className="w-3.5 h-3.5" />
+          )}
+        </button>
+      </div>
+
+      {isAuthModalOpen && (
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
