@@ -508,7 +508,8 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
     let objectUrl: string | null = null;
     try {
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(src)}`;
+      const proxyBase = (process.env.NEXT_PUBLIC_PROXY_URL || "").replace(/\/+$/, "") || "/api/proxy";
+      const proxyUrl = `${proxyBase}?url=${encodeURIComponent(src)}`;
       const res = await fetch(proxyUrl);
       if (res.ok) {
         const blob = await res.blob();

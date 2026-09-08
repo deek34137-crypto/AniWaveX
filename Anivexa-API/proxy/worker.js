@@ -294,6 +294,23 @@ export default {
       }
 
       const contentType = upstreamRes.headers.get("Content-Type") || "";
+
+      // Handle HEAD requests immediately without reading body
+      if (request.method === "HEAD") {
+        const headHeaders = new Headers({
+          ...CORS_HEADERS,
+          "Content-Type": contentType || "video/MP2T",
+          "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable",
+          "Accept-Ranges": "bytes",
+        });
+        const cl = upstreamRes.headers.get("Content-Length");
+        if (cl) headHeaders.set("Content-Length", cl);
+        return new Response(null, {
+          status: upstreamRes.status,
+          headers: headHeaders,
+        });
+      }
+
       const isM3U8 =
         contentType.includes("mpegurl") ||
         contentType.includes("x-mpegurl") ||

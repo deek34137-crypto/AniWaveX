@@ -40,8 +40,9 @@ export async function measureServerLatency(url: string, timeoutMs = 2000): Promi
 
   const start = performance.now();
   try {
+    const proxyBase = (process.env.NEXT_PUBLIC_PROXY_URL || "").replace(/\/+$/, "") || "/api/proxy";
     const probeUrl = url.startsWith("http") && !url.includes("/api/proxy") && !url.includes("proxy?")
-      ? `/api/proxy?url=${encodeURIComponent(url)}`
+      ? `${proxyBase}?url=${encodeURIComponent(url)}`
       : url;
     
     await fetch(probeUrl, {
