@@ -128,7 +128,7 @@ export default function WatchHistoryGrid({ initialItems }: { initialItems: Watch
 
           return (
             <Link 
-              href={`/anime/${item.anime_slug}`} 
+              href={`/anime/${item.anime_slug}${item.last_episode_watched ? `?ep=${item.last_episode_watched}` : ""}`} 
               key={item.id}
               className="group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105"
             >

@@ -39,7 +39,7 @@ export default function AniListSyncModal({
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const { user, supabase } = useAuth();
+  const { user, supabase, addBookmarkSlug } = useAuth();
 
   if (!isOpen) return null;
 
@@ -88,8 +88,27 @@ export default function AniListSyncModal({
           updated_at: new Date().toISOString(),
         }));
 
-        await supabase.from("bookmarks").upsert(payload, { onConflict: "user_id,anime_slug" });
+        const BATCH_SIZE = 50;
+        for (let i = 0; i < payload.length; i += BATCH_SIZE) {
+          const batch = payload.slice(i, i + BATCH_SIZE);
+          setImportStatus(`Saving ${Math.min(i + batch.length, payload.length)} of ${payload.length} anime...`);
+          const { error } = await supabase
+            .from("bookmarks")
+            .upsert(batch, { onConflict: "user_id,anime_slug" });
+
+          if (error) {
+            console.error(`Failed to import batch starting at index ${i}:`, error);
+            throw new Error(`Database import failed: ${error.message}`);
+          }
+        }
       }
+
+      // 3. Sync to AuthProvider global state
+      items.forEach((item) => {
+        if (item.anime_slug) {
+          addBookmarkSlug(item.anime_slug);
+        }
+      });
 
       setImportStatus(`Successfully imported ${items.length} anime!`);
       if (onImportComplete) onImportComplete(items.length);

@@ -97,11 +97,20 @@ export default function CommandPalette() {
       icon: Dices,
       action: async () => {
         try {
-          const res = await fetch("/api/search?q=a&limit=20");
+          const seeds = [
+            "hero", "dragon", "titan", "hunter", "demon", "sword", 
+            "fate", "jujutsu", "star", "night", "soul", "shin", 
+            "zero", "punch", "piece", "bleach", "clover", "alchemist", 
+            "space", "magic", "moon", "shadow", "cyber", "gate"
+          ];
+          const randomSeed = seeds[Math.floor(Math.random() * seeds.length)];
+          const res = await fetch(`/api/search?q=${encodeURIComponent(randomSeed)}&limit=20`);
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             const randomPick = data[Math.floor(Math.random() * data.length)];
             router.push(`/anime/${randomPick.slug}`);
+          } else {
+            router.push("/catalog");
           }
         } catch {
           router.push("/catalog");

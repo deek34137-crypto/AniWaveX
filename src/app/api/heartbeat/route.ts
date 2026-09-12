@@ -74,7 +74,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase.rpc("get_heartbeat_analytics");
+    // Use authenticated serverSupabase client (transmits admin JWT) or service_role key for admin key access
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const clientToQuery = (hasKeyAccess && serviceRoleKey)
+      ? createAdminClient(supabaseUrl, serviceRoleKey)
+      : serverSupabase;
+
+    const { data, error } = await clientToQuery.rpc("get_heartbeat_analytics");
 
     if (error) {
       console.error("Failed to fetch heartbeat analytics:", error);

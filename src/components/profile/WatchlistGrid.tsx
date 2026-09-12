@@ -13,7 +13,7 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
   const [toastItem, setToastItem] = useState<any | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const { user, supabase } = useAuth();
+  const { user, supabase, removeBookmarkSlug, addBookmarkSlug } = useAuth();
 
   useEffect(() => {
     return () => {
@@ -80,9 +80,25 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
     e.preventDefault();
     e.stopPropagation();
 
-    // Optimistic UI update
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    // 1. Optimistic UI update
+    setItems((prev) => prev.filter((i) => i.id !== item.id && i.anime_slug !== item.anime_slug));
     setToastItem(item);
+
+    // 2. Sync to AuthProvider global state
+    if (item.anime_slug) {
+      removeBookmarkSlug(item.anime_slug);
+    }
+
+    // 3. Sync to localStorage
+    try {
+      const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+      if (Array.isArray(localWatchlist)) {
+        const filtered = localWatchlist.filter(
+          (it: any) => it.id !== item.id && it.anime_slug !== item.anime_slug
+        );
+        localStorage.setItem("aniwavex_watchlist", JSON.stringify(filtered));
+      }
+    } catch {}
 
     // Auto-hide toast after 5 seconds
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -91,11 +107,22 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
       toastTimerRef.current = null;
     }, 5000);
 
-    try {
-      const { error } = await supabase.from("bookmarks").delete().eq("id", item.id);
-      if (error) console.error("Failed to delete bookmark", error);
-    } catch (err) {
-      console.error("Failed to delete bookmark", err);
+    // 4. Sync to Supabase
+    if (user) {
+      try {
+        let query = supabase.from("bookmarks").delete();
+        if (item.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
+          query = query.eq("id", item.id);
+        } else if (item.anime_slug) {
+          query = query.eq("user_id", user.id).eq("anime_slug", item.anime_slug);
+        } else {
+          query = query.eq("id", item.id);
+        }
+        const { error } = await query;
+        if (error) console.error("Failed to delete bookmark", error);
+      } catch (err) {
+        console.error("Failed to delete bookmark", err);
+      }
     }
   };
 
@@ -105,18 +132,43 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
 
     setEditingItemId(null);
     setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, status: newStatus } : i))
+      prev.map((i) =>
+        (i.id === item.id || (item.anime_slug && i.anime_slug === item.anime_slug))
+          ? { ...i, status: newStatus }
+          : i
+      )
     );
 
+    // Sync to localStorage
     try {
-      const { error } = await supabase
-        .from("bookmarks")
-        .update({ status: newStatus })
-        .eq("id", item.id);
+      const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+      if (Array.isArray(localWatchlist)) {
+        const updated = localWatchlist.map((it: any) => {
+          if (it.id === item.id || (item.anime_slug && it.anime_slug === item.anime_slug)) {
+            return { ...it, status: newStatus };
+          }
+          return it;
+        });
+        localStorage.setItem("aniwavex_watchlist", JSON.stringify(updated));
+      }
+    } catch {}
 
-      if (error) console.error("Failed to update bookmark status", error);
-    } catch (err) {
-      console.error("Failed to update bookmark status", err);
+    // Sync to Supabase
+    if (user) {
+      try {
+        let query = supabase.from("bookmarks").update({ status: newStatus });
+        if (item.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
+          query = query.eq("id", item.id);
+        } else if (item.anime_slug) {
+          query = query.eq("user_id", user.id).eq("anime_slug", item.anime_slug);
+        } else {
+          query = query.eq("id", item.id);
+        }
+        const { error } = await query;
+        if (error) console.error("Failed to update bookmark status", error);
+      } catch (err) {
+        console.error("Failed to update bookmark status", err);
+      }
     }
   };
 
@@ -126,25 +178,47 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
     // Optimistic Re-add
     setItems((prev) =>
       [toastItem, ...prev].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
       )
     );
 
     const itemToRestore = toastItem;
     setToastItem(null);
 
+    // Sync to AuthProvider global state
+    if (itemToRestore.anime_slug) {
+      addBookmarkSlug(itemToRestore.anime_slug);
+    }
+
+    // Sync to localStorage
     try {
-      const { error } = await supabase.from("bookmarks").insert({
-        user_id: itemToRestore.user_id,
-        anime_slug: itemToRestore.anime_slug,
-        anime_title: itemToRestore.anime_title,
-        poster_image: itemToRestore.poster_image,
-        status: itemToRestore.status || "watching",
-        created_at: itemToRestore.created_at
-      });
-      if (error) console.error("Failed to restore bookmark", error);
-    } catch (err) {
-      console.error("Failed to restore bookmark", err);
+      const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+      const filtered = Array.isArray(localWatchlist)
+        ? localWatchlist.filter(
+            (it: any) => it.id !== itemToRestore.id && it.anime_slug !== itemToRestore.anime_slug
+          )
+        : [];
+      localStorage.setItem(
+        "aniwavex_watchlist",
+        JSON.stringify([itemToRestore, ...filtered])
+      );
+    } catch {}
+
+    // Sync to Supabase
+    if (user) {
+      try {
+        const { error } = await supabase.from("bookmarks").insert({
+          user_id: user.id,
+          anime_slug: itemToRestore.anime_slug,
+          anime_title: itemToRestore.anime_title,
+          poster_image: itemToRestore.poster_image,
+          status: itemToRestore.status || "watching",
+          created_at: itemToRestore.created_at || new Date().toISOString(),
+        });
+        if (error) console.error("Failed to restore bookmark", error);
+      } catch (err) {
+        console.error("Failed to restore bookmark", err);
+      }
     }
   };
 

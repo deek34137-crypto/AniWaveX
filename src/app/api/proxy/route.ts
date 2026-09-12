@@ -519,6 +519,7 @@ export async function GET(request: NextRequest) {
 
     while (true) {
       upstreamRes = await fetch(currentTarget, {
+        method: request.method === "HEAD" ? "HEAD" : "GET",
         headers: upstreamHeaders,
         redirect: "manual",
       });
@@ -583,7 +584,11 @@ export async function GET(request: NextRequest) {
             delete retryHeaders["Referer"];
             delete retryHeaders["Origin"];
           }
-          const retryRes = await fetch(currentTarget, { headers: retryHeaders, redirect: "manual" });
+          const retryRes = await fetch(currentTarget, {
+            method: request.method === "HEAD" ? "HEAD" : "GET",
+            headers: retryHeaders,
+            redirect: "manual",
+          });
           if (retryRes.ok || retryRes.status === 206) {
             upstreamRes = retryRes;
             break;
@@ -595,7 +600,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!upstreamRes.ok && upstreamRes.status !== 206) {
-      return new NextResponse(await upstreamRes.text(), {
+      return new NextResponse(request.method === "HEAD" ? null : await upstreamRes.text(), {
         status: upstreamRes.status,
         headers: {
           ...corsHeaders,
@@ -605,6 +610,19 @@ export async function GET(request: NextRequest) {
     }
 
     const contentType = upstreamRes.headers.get("Content-Type") || "";
+
+    if (request.method === "HEAD") {
+      const headHeaders: Record<string, string> = {
+        ...corsHeaders,
+        "Content-Type": contentType || "application/octet-stream",
+      };
+      const cl = upstreamRes.headers.get("Content-Length");
+      if (cl) headHeaders["Content-Length"] = cl;
+      return new NextResponse(null, {
+        status: upstreamRes.status,
+        headers: headHeaders,
+      });
+    }
     const isM3U8 =
       contentType.includes("mpegurl") ||
       contentType.includes("x-mpegurl") ||
@@ -692,4 +710,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message || "Proxy request failed" }, { status: 502, headers: corsHeaders });
   }
 }
+
+export const HEAD = GET;
+
 

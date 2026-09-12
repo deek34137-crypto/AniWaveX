@@ -3,9 +3,7 @@
  * Prevents open proxy relay abuse and SSRF through cryptographically signed short-lived tokens.
  */
 
-import { createHmac, randomBytes } from "crypto";
-
-const RUNTIME_SECRET = randomBytes(32).toString("hex");
+import { createHmac, timingSafeEqual } from "crypto";
 
 function getProxySecret(): string {
   const configured = 
@@ -15,9 +13,11 @@ function getProxySecret(): string {
 
   if (configured) return configured;
 
-  if (process.env.NODE_ENV === "production") {
-    console.warn("[SECURITY WARNING] PROXY_SECRET is not configured in environment variables. Falling back to an ephemeral in-memory runtime secret.");
-    return RUNTIME_SECRET;
+  // Derive a deterministic fallback secret from the project's Supabase key so that
+  // signatures remain valid across distributed serverless lambda instances and cold starts
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (anonKey) {
+    return createHmac("sha256", "aniwavex_proxy_signature_salt_v1").update(anonKey).digest("hex");
   }
 
   return "aniwavex_dev_proxy_hmac_secret";
@@ -82,7 +82,17 @@ export function verifyProxySignature(
   if (isNaN(exp)) return false;
 
   const expectedSig = generateProxySignature(url, exp);
-  if (expectedSig !== sig) {
+  if (expectedSig.length !== sig.length) {
+    return false;
+  }
+
+  try {
+    const expectedBuf = Buffer.from(expectedSig, "utf-8");
+    const actualBuf = Buffer.from(sig, "utf-8");
+    if (!timingSafeEqual(expectedBuf, actualBuf)) {
+      return false;
+    }
+  } catch {
     return false;
   }
 

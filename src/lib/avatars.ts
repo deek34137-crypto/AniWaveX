@@ -15,5 +15,12 @@ export const AVATARS: Record<string, string> = {
 
 export function getAvatarUrl(avatarId?: string | null): string | null {
   if (!avatarId) return null;
-  return AVATARS[avatarId] || null;
+  if (AVATARS[avatarId]) return AVATARS[avatarId];
+  // Normalize formats like 'avatar-1', 'avatar-01', or 'avatar_1' to 'avatar_01'
+  const match = avatarId.match(/avatar[-_](\d+)/i);
+  if (match) {
+    const normalizedKey = `avatar_${match[1].padStart(2, "0")}`;
+    return AVATARS[normalizedKey] || null;
+  }
+  return null;
 }
