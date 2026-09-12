@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect } from "react";
 import { App as CapApp } from "@capacitor/app";
@@ -38,7 +38,7 @@ export default function MobileAppShell({ children }: { children: React.ReactNode
       } catch {}
 
       try {
-        await CapApp.addListener("backButton", ({ canGoBack }) => {
+        await CapApp.addListener("backButton", ({ canGoBack }: { canGoBack: boolean }) => {
           const closeBtn = document.querySelector(
             "[data-modal-close='true'], button[aria-label='Close'], button.modal-close"
           ) as HTMLElement | null;
