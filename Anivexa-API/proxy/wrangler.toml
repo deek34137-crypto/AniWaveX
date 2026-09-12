@@ -1,3 +1,4 @@
 name = "anidb-proxy"
 main = "worker.js"
 compatibility_date = "2024-01-01"
+account_id = "6a34199b721520c45f514c103a1af82f"
