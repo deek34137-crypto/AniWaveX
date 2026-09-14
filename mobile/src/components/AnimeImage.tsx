@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Film } from "lucide-react";
+import { getOptimizedImageUrl } from "@/lib/image-utils";
 
 interface AnimeImageProps {
   src?: string | null;
@@ -13,6 +14,7 @@ interface AnimeImageProps {
   priority?: boolean;
   quality?: number;
   unoptimized?: boolean;
+  targetWidth?: number;
 }
 
 export default function AnimeImage({
@@ -24,10 +26,18 @@ export default function AnimeImage({
   priority = false,
   quality = 85,
   unoptimized,
+  targetWidth,
 }: AnimeImageProps) {
+  const [useFallback, setUseFallback] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  // If no source is provided or image failed to load, render stylish placeholder
+  // Reset fallback state if src changes
+  useEffect(() => {
+    setUseFallback(false);
+    setHasError(false);
+  }, [src]);
+
+  // If no source is provided or both optimized & fallback images failed to load, render stylish placeholder
   if (!src || hasError) {
     const initials = alt
       ? alt
@@ -53,17 +63,42 @@ export default function AnimeImage({
     );
   }
 
+  // Infer optimal responsive width based on sizes if not explicitly provided
+  let computedWidth = targetWidth;
+  if (!computedWidth && sizes) {
+    if (sizes.includes("100vw")) {
+      computedWidth = 1400; // Banner size
+    } else {
+      computedWidth = 450; // High-density 2x poster card
+    }
+  }
+
+  // Get edge-optimized WebP unless fallback is active
+  const displaySrc = !useFallback
+    ? getOptimizedImageUrl(src, { width: computedWidth, quality, format: "webp" })
+    : src;
+
+  const handleError = () => {
+    if (!useFallback && displaySrc !== src) {
+      // First failure: seamlessly fall back to original direct CDN source
+      setUseFallback(true);
+    } else {
+      // Second failure: show placeholder
+      setHasError(true);
+    }
+  };
+
   return (
     <Image
-      src={src}
+      src={displaySrc}
       alt={alt || "Anime poster"}
       fill={fill}
       sizes={sizes || "(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"}
       priority={priority}
       quality={quality}
       className={className}
-      onError={() => setHasError(true)}
-      unoptimized={unoptimized !== undefined ? unoptimized : src.startsWith("http://")}
+      onError={handleError}
+      unoptimized={unoptimized !== undefined ? unoptimized : displaySrc.startsWith("http://")}
     />
   );
 }

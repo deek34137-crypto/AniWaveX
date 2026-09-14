@@ -12,6 +12,15 @@ interface HeroSliderProps {
 export default function HeroSlider({ animeList }: HeroSliderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+  const [isPreloadReady, setIsPreloadReady] = useState(false);
+
+  // Defer preloading adjacent slides until after initial paint (1.5s) to guarantee sub-second LCP
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsPreloadReady(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Auto-slide every 6 seconds (paused on hover or when browser tab is in background)
   useEffect(() => {
@@ -29,10 +38,12 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
   if (!animeList || animeList.length === 0) return null;
 
   const nextSlide = () => {
+    setIsPreloadReady(true);
     setCurrentIndex((prev) => (prev + 1) % animeList.length);
   };
 
   const prevSlide = () => {
+    setIsPreloadReady(true);
     setCurrentIndex((prev) => (prev - 1 + animeList.length) % animeList.length);
   };
 
@@ -40,14 +51,15 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
     <div 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="relative w-full h-[70vh] min-h-[500px] overflow-hidden rounded-3xl mt-6 group"
+      className="relative w-full h-[52vh] sm:h-[65vh] md:h-[70vh] min-h-[380px] sm:min-h-[500px] overflow-hidden rounded-2xl md:rounded-3xl mt-2 sm:mt-6 group shadow-2xl"
     >
       {animeList.map((anime, index) => {
         const isActive = index === currentIndex;
         const isAdjacent = 
           index === (currentIndex + 1) % animeList.length || 
           index === (currentIndex - 1 + animeList.length) % animeList.length;
-        const shouldRenderImage = isActive || isAdjacent;
+        // On initial page load, only render the active slide to give 100% bandwidth to LCP
+        const shouldRenderImage = isActive || (isPreloadReady && isAdjacent);
         const imageUrl = anime.backgroundImage || anime.posterImage;
 
         return (
@@ -70,33 +82,33 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
             ) : null}
             
             {/* Gradients for readability */}
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/70 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
 
             {/* Content */}
-            <div className="absolute bottom-0 left-0 w-full max-w-4xl p-8 md:p-16 flex flex-col justify-end h-full">
-              <h1 className={`text-5xl md:text-7xl font-black text-white tracking-tight mb-4 drop-shadow-2xl transition-all duration-700 delay-300 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+            <div className="absolute bottom-0 left-0 w-full max-w-4xl p-4 sm:p-8 md:p-16 flex flex-col justify-end h-full">
+              <h1 className={`text-2xl sm:text-4xl md:text-6xl font-black text-white tracking-tight mb-2 sm:mb-4 drop-shadow-2xl transition-all duration-700 delay-300 transform line-clamp-2 ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 {anime.title}
               </h1>
               
-              <p className={`text-slate-300 text-lg md:text-xl line-clamp-3 mb-8 max-w-2xl drop-shadow-md transition-all duration-700 delay-500 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+              <p className={`text-slate-300 text-xs sm:text-base md:text-xl line-clamp-2 sm:line-clamp-3 mb-4 sm:mb-8 max-w-2xl drop-shadow-md transition-all duration-700 delay-500 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 {anime.description}
               </p>
 
-              <div className={`flex flex-col sm:flex-row items-center gap-4 transition-all duration-700 delay-700 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+              <div className={`flex flex-row items-center gap-2.5 sm:gap-4 transition-all duration-700 delay-700 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 <Link 
                   href={`/anime/${anime.slug}`}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl shadow-[0_0_30px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95"
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-105 active:scale-95"
                 >
-                  <Play className="w-5 h-5 fill-current" />
+                  <Play className="w-4 h-4 fill-current" />
                   Watch Now
                 </Link>
                 
                 <Link 
                   href={`/anime/${anime.slug}`}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-slate-500/40 hover:bg-slate-500/60 text-white font-semibold rounded-xl backdrop-blur-md transition-all hover:scale-105 active:scale-95"
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-slate-500/40 hover:bg-slate-500/60 text-white text-xs sm:text-base font-semibold rounded-xl backdrop-blur-md transition-all hover:scale-105 active:scale-95"
                 >
-                  <Info className="w-5 h-5" />
+                  <Info className="w-4 h-4" />
                   More Info
                 </Link>
               </div>

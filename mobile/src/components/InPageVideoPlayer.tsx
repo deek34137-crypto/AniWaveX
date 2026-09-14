@@ -6,6 +6,7 @@ import NativePlayer from "./NativePlayer";
 import { useAuth } from "@/providers/AuthProvider";
 import { benchmarkStreamSources, getFastestServerIndex, formatLatencyBadge } from "@/lib/latency-benchmarker";
 import { syncProgressToAniList } from "@/lib/sync/anilist-sync";
+import { handleSequelPlaybackStarted, handleAnimeCompleted } from "@/lib/franchise";
 import type { MediaPlayerInstance } from "@vidstack/react";
 
 interface StreamSource {
@@ -33,6 +34,7 @@ interface InPageVideoPlayerProps {
   animePosterImage?: string;
   user?: any;
   anilistId?: number | null;
+  animeId?: string | number;
 }
 
 export default function InPageVideoPlayer({ 
@@ -45,7 +47,8 @@ export default function InPageVideoPlayer({
   onEpisodeChange,
   onClose,
   user: initialUser,
-  anilistId
+  anilistId,
+  animeId
 }: InPageVideoPlayerProps) {
   const { user: authUser, supabase } = useAuth();
   const [activeTab, setActiveTab] = useState<"sub" | "dub" | "hindi">("sub");
@@ -246,6 +249,23 @@ export default function InPageVideoPlayer({
     };
   }, [episode?.id, animeSlug, syncToSupabase, initialTime]);
 
+  // When user starts playing this anime, check if it is a sequel of a completed prequel.
+  // If so, remove the completed prequel from Continue Watching and ensure it is preserved in Watched Anime (completed).
+  useEffect(() => {
+    if (!episode) return;
+    const activeUserId = currentUserRef.current?.id || currentUser?.id || authUser?.id || initialUser?.id;
+    handleSequelPlaybackStarted({
+      currentAnime: {
+        slug: animeSlug,
+        title: animeTitle,
+        animeId,
+        posterImage: animePosterImage,
+      },
+      supabase,
+      userId: activeUserId,
+    });
+  }, [animeSlug, animeTitle, animeId, animePosterImage, episode?.id, authUser?.id, initialUser?.id, supabase]);
+
   // Window beforeunload listener to flush progress on page close/reload
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -333,12 +353,15 @@ export default function InPageVideoPlayer({
       if (isCancelled) return;
       setServerLatencies(latencies);
 
-      // Auto-select lowest latency server if user has not explicitly locked a server
+      // Only auto-switch if user has not explicitly locked a server and playback has not already commenced
       if (!userExplicitlySelectedServerRef.current) {
-        const fastestIdx = getFastestServerIndex(activeSources, latencies);
-        if (fastestIdx !== validServerIndex && latencies[activeSources[fastestIdx]?.url] < 400) {
-          setSelectedServerIndex(fastestIdx);
-          setFallbackToIframe(!activeSources[fastestIdx].isM3U8);
+        const liveTime = mediaPlayerRef.current?.currentTime || 0;
+        if (liveTime < 1) {
+          const fastestIdx = getFastestServerIndex(activeSources, latencies);
+          if (fastestIdx !== validServerIndex && latencies[activeSources[fastestIdx]?.url] < 300) {
+            setSelectedServerIndex(fastestIdx);
+            setFallbackToIframe(!activeSources[fastestIdx].isM3U8);
+          }
         }
       }
     });
@@ -518,10 +541,37 @@ export default function InPageVideoPlayer({
         }
       });
     }
+
+    // If final episode of series has ended, automatically mark anime as completed
+    // and remove from Continue Watching if it has no sequel
+    if (!hasNext) {
+      const activeUserId = currentUserRef.current?.id || currentUser?.id || authUser?.id || initialUser?.id;
+      const finalEp = episode?.id || episodes?.length || 12;
+
+      handleAnimeCompleted({
+        anime: {
+          slug: animeSlug,
+          title: animeTitle,
+          animeId,
+          posterImage: animePosterImage,
+          anilistId,
+        },
+        supabase,
+        userId: activeUserId,
+        finalEpisode: finalEp,
+      });
+    }
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("aniwavex_watch_updated", {
+        detail: { animeSlug, episodeId: episode?.id }
+      }));
+    }
+
     if (autoplayNext && hasNext) {
       handleNext();
     }
-  }, [anilistId, episode?.id, autoplayNext, hasNext, handleNext, showToast]);
+  }, [anilistId, episode?.id, autoplayNext, hasNext, handleNext, showToast, currentUser?.id, authUser?.id, initialUser?.id, animeSlug, animeTitle, animePosterImage, supabase]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

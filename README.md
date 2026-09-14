@@ -7,14 +7,14 @@
 **Next-Gen Ad-Free High-Performance Anime Streaming Platform & Native Android Client**
 
 [![Website](https://img.shields.io/badge/Website-aniwavex.bond-06b6d4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://aniwavex.bond)
-[![Download APK](https://img.shields.io/badge/Download_APK-v1.0.0_Android-8b5cf6?style=for-the-badge&logo=android&logoColor=white)](releases/AniWaveX.apk)
+[![Download APK](https://img.shields.io/badge/Download_APK-v1.0.0_Android-8b5cf6?style=for-the-badge&logo=android&logoColor=white)](https://github.com/deek34137-crypto/AniWaveX/raw/master/releases/AniWaveX.apk)
 [![Proxy Pool](https://img.shields.io/badge/Proxy_Pool-200K_Daily_Reqs-f97316?style=for-the-badge&logo=cloudflare&logoColor=white)](https://workers.cloudflare.com)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-7-119eff?style=for-the-badge&logo=capacitor&logoColor=white)](https://capacitorjs.com/)
 
 ---
 
-[**🌐 Open Web App (aniwavex.bond)**](https://aniwavex.bond) • [**📥 Download Android APK**](releases/AniWaveX.apk) • [**⚙️ Architecture**](#-architecture) • [**🚀 Getting Started**](#-getting-started)
+[**🌐 Open Web App (aniwavex.bond)**](https://aniwavex.bond) • [**📥 Direct Download APK (1-Click)**](https://github.com/deek34137-crypto/AniWaveX/raw/master/releases/AniWaveX.apk) • [**⚙️ Architecture**](#-architecture) • [**🚀 Getting Started**](#-getting-started)
 
 </div>
 
@@ -36,9 +36,9 @@
 
 ## 📱 Android App Download
 
-The compiled Android APK is directly available in this repository:
+The compiled Android APK is directly downloadable with one click:
 
-👉 **[Download AniWaveX.apk (v1.0.0)](releases/AniWaveX.apk)**
+👉 **[📥 Direct 1-Click Download AniWaveX.apk (5.2 MB)](https://github.com/deek34137-crypto/AniWaveX/raw/master/releases/AniWaveX.apk)**
 
 ### Installation on Android:
 1. Download `AniWaveX.apk` onto your Android device.

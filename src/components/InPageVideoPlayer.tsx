@@ -353,12 +353,15 @@ export default function InPageVideoPlayer({
       if (isCancelled) return;
       setServerLatencies(latencies);
 
-      // Auto-select lowest latency server if user has not explicitly locked a server
+      // Only auto-switch if user has not explicitly locked a server and playback has not already commenced
       if (!userExplicitlySelectedServerRef.current) {
-        const fastestIdx = getFastestServerIndex(activeSources, latencies);
-        if (fastestIdx !== validServerIndex && latencies[activeSources[fastestIdx]?.url] < 400) {
-          setSelectedServerIndex(fastestIdx);
-          setFallbackToIframe(!activeSources[fastestIdx].isM3U8);
+        const liveTime = mediaPlayerRef.current?.currentTime || 0;
+        if (liveTime < 1) {
+          const fastestIdx = getFastestServerIndex(activeSources, latencies);
+          if (fastestIdx !== validServerIndex && latencies[activeSources[fastestIdx]?.url] < 300) {
+            setSelectedServerIndex(fastestIdx);
+            setFallbackToIframe(!activeSources[fastestIdx].isM3U8);
+          }
         }
       }
     });
