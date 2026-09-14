@@ -1,7 +1,11 @@
 import { cache } from "react";
 import { fetchAniListGraphQL } from "@/lib/schedule";
 import { getAnilistId } from "@/lib/providers/anikoto-wrapper";
-import { resolveAnilistIdFromKitsu } from "@/lib/kitsu-mapper";
+import {
+  resolveAnilistIdFromKitsu,
+  resolveKitsuIdFromAnilistId,
+  resolveKitsuSlugFromAnilist
+} from "@/lib/kitsu-mapper";
 
 function extractCategories(anime: any, included?: any[]): string[] {
   if (!included || !Array.isArray(included) || included.length === 0) {
@@ -219,22 +223,89 @@ export const getAnimeData = cache(async (slug: string) => {
   };
 
   try {
-    // 1. Fetch live metadata from Kitsu including categories & episodes in a single combined request
-    let res = await fetch(`https://kitsu.io/api/edge/anime?filter[slug]=${encodeURIComponent(slug)}&include=categories,episodes`, {
-      headers,
-      signal: AbortSignal.timeout(8000),
-      next: { revalidate: 86400 } // 24 hours ISR cache
-    });
-    let json = res.ok ? await res.json() : { data: [], included: [] };
-    
-    // Fallback to text search if exact slug match is not found
-    if (!json.data || json.data.length === 0) {
-      res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(slug)}&include=categories,episodes`, {
+    let json: any = { data: [], included: [] };
+
+    // 1. If slug is numeric, fetch by Kitsu ID directly
+    if (/^\d+$/.test(slug)) {
+      const res = await fetch(`https://kitsu.io/api/edge/anime/${encodeURIComponent(slug)}?include=categories,episodes`, {
         headers,
         signal: AbortSignal.timeout(8000),
         next: { revalidate: 86400 }
       });
-      json = res.ok ? await res.json() : { data: [], included: [] };
+      if (res.ok) {
+        const idJson = await res.json();
+        if (idJson.data) {
+          json = { data: [idJson.data], included: idJson.included || [] };
+        }
+      }
+    }
+
+    // 2. Fetch live metadata from Kitsu by exact slug
+    if (!json.data || json.data.length === 0) {
+      const res = await fetch(`https://kitsu.io/api/edge/anime?filter[slug]=${encodeURIComponent(slug)}&include=categories,episodes`, {
+        headers,
+        signal: AbortSignal.timeout(8000),
+        next: { revalidate: 86400 } // 24 hours ISR cache
+      });
+      if (res.ok) {
+        json = await res.json();
+      }
+    }
+
+    // 3. Fallback: If exact slug match not found, resolve via AniList + ARM / AniZip cross-referencing
+    if (!json.data || json.data.length === 0) {
+      try {
+        const cleanTitle = slug.replace(/[-_]+/g, " ").trim();
+        const aniListQuery = `query($search: String) {
+          Media(search: $search, type: ANIME) {
+            id
+            title { english romaji }
+          }
+        }`;
+        const alRes = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ query: aniListQuery, variables: { search: cleanTitle } }),
+          signal: AbortSignal.timeout(4000)
+        });
+        if (alRes.ok) {
+          const alData = await alRes.json();
+          const alMedia = alData?.data?.Media;
+          if (alMedia?.id) {
+            const mappedKitsuId = await resolveKitsuIdFromAnilistId(alMedia.id);
+            if (mappedKitsuId) {
+              const directRes = await fetch(`https://kitsu.io/api/edge/anime/${encodeURIComponent(mappedKitsuId)}?include=categories,episodes`, {
+                headers,
+                signal: AbortSignal.timeout(8000),
+                next: { revalidate: 86400 }
+              });
+              if (directRes.ok) {
+                const directJson = await directRes.json();
+                if (directJson.data) {
+                  json = { data: [directJson.data], included: directJson.included || [] };
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`AniList fallback lookup failed for slug "${slug}":`, err);
+      }
+    }
+
+    // 4. Fallback to normalized text search on Kitsu (stripping confusing hyphens/negations)
+    if (!json.data || json.data.length === 0) {
+      const normalizedQuery = normalizeSearchQuery(slug);
+      if (normalizedQuery) {
+        const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(normalizedQuery)}&include=categories,episodes`, {
+          headers,
+          signal: AbortSignal.timeout(8000),
+          next: { revalidate: 86400 }
+        });
+        if (res.ok) {
+          json = await res.json();
+        }
+      }
     }
 
     if (!json.data || json.data.length === 0) {
@@ -390,7 +461,24 @@ async function fetchAniListRelations(title: string): Promise<{
 
     const next = sequelEdges[0].node;
     const nextTitle = next.title?.english || next.title?.romaji || "";
-    const nextSlug = generateSlugFromTitle(nextTitle);
+
+    // Resolve real canonical Kitsu slug & ID deterministically via ARM/AniZip
+    let nextSlug = "";
+    if (next.id) {
+      try {
+        const mappedKitsu = await resolveKitsuSlugFromAnilist(next.id, {
+          romaji: next.title?.romaji,
+          english: next.title?.english,
+        });
+        if (mappedKitsu?.slug) {
+          nextSlug = mappedKitsu.slug;
+        }
+      } catch {}
+    }
+
+    if (!nextSlug) {
+      nextSlug = generateSlugFromTitle(nextTitle);
+    }
 
     return {
       nextInSeries: {
