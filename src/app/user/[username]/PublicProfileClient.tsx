@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { 
@@ -43,6 +43,7 @@ export default function PublicProfileClient({
   history: initialHistory,
   initialTierLists,
 }: PublicProfileClientProps) {
+  const tabsRef = useRef<HTMLDivElement>(null);
   const [bookmarks, setBookmarks] = useState<any[]>(initialBookmarks || []);
   const [history, setHistory] = useState<any[]>(initialHistory || []);
   const [copied, setCopied] = useState(false);
@@ -306,9 +307,32 @@ export default function PublicProfileClient({
   }, [bookmarks]);
 
   const filteredBookmarks = useMemo(() => {
+    if (watchlistFilter === "completed") {
+      const list = bookmarks.filter((b) => b.status === "completed");
+      const slugs = new Set(list.map((b) => b.anime_slug));
+
+      // Include completed shows inferred from history
+      history.forEach((h) => {
+        if (h.anime_slug && !slugs.has(h.anime_slug)) {
+          if (h.last_episode_watched >= 12 && (h.progress_seconds || 0) > 1000) {
+            slugs.add(h.anime_slug);
+            list.push({
+              id: h.id || h.anime_slug,
+              anime_slug: h.anime_slug,
+              anime_title: h.anime_title,
+              poster_image: h.poster_image,
+              status: "completed",
+              created_at: h.updated_at || new Date().toISOString(),
+            });
+          }
+        }
+      });
+      return list;
+    }
+
     if (watchlistFilter === "all") return bookmarks;
     return bookmarks.filter((b) => b.status === watchlistFilter);
-  }, [bookmarks, watchlistFilter]);
+  }, [bookmarks, history, watchlistFilter]);
 
   const handleShare = () => {
     if (typeof window !== "undefined") {
@@ -407,57 +431,107 @@ export default function PublicProfileClient({
 
       {/* 2. Stats Dashboard */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-slate-900/70 border border-white/10 rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg">
-          <div className="p-3 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30 shrink-0">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("history");
+            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
+          }}
+          className={`text-left bg-slate-900/70 border rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer group ${
+            activeTab === "history"
+              ? "border-blue-500/80 bg-blue-950/20 shadow-blue-950/30 ring-1 ring-blue-500/50"
+              : "border-white/10 hover:border-blue-500/50"
+          }`}
+          title="Click to view Watch History"
+        >
+          <div className="p-3 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30 shrink-0 group-hover:scale-110 transition-transform">
             <Clock className="w-5 h-5" />
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-black text-white">{estimatedHours} hrs</div>
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-[11px] font-semibold text-slate-400 group-hover:text-blue-400 uppercase tracking-wider transition-colors">
               Watch Time
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-slate-900/70 border border-white/10 rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg">
-          <div className="p-3 bg-purple-600/20 text-purple-400 rounded-xl border border-purple-500/30 shrink-0">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("history");
+            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
+          }}
+          className={`text-left bg-slate-900/70 border rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer group ${
+            activeTab === "history"
+              ? "border-purple-500/80 bg-purple-950/20 shadow-purple-950/30 ring-1 ring-purple-500/50"
+              : "border-white/10 hover:border-purple-500/50"
+          }`}
+          title="Click to view Episodes Watched"
+        >
+          <div className="p-3 bg-purple-600/20 text-purple-400 rounded-xl border border-purple-500/30 shrink-0 group-hover:scale-110 transition-transform">
             <Tv className="w-5 h-5" />
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-black text-white">{totalEpisodesWatched}</div>
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-[11px] font-semibold text-slate-400 group-hover:text-purple-400 uppercase tracking-wider transition-colors">
               Episodes Watched
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-slate-900/70 border border-white/10 rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg">
-          <div className="p-3 bg-emerald-600/20 text-emerald-400 rounded-xl border border-emerald-500/30 shrink-0">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("watchlist");
+            setWatchlistFilter("completed");
+            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
+          }}
+          className={`text-left bg-slate-900/70 border rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer group ${
+            activeTab === "watchlist" && watchlistFilter === "completed"
+              ? "border-emerald-500/80 bg-emerald-950/20 shadow-emerald-950/30 ring-1 ring-emerald-500/50"
+              : "border-white/10 hover:border-emerald-500/50"
+          }`}
+          title="Click to view Completed Shows"
+        >
+          <div className="p-3 bg-emerald-600/20 text-emerald-400 rounded-xl border border-emerald-500/30 shrink-0 group-hover:scale-110 transition-transform">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-black text-white">{completedCount}</div>
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-[11px] font-semibold text-slate-400 group-hover:text-emerald-400 uppercase tracking-wider transition-colors">
               Completed Shows
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-slate-900/70 border border-white/10 rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg">
-          <div className="p-3 bg-amber-600/20 text-amber-400 rounded-xl border border-amber-500/30 shrink-0">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("watchlist");
+            setWatchlistFilter("all");
+            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
+          }}
+          className={`text-left bg-slate-900/70 border rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer group ${
+            activeTab === "watchlist" && watchlistFilter === "all"
+              ? "border-amber-500/80 bg-amber-950/20 shadow-amber-950/30 ring-1 ring-amber-500/50"
+              : "border-white/10 hover:border-amber-500/50"
+          }`}
+          title="Click to view Watchlist"
+        >
+          <div className="p-3 bg-amber-600/20 text-amber-400 rounded-xl border border-amber-500/30 shrink-0 group-hover:scale-110 transition-transform">
             <Bookmark className="w-5 h-5" />
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-black text-white">{bookmarks.length}</div>
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-[11px] font-semibold text-slate-400 group-hover:text-amber-400 uppercase tracking-wider transition-colors">
               Total Watchlist
             </div>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* 3. Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto">
+      <div ref={tabsRef} className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto">
         <button
           onClick={() => setActiveTab("showcase")}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
@@ -612,9 +686,9 @@ export default function PublicProfileClient({
           {/* Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
             {[
-              { id: "all", label: "All Shows" },
-              { id: "watching", label: "Watching" },
-              { id: "completed", label: "Completed" },
+              { id: "all", label: `All Shows (${bookmarks.length})` },
+              { id: "watching", label: `Watching (${watchingCount})` },
+              { id: "completed", label: `Completed (${completedCount})` },
               { id: "plan_to_watch", label: "Plan to Watch" },
               { id: "dropped", label: "Dropped" },
             ].map((f) => (
@@ -634,8 +708,20 @@ export default function PublicProfileClient({
 
           {filteredBookmarks.length === 0 ? (
             <div className="text-center py-20 bg-slate-900/30 border border-white/5 rounded-3xl text-slate-400">
-              <Bookmark className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-              <h4 className="text-base font-bold text-white">No Anime in this Category</h4>
+              {watchlistFilter === "completed" ? (
+                <>
+                  <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-500/60 mb-2" />
+                  <h4 className="text-base font-bold text-white">No Completed Shows Yet</h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                    When you finish watching all episodes of an anime series, it will automatically appear here.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Bookmark className="w-10 h-10 mx-auto text-slate-600 mb-2" />
+                  <h4 className="text-base font-bold text-white">No Anime in this Category</h4>
+                </>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
