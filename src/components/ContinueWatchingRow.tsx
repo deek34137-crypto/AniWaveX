@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Play, PlayCircle, X } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import { useAuth } from "@/providers/AuthProvider";
-import { filterActiveSequelPrequels } from "@/lib/franchise";
+import { filterActiveSequelPrequels, checkAnimeHasSequel } from "@/lib/franchise";
 
 interface WatchHistoryItem {
   animeSlug: string;
@@ -134,6 +134,39 @@ export default function ContinueWatchingRow() {
       const filteredList = filterActiveSequelPrequels(mergedList, completedSlugs);
 
       setItems(filteredList.slice(0, 12));
+
+      // Check any completed anime in background: if it has NO sequel, remove it from Continue Watching
+      mergedList.forEach((item) => {
+        const isDone = completedSlugs.has(item.animeSlug) || (item.episodeId && item.episodeId >= 11);
+        if (isDone) {
+          checkAnimeHasSequel({ slug: item.animeSlug, title: item.animeTitle }).then((hasSequel) => {
+            if (!hasSequel) {
+              // Remove from localStorage
+              try {
+                const rawRecent = localStorage.getItem("aniwavex_recent_watches");
+                if (rawRecent) {
+                  const list = JSON.parse(rawRecent);
+                  const updated = list.filter((x: any) => (x.animeSlug || x.slug) !== item.animeSlug);
+                  localStorage.setItem("aniwavex_recent_watches", JSON.stringify(updated));
+                }
+              } catch {}
+
+              // Remove from Supabase
+              if (user) {
+                supabase
+                  .from("watch_history")
+                  .delete()
+                  .eq("user_id", user.id)
+                  .eq("anime_slug", item.animeSlug)
+                  .then(() => {});
+              }
+
+              // Update local state
+              setItems((prev) => prev.filter((it) => it.animeSlug !== item.animeSlug));
+            }
+          });
+        }
+      });
     } catch (err) {
       console.error("Failed to load continue watching history:", err);
     } finally {

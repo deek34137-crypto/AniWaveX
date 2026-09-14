@@ -6,6 +6,7 @@ import { Trash2, ChevronDown } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
 import AnimeImage from "@/components/AnimeImage";
+import { handleAnimeCompleted } from "@/lib/franchise";
 
 export default function WatchlistGrid({ initialItems }: { initialItems: any[] }) {
   const [items, setItems] = useState(initialItems);
@@ -169,6 +170,25 @@ export default function WatchlistGrid({ initialItems }: { initialItems: any[] })
       } catch (err) {
         console.error("Failed to update bookmark status", err);
       }
+    }
+
+    if (newStatus === "completed") {
+      handleAnimeCompleted({
+        anime: {
+          slug: item.anime_slug,
+          title: item.anime_title,
+          posterImage: item.poster_image,
+        },
+        supabase,
+        userId: user?.id,
+        finalEpisode: item.last_episode_watched || 12,
+      });
+    } else if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("aniwavex_watchlist_updated", {
+          detail: { animeSlug: item.anime_slug, status: newStatus },
+        })
+      );
     }
   };
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Star, Trash2 } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import AnimeImage from "@/components/AnimeImage";
-import { filterActiveSequelPrequels } from "@/lib/franchise";
+import { filterActiveSequelPrequels, checkAnimeHasSequel } from "@/lib/franchise";
 
 interface WatchHistoryItem {
   id: string;
@@ -97,6 +97,22 @@ export default function WatchHistoryGrid({
               }
             });
             setLocalMeta((prev) => ({ ...prev, ...metaMap }));
+
+            // Background check for completed items without sequel
+            data.forEach((item: any) => {
+              if (item.last_episode_watched >= 11) {
+                checkAnimeHasSequel({ slug: item.anime_slug, title: item.anime_title }).then((hasSequel) => {
+                  if (!hasSequel) {
+                    supabase
+                      .from("watch_history")
+                      .delete()
+                      .eq("id", item.id)
+                      .then(() => {});
+                    setItems((prev) => prev.filter((it) => it.id !== item.id));
+                  }
+                });
+              }
+            });
           }
         });
     }

@@ -165,17 +165,20 @@ export function isPrequelOf(
   return false;
 }
 
+export const sequelMemoryCache = new Map<string, boolean>();
+
 /**
  * Filter Continue Watching list:
- * If an item is completed and has a sequel actively being watched in the list,
- * omit the completed prequel so only the active sequel appears.
- * If the user hasn't played the sequel, the completed prequel is kept in the list.
+ * 1. If an item is completed and has NO sequel, it should NOT rest in Continue Watching.
+ * 2. If an item is completed and has a sequel actively being watched in the list,
+ *    omit the completed prequel so only the active sequel appears.
+ * 3. If the user hasn't played the sequel, the completed prequel is kept in the list.
  */
 export function filterActiveSequelPrequels<T extends FranchiseAnimeRef>(
   items: T[],
   completedSlugs: Set<string> = new Set()
 ): T[] {
-  if (!items || items.length <= 1) return items;
+  if (!items || items.length === 0) return items;
 
   return items.filter((candidate) => {
     const candSlug = candidate.animeSlug || candidate.slug || "";
@@ -187,6 +190,23 @@ export function filterActiveSequelPrequels<T extends FranchiseAnimeRef>(
 
     // If not completed, keep in Continue Watching!
     if (!isCompleted) return true;
+
+    // Check if we know whether this anime has a sequel
+    let hasKnownSequel: boolean | null = null;
+    if (sequelMemoryCache.has(candSlug)) {
+      hasKnownSequel = sequelMemoryCache.get(candSlug)!;
+    } else if (typeof window !== "undefined") {
+      const cached = localStorage.getItem(`aniwavex_has_sequel_${candSlug}`);
+      if (cached !== null) {
+        hasKnownSequel = cached === "true";
+        sequelMemoryCache.set(candSlug, hasKnownSequel);
+      }
+    }
+
+    // If confirmed to have NO sequel, omit from Continue Watching
+    if (hasKnownSequel === false) {
+      return false;
+    }
 
     // Check if any other item in the list is an active sequel of candidate
     const hasSequelInList = items.some((other) => {
@@ -446,4 +466,233 @@ export async function handleSequelPlaybackStarted({
   } catch (err) {
     console.error("Failed to clean completed prequels:", err);
   }
+}
+
+/**
+ * Checks if an anime has a sequel (e.g. S1 has S2).
+ * Utilizes memory cache + localStorage cache for instantaneous response.
+ */
+export async function checkAnimeHasSequel(anime: {
+  slug?: string;
+  title?: string;
+  animeId?: string | number;
+  anilistId?: number | null;
+}): Promise<boolean> {
+  const slug = anime.slug || "";
+  const title = anime.title || "";
+  const animeId = anime.animeId;
+  const cacheKey = slug || title || String(animeId || "");
+
+  if (!cacheKey) return false;
+
+  if (sequelMemoryCache.has(cacheKey)) {
+    return sequelMemoryCache.get(cacheKey)!;
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem(`aniwavex_has_sequel_${cacheKey}`);
+      if (cached !== null) {
+        const val = cached === "true";
+        sequelMemoryCache.set(cacheKey, val);
+        return val;
+      }
+    } catch {}
+  }
+
+  // 1. Try Kitsu media-relationships if animeId is provided
+  if (animeId) {
+    try {
+      const res = await fetch(
+        `https://kitsu.io/api/edge/anime/${animeId}/media-relationships?include=destination`,
+        {
+          headers: {
+            Accept: "application/vnd.api+json",
+            "Content-Type": "application/vnd.api+json",
+          },
+          signal: AbortSignal.timeout(4000),
+        }
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const hasKitsuSequel = (json.data || []).some(
+          (rel: any) => rel.attributes?.role === "sequel"
+        );
+        if (hasKitsuSequel) {
+          sequelMemoryCache.set(cacheKey, true);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(`aniwavex_has_sequel_${cacheKey}`, "true");
+            } catch {}
+          }
+          return true;
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Query AniList for relations
+  const searchTitle = title || (slug ? slug.replace(/-/g, " ") : "");
+  if (searchTitle) {
+    try {
+      const query = `query($search: String) {
+        Media(search: $search, type: ANIME) {
+          relations {
+            edges {
+              relationType
+              node {
+                type
+              }
+            }
+          }
+        }
+      }`;
+      const res = await fetch("https://graphql.anilist.co", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables: { search: searchTitle } }),
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const edges = json.data?.Media?.relations?.edges || [];
+        const hasAniListSequel = edges.some(
+          (e: any) =>
+            (e.relationType === "SEQUEL" || e.relationType === "ALTERNATIVE_VERSION") &&
+            e.node?.type === "ANIME"
+        );
+        sequelMemoryCache.set(cacheKey, hasAniListSequel);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(`aniwavex_has_sequel_${cacheKey}`, String(hasAniListSequel));
+          } catch {}
+        }
+        return hasAniListSequel;
+      }
+    } catch {}
+  }
+
+  sequelMemoryCache.set(cacheKey, false);
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(`aniwavex_has_sequel_${cacheKey}`, "false");
+    } catch {}
+  }
+  return false;
+}
+
+/**
+ * Handles an anime completion (via video player final episode, or user status change to 'completed').
+ * 1. Ensures anime is saved to Watched Anime (bookmarks with status: 'completed' and last_episode_watched, plus localStorage watchlist).
+ * 2. Checks if anime has a sequel:
+ *    - If NO sequel: Removes from Continue Watching ('aniwavex_recent_watches' and Supabase 'watch_history')!
+ *    - If HAS sequel: Leaves in Continue Watching until the user plays the sequel.
+ */
+export async function handleAnimeCompleted({
+  anime,
+  supabase,
+  userId,
+  finalEpisode,
+}: {
+  anime: {
+    slug: string;
+    title: string;
+    animeId?: string | number;
+    posterImage?: string;
+    anilistId?: number | null;
+  };
+  supabase?: any;
+  userId?: string;
+  finalEpisode?: number;
+}): Promise<{ hasSequel: boolean }> {
+  if (typeof window === "undefined" || !anime?.slug) {
+    return { hasSequel: false };
+  }
+
+  const slug = anime.slug;
+  const title = anime.title || slug;
+  const poster = anime.posterImage || "";
+  const ep = finalEpisode || 12;
+
+  // 1. Ensure anime is in Watched Anime (bookmarks & local watchlist as 'completed')
+  try {
+    const rawWatchlist = localStorage.getItem("aniwavex_watchlist");
+    const localWatchlist: any[] = rawWatchlist ? JSON.parse(rawWatchlist) : [];
+    const idx = localWatchlist.findIndex((w) => w.anime_slug === slug);
+    if (idx >= 0) {
+      localWatchlist[idx].status = "completed";
+      localWatchlist[idx].last_episode_watched = ep;
+    } else {
+      localWatchlist.unshift({
+        anime_slug: slug,
+        anime_title: title,
+        poster_image: poster,
+        status: "completed",
+        last_episode_watched: ep,
+        created_at: new Date().toISOString(),
+      });
+    }
+    localStorage.setItem("aniwavex_watchlist", JSON.stringify(localWatchlist));
+  } catch {}
+
+  if (supabase && userId) {
+    try {
+      await supabase.from("bookmarks").upsert(
+        {
+          user_id: userId,
+          anime_slug: slug,
+          anime_title: title,
+          poster_image: poster,
+          status: "completed",
+          last_episode_watched: ep,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,anime_slug" }
+      );
+    } catch {}
+  }
+
+  // 2. Check if this anime has any sequel
+  const hasSequel = await checkAnimeHasSequel({
+    slug,
+    title,
+    animeId: anime.animeId,
+    anilistId: anime.anilistId,
+  });
+
+  // 3. If NO sequel, remove from Continue Watching!
+  if (!hasSequel) {
+    try {
+      const rawRecent = localStorage.getItem("aniwavex_recent_watches");
+      if (rawRecent) {
+        const recentList: any[] = JSON.parse(rawRecent);
+        const updated = recentList.filter((x: any) => (x.animeSlug || x.slug) !== slug);
+        localStorage.setItem("aniwavex_recent_watches", JSON.stringify(updated));
+      }
+    } catch {}
+
+    if (supabase && userId) {
+      try {
+        await supabase
+          .from("watch_history")
+          .delete()
+          .eq("user_id", userId)
+          .eq("anime_slug", slug);
+      } catch {}
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("aniwavex_watch_updated", {
+        detail: { animeSlug: slug },
+      })
+    );
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("aniwavex_watchlist_updated", {
+      detail: { animeSlug: slug, status: "completed" },
+    })
+  );
+
+  return { hasSequel };
 }

@@ -6,6 +6,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
 import AnimeImage from "@/components/AnimeImage";
 import AuthModal from "./AuthModal";
+import { handleAnimeCompleted } from "@/lib/franchise";
 
 interface HeroProps {
   anime: any;
@@ -106,6 +107,25 @@ export default function Hero({
         ];
         localStorage.setItem('aniwavex_watchlist', JSON.stringify(updatedList));
       } catch {}
+
+      if (status === 'completed') {
+        handleAnimeCompleted({
+          anime: {
+            slug: anime.slug,
+            title: anime.title,
+            animeId: anime.id || anime.animeId,
+            posterImage: anime.posterImage || anime.backgroundImage,
+            anilistId: anime.anilistId
+          },
+          supabase,
+          userId: activeUser?.id,
+          finalEpisode: anime.totalEpisodes || lastWatchedEpisode || 12
+        });
+      } else if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("aniwavex_watchlist_updated", {
+          detail: { animeSlug: anime.slug, status }
+        }));
+      }
     } catch (error: any) {
       console.error("Bookmark status error:", error);
       // Seamlessly keep local state if network or db throws
