@@ -26,6 +26,7 @@ import AnimeImage from "@/components/AnimeImage";
 import { getAvatarUrl } from "@/lib/avatars";
 import { PROFILE_BANNER_PRESETS, AnimeTierList } from "@/lib/tierlist";
 import { useAuth } from "@/providers/AuthProvider";
+import WatchHistoryGrid from "@/components/profile/WatchHistoryGrid";
 
 interface PublicProfileClientProps {
   username: string;
@@ -43,8 +44,9 @@ export default function PublicProfileClient({
   initialTierLists,
 }: PublicProfileClientProps) {
   const [bookmarks, setBookmarks] = useState<any[]>(initialBookmarks || []);
+  const [history, setHistory] = useState<any[]>(initialHistory || []);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"showcase" | "watchlist" | "tierlists">("showcase");
+  const [activeTab, setActiveTab] = useState<"showcase" | "history" | "watchlist" | "tierlists">("showcase");
   const [watchlistFilter, setWatchlistFilter] = useState("all");
   const [tierLists, setTierLists] = useState<AnimeTierList[]>(() => {
     if (initialTierLists && initialTierLists.length > 0) {
@@ -150,49 +152,158 @@ export default function PublicProfileClient({
       });
   }, [username, initialTierLists, supabase]);
 
-  // Hydrate bookmarks from localStorage & Supabase
+  // Hydrate bookmarks & watch history from localStorage & Supabase, and listen for live playback updates
   useEffect(() => {
-    if (isOwner) {
+    const refreshData = () => {
+      // 1. Hydrate bookmarks from localStorage
+      if (isOwner) {
+        try {
+          const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+          if (localWatchlist.length > 0) {
+            setBookmarks((prev) => {
+              const map = new Map();
+              [...localWatchlist, ...prev].forEach((item) => {
+                if (item?.anime_slug) map.set(item.anime_slug, item);
+              });
+              return Array.from(map.values());
+            });
+          }
+        } catch {}
+      }
+
+      // 2. Hydrate watch history from localStorage (recent watches)
       try {
-        const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
-        if (localWatchlist.length > 0) {
-          setBookmarks((prev) => {
+        const localRecent = JSON.parse(localStorage.getItem("aniwavex_recent_watches") || "[]");
+        if (Array.isArray(localRecent) && localRecent.length > 0) {
+          setHistory((prev) => {
             const map = new Map();
-            [...localWatchlist, ...prev].forEach((item) => {
+            prev.forEach((item) => {
               if (item?.anime_slug) map.set(item.anime_slug, item);
+            });
+            localRecent.forEach((r: any) => {
+              if (r?.animeSlug) {
+                const existing = map.get(r.animeSlug);
+                map.set(r.animeSlug, {
+                  id: existing?.id || `local-${r.animeSlug}`,
+                  user_id: existing?.user_id || authUser?.id || "guest",
+                  anime_slug: r.animeSlug,
+                  anime_title: r.animeTitle || existing?.anime_title,
+                  poster_image: r.posterImage || existing?.poster_image,
+                  last_episode_watched: Math.max(r.episodeId || 1, existing?.last_episode_watched || 1),
+                  progress_seconds: r.progressSeconds || existing?.progress_seconds || 0,
+                  total_seconds: r.totalSeconds || existing?.total_seconds || 1440,
+                  updated_at: new Date(r.updatedAt || Date.now()).toISOString(),
+                });
+              }
             });
             return Array.from(map.values());
           });
         }
       } catch {}
 
-      if (authUser) {
-        supabase
-          .from("bookmarks")
-          .select("*")
-          .eq("user_id", authUser.id)
-          .order("created_at", { ascending: false })
-          .then((fetchRes: any) => {
-            const data = fetchRes?.data;
-            if (data && data.length > 0) {
-              setBookmarks((prev) => {
-                const map = new Map();
-                [...prev, ...data].forEach((item) => {
-                  if (item?.anime_slug) map.set(item.anime_slug, item);
-                });
-                return Array.from(map.values());
+      // 3. Fetch latest from Supabase if owner is logged in
+      if (isOwner && authUser) {
+        Promise.all([
+          supabase
+            .from("bookmarks")
+            .select("*")
+            .eq("user_id", authUser.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("watch_history")
+            .select("*")
+            .eq("user_id", authUser.id)
+            .order("updated_at", { ascending: false })
+        ]).then(([bRes, hRes]: any) => {
+          if (bRes?.data && bRes.data.length > 0) {
+            setBookmarks((prev) => {
+              const map = new Map();
+              [...prev, ...bRes.data].forEach((item) => {
+                if (item?.anime_slug) map.set(item.anime_slug, item);
               });
-            }
-          });
+              return Array.from(map.values());
+            });
+          }
+          if (hRes?.data && hRes.data.length > 0) {
+            setHistory((prev) => {
+              const map = new Map();
+              hRes.data.forEach((item: any) => {
+                if (item?.anime_slug) map.set(item.anime_slug, item);
+              });
+              prev.forEach((item) => {
+                if (item?.anime_slug && !map.has(item.anime_slug)) {
+                  map.set(item.anime_slug, item);
+                }
+              });
+              return Array.from(map.values());
+            });
+          }
+        });
       }
-    }
+    };
+
+    refreshData();
+
+    // Listen to live watch progress updates and storage events so stats react dynamically
+    const handleWatchUpdate = () => refreshData();
+    window.addEventListener("aniwavex_watch_updated", handleWatchUpdate);
+    window.addEventListener("storage", handleWatchUpdate);
+
+    return () => {
+      window.removeEventListener("aniwavex_watch_updated", handleWatchUpdate);
+      window.removeEventListener("storage", handleWatchUpdate);
+    };
   }, [authUser, isOwner, supabase]);
 
-  // Compute stats
-  const totalEpisodesWatched = initialHistory.length;
-  const estimatedHours = Math.round((totalEpisodesWatched * 24) / 60);
-  const completedCount = bookmarks.filter((b) => b.status === "completed").length;
-  const watchingCount = bookmarks.filter((b) => b.status === "watching").length;
+  // Dynamically compute stats from all watched anime and episodes
+  const totalEpisodesWatched = useMemo(() => {
+    let sumFromHistory = 0;
+    history.forEach((item) => {
+      sumFromHistory += Math.max(1, Number(item.last_episode_watched) || 1);
+    });
+
+    let distinctLocalKeys = 0;
+    if (typeof window !== "undefined") {
+      try {
+        const set = new Set<string>();
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith("watch_progress_")) {
+            set.add(k);
+          }
+        }
+        distinctLocalKeys = set.size;
+      } catch {}
+    }
+
+    return Math.max(sumFromHistory, distinctLocalKeys);
+  }, [history]);
+
+  const estimatedHours = useMemo(() => {
+    if (totalEpisodesWatched <= 0) return 0;
+    const hours = (totalEpisodesWatched * 24) / 60;
+    return hours >= 10 ? Math.round(hours) : Math.round(hours * 10) / 10;
+  }, [totalEpisodesWatched]);
+
+  const completedCount = useMemo(() => {
+    const fromBookmarks = bookmarks.filter((b) => b.status === "completed").length;
+    const completedSlugs = new Set(
+      bookmarks.filter((b) => b.status === "completed").map((b) => b.anime_slug)
+    );
+    let fromHistory = 0;
+    history.forEach((h) => {
+      if (!completedSlugs.has(h.anime_slug)) {
+        if (h.last_episode_watched >= 12 && (h.progress_seconds || 0) > 1000) {
+          fromHistory++;
+        }
+      }
+    });
+    return fromBookmarks + fromHistory;
+  }, [bookmarks, history]);
+
+  const watchingCount = useMemo(() => {
+    return bookmarks.filter((b) => b.status === "watching").length;
+  }, [bookmarks]);
 
   const filteredBookmarks = useMemo(() => {
     if (watchlistFilter === "all") return bookmarks;
@@ -360,6 +471,18 @@ export default function PublicProfileClient({
         </button>
 
         <button
+          onClick={() => setActiveTab("history")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
+            activeTab === "history"
+              ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
+              : "bg-slate-900 text-slate-400 hover:text-white"
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>Watch History ({history.length})</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab("watchlist")}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
             activeTab === "watchlist"
@@ -457,6 +580,29 @@ export default function PublicProfileClient({
                 );
               })}
             </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "history" && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-400" />
+              Watch History & Continued Playback
+            </h2>
+          </div>
+
+          {history.length === 0 ? (
+            <div className="text-center py-20 bg-slate-900/30 border border-white/5 rounded-3xl text-slate-400">
+              <Tv className="w-10 h-10 mx-auto text-slate-600 mb-2" />
+              <h4 className="text-base font-bold text-white mb-1">No Watch History Yet</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Episodes you watch on AniWaveX will automatically show up here so you can pick up right where you left off.
+              </p>
+            </div>
+          ) : (
+            <WatchHistoryGrid initialItems={history} isOwner={isOwner} />
           )}
         </div>
       )}

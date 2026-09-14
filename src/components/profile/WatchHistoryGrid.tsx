@@ -30,7 +30,13 @@ function formatTime(totalSeconds: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export default function WatchHistoryGrid({ initialItems }: { initialItems: WatchHistoryItem[] }) {
+export default function WatchHistoryGrid({ 
+  initialItems, 
+  isOwner = true 
+}: { 
+  initialItems: WatchHistoryItem[]; 
+  isOwner?: boolean; 
+}) {
   const [items, setItems] = useState<WatchHistoryItem[]>(initialItems);
   const [localMeta, setLocalMeta] = useState<Record<string, { duration: number; progress: number }>>({});
   const { user, supabase } = useAuth();
@@ -150,14 +156,16 @@ export default function WatchHistoryGrid({ initialItems }: { initialItems: Watch
                   </div>
                 </div>
 
-                {/* Delete Button */}
-                <button
-                  onClick={(e) => handleDelete(e, item.id)}
-                  className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-red-500/90 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all border border-white/10"
-                  title="Remove from history"
-                >
-                  <Trash2 className="w-4 h-4 text-white" />
-                </button>
+                {/* Delete Button (only if owner) */}
+                {isOwner && (
+                  <button
+                    onClick={(e) => handleDelete(e, item.id)}
+                    className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-red-500/90 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all border border-white/10"
+                    title="Remove from history"
+                  >
+                    <Trash2 className="w-4 h-4 text-white" />
+                  </button>
+                )}
                 
                 <div className="absolute bottom-0 left-0 w-full p-4">
                   <h3 className="text-white font-bold text-sm truncate" title={item.anime_title}>

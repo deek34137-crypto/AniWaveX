@@ -518,10 +518,51 @@ export default function InPageVideoPlayer({
         }
       });
     }
+
+    // If final episode of series has ended, automatically mark anime as completed
+    if (!hasNext) {
+      const activeUserId = currentUserRef.current?.id || currentUser?.id || authUser?.id || initialUser?.id;
+      if (activeUserId) {
+        supabase
+          .from("bookmarks")
+          .upsert({
+            user_id: activeUserId,
+            anime_slug: animeSlug,
+            anime_title: animeTitle,
+            poster_image: animePosterImage,
+            status: "completed",
+            updated_at: new Date().toISOString()
+          }, { onConflict: "user_id,anime_slug" })
+          .then(() => {});
+      }
+      try {
+        const localWatchlist = JSON.parse(localStorage.getItem("aniwavex_watchlist") || "[]");
+        const idx = localWatchlist.findIndex((it: any) => it.anime_slug === animeSlug);
+        if (idx >= 0) {
+          localWatchlist[idx].status = "completed";
+        } else {
+          localWatchlist.unshift({
+            anime_slug: animeSlug,
+            anime_title: animeTitle,
+            poster_image: animePosterImage,
+            status: "completed",
+            created_at: new Date().toISOString()
+          });
+        }
+        localStorage.setItem("aniwavex_watchlist", JSON.stringify(localWatchlist));
+      } catch {}
+    }
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("aniwavex_watch_updated", {
+        detail: { animeSlug, episodeId: episode?.id }
+      }));
+    }
+
     if (autoplayNext && hasNext) {
       handleNext();
     }
-  }, [anilistId, episode?.id, autoplayNext, hasNext, handleNext, showToast]);
+  }, [anilistId, episode?.id, autoplayNext, hasNext, handleNext, showToast, currentUser?.id, authUser?.id, initialUser?.id, animeSlug, animeTitle, animePosterImage, supabase]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
