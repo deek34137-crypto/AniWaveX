@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Play, PlayCircle, X } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
@@ -22,81 +22,105 @@ export default function ContinueWatchingRow() {
   const [loading, setLoading] = useState(true);
   const { user, supabase } = useAuth();
 
-  useEffect(() => {
-    async function loadWatchHistory() {
-      try {
-        // 1. Try fetching from Supabase if logged in
-        if (user) {
-          const { data: records } = await supabase
-            .from("watch_history")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("updated_at", { ascending: false })
-            .limit(12);
+  const loadWatchHistory = useCallback(async () => {
+    try {
+      let dbMapped: WatchHistoryItem[] = [];
+      if (user) {
+        const { data: records } = await supabase
+          .from("watch_history")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(12);
 
-          if (records && records.length > 0) {
-            const mapped: WatchHistoryItem[] = records.map((r: any) => {
-              const slug = r.anime_slug;
-              const epId = r.last_episode_watched || 1;
+        if (records && records.length > 0) {
+          dbMapped = records.map((r: any) => {
+            const slug = r.anime_slug;
+            const epId = r.last_episode_watched || 1;
 
-              // Pull per-episode localStorage progress as a more accurate source
-              let localProgress = 0;
-              let localDuration = 0;
-              try {
-                const localRaw = localStorage.getItem(`watch_progress_${slug}_ep_${epId}`);
-                if (localRaw) {
-                  const lp = JSON.parse(localRaw);
-                  localProgress = lp.currentTime || 0;
-                  localDuration = lp.duration || 0;
-                }
-              } catch {}
+            // Pull per-episode localStorage progress as a more accurate source
+            let localProgress = 0;
+            let localDuration = 0;
+            try {
+              const localRaw = localStorage.getItem(`watch_progress_${slug}_ep_${epId}`);
+              if (localRaw) {
+                const lp = JSON.parse(localRaw);
+                localProgress = lp.currentTime || 0;
+                localDuration = lp.duration || 0;
+              }
+            } catch {}
 
-              // Use the higher of DB vs localStorage progress
-              const dbProgress = r.progress_seconds || 0;
-              const bestProgress = Math.max(dbProgress, Math.floor(localProgress));
+            // Use the higher of DB vs localStorage progress
+            const dbProgress = r.progress_seconds || 0;
+            const bestProgress = Math.max(dbProgress, Math.floor(localProgress));
 
-              // Use localStorage duration if DB has none yet
-              const dbDuration = r.total_seconds > 0 ? r.total_seconds : 0;
-              const bestDuration = dbDuration > 0 ? dbDuration : (localDuration > 0 ? Math.floor(localDuration) : 1440);
+            // Use localStorage duration if DB has none yet
+            const dbDuration = r.total_seconds > 0 ? r.total_seconds : 0;
+            const bestDuration = dbDuration > 0 ? dbDuration : (localDuration > 0 ? Math.floor(localDuration) : 1440);
 
-              return {
-                animeSlug: slug,
-                animeTitle: r.anime_title,
-                posterImage: r.poster_image,
-                episodeId: epId,
-                progressSeconds: bestProgress,
-                totalSeconds: bestDuration,
-                updatedAt: new Date(r.updated_at).getTime(),
-              };
-            });
-            setItems(mapped);
-            setLoading(false);
-            return;
-          }
-
-          // User is authenticated but has no history records in database
-          setItems([]);
-          setLoading(false);
-          return;
+            return {
+              animeSlug: slug,
+              animeTitle: r.anime_title,
+              posterImage: r.poster_image,
+              episodeId: epId,
+              progressSeconds: bestProgress,
+              totalSeconds: bestDuration,
+              updatedAt: new Date(r.updated_at).getTime(),
+            };
+          });
         }
+      }
 
-        // 2. Fallback to localStorage for guests
+      // Read from localStorage
+      let localItems: WatchHistoryItem[] = [];
+      try {
         const raw = localStorage.getItem("aniwavex_recent_watches");
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setItems(parsed);
+          if (Array.isArray(parsed)) {
+            localItems = parsed;
           }
         }
-      } catch (err) {
-        console.error("Failed to load continue watching history:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
+      } catch {}
 
-    loadWatchHistory();
+      // Merge DB items with local items (DB items take precedence)
+      const mergedMap = new Map<string, WatchHistoryItem>();
+      dbMapped.forEach((it) => {
+        if (it.animeSlug) mergedMap.set(it.animeSlug, it);
+      });
+      localItems.forEach((it) => {
+        if (it.animeSlug && !mergedMap.has(it.animeSlug)) {
+          mergedMap.set(it.animeSlug, it);
+        }
+      });
+
+      const mergedList = Array.from(mergedMap.values()).sort(
+        (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)
+      );
+
+      setItems(mergedList.slice(0, 12));
+    } catch (err) {
+      console.error("Failed to load continue watching history:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [user, supabase]);
+
+  useEffect(() => {
+    loadWatchHistory();
+
+    const handleWatchUpdate = () => {
+      loadWatchHistory();
+    };
+
+    window.addEventListener("aniwavex_watch_updated", handleWatchUpdate);
+    window.addEventListener("storage", handleWatchUpdate);
+
+    return () => {
+      window.removeEventListener("aniwavex_watch_updated", handleWatchUpdate);
+      window.removeEventListener("storage", handleWatchUpdate);
+    };
+  }, [loadWatchHistory]);
 
   const handleRemove = (e: React.MouseEvent, animeSlug: string) => {
     e.preventDefault();

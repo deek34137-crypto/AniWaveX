@@ -24,7 +24,7 @@ export default function Hero({
   lastWatchedEpisode, 
   onPlayEpisode 
 }: HeroProps) {
-  const { user: authUser, supabase } = useAuth();
+  const { user: authUser, supabase, addBookmarkSlug, removeBookmarkSlug } = useAuth();
   const currentUser = authUser || initialUser;
   const [isBookmarked, setIsBookmarked] = useState(initialBookmarked);
   const [currentStatus, setCurrentStatus] = useState<WatchlistStatus>(initialBookmarkStatus || 'watching');
@@ -51,6 +51,9 @@ export default function Hero({
     setIsBookmarked(true);
     setCurrentStatus(status);
     setIsDropdownOpen(false);
+    if (anime?.slug) {
+      addBookmarkSlug(anime.slug);
+    }
 
     try {
       // 1. Check if record already exists
@@ -140,6 +143,9 @@ export default function Hero({
     setIsSaving(true);
     setIsBookmarked(false);
     setIsDropdownOpen(false);
+    if (anime?.slug) {
+      removeBookmarkSlug(anime.slug);
+    }
 
     try {
       await supabase

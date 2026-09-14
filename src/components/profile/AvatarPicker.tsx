@@ -19,11 +19,19 @@ export default function AvatarPicker({ currentAvatarId }: { currentAvatarId?: st
     setSuccess(false);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { data: authData, error: authError } = await supabase.auth.updateUser({
         data: { avatar_id: selected }
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
+
+      if (authData?.user?.id) {
+        await supabase
+          .from("profiles")
+          .update({ avatar_id: selected, updated_at: new Date().toISOString() })
+          .eq("id", authData.user.id);
+      }
+
       setSuccess(true);
       // Auto-hide success message
       setTimeout(() => setSuccess(false), 3000);

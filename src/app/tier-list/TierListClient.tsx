@@ -135,16 +135,23 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
   // Read ?id= query param for "View & Clone" from profile
   const searchParams = useSearchParams();
-  const listId = searchParams.get("id");
+  const urlListId = searchParams.get("id");
+  const [activeListId, setActiveListId] = useState<string | null>(urlListId);
 
   useEffect(() => {
-    if (!listId) return;
+    if (urlListId) {
+      setActiveListId(urlListId);
+    }
+  }, [urlListId]);
+
+  useEffect(() => {
+    if (!activeListId) return;
 
     // 1. Try fetching from Supabase first
     supabase
       .from("tier_lists")
       .select("*")
-      .eq("id", listId)
+      .eq("id", activeListId)
       .maybeSingle()
       .then(({ data }: { data: any }) => {
         if (data) {
@@ -168,7 +175,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               if (raw) {
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
-                  const match = parsed.find((tl: any) => tl.id === listId);
+                  const match = parsed.find((tl: any) => tl.id === activeListId);
                   if (match) {
                     foundList = match;
                     break;
@@ -191,7 +198,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
           console.error("Failed to load saved tier list by id:", err);
         }
       });
-  }, [listId, supabase]);
+  }, [activeListId, supabase]);
 
   // Search anime with debounce + AbortController to prevent race conditions
   useEffect(() => {
@@ -451,7 +458,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
     }
 
     const username = activeUser?.user_metadata?.username || activeUser?.email?.split("@")[0] || "guest";
-    const tierListId = listId || `tierlist_${Date.now()}`;
+    const tierListId = activeListId || `tierlist_${Date.now()}`;
     const tierListObj: AnimeTierList = {
       id: tierListId,
       title: title.trim() || "My Anime Tier List",
@@ -466,7 +473,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
 
     // 1. Save to Supabase
     try {
-      await supabase
+      const { error } = await supabase
         .from("tier_lists")
         .upsert({
           id: tierListId,
@@ -478,6 +485,9 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
           unranked_pool: tierListObj.unrankedPool,
           updated_at: new Date().toISOString()
         });
+      if (error) {
+        console.error("Failed to sync tier list to Supabase", error);
+      }
     } catch (err) {
       console.error("Failed to sync tier list to Supabase", err);
     }
@@ -494,6 +504,7 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       console.error("Failed to save tier list locally:", err);
     }
 
+    setActiveListId(tierListId);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
     showToast("Tier list saved to your profile!", "info");

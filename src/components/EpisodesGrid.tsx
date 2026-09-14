@@ -1,7 +1,7 @@
 "use client";
 
 import { LayoutGrid, List, Play, Search, X, Check } from "lucide-react";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 interface Episode {
   id: number;
@@ -36,7 +36,7 @@ export default function EpisodesGrid({
   const fetchedOffsetsRef = useRef<Set<number>>(new Set());
 
   // Load episode watch progress from localStorage
-  useEffect(() => {
+  const refreshProgress = useCallback(() => {
     if (!animeSlug || !episodes || episodes.length === 0) return;
     try {
       const map: Record<number, number> = {};
@@ -54,6 +54,22 @@ export default function EpisodesGrid({
       setEpisodeProgressMap(map);
     } catch {}
   }, [animeSlug, episodes]);
+
+  useEffect(() => {
+    refreshProgress();
+
+    const handleUpdate = () => {
+      refreshProgress();
+    };
+
+    window.addEventListener("aniwavex_watch_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+
+    return () => {
+      window.removeEventListener("aniwavex_watch_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, [refreshProgress]);
 
   // Generate range chunks if > 25 episodes (e.g. 1-25, 26-50, 51-75)
   const rangeChunks = useMemo(() => {

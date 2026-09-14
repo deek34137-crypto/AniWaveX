@@ -155,7 +155,7 @@ export default function ProfileCustomizer({ user }: { user: any }) {
 
     try {
       const usernameVal = meta.username || user?.email?.split("@")[0] || "User";
-      await Promise.all([
+      const [authRes, profileRes] = await Promise.all([
         supabase.auth.updateUser({
           data: {
             bio: bio.trim(),
@@ -174,6 +174,13 @@ export default function ProfileCustomizer({ user }: { user: any }) {
           updated_at: new Date().toISOString(),
         })
       ]);
+
+      if (authRes?.error) {
+        throw new Error(authRes.error.message);
+      }
+      if (profileRes?.error) {
+        throw new Error(profileRes.error.message);
+      }
 
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3000);

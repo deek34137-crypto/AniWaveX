@@ -31,11 +31,23 @@ export default function UsernameModal({ isOpen, onClose }: UsernameModalProps) {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        data: { username: username.trim() }
+      const cleanUsername = username.trim();
+      const { data: authData, error: authError } = await supabase.auth.updateUser({
+        data: { username: cleanUsername }
       });
       
-      if (error) throw error;
+      if (authError) throw authError;
+
+      if (authData?.user?.id) {
+        await supabase
+          .from("profiles")
+          .upsert({
+            id: authData.user.id,
+            username: cleanUsername,
+            username_lower: cleanUsername.toLowerCase(),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "id" });
+      }
       
       router.refresh();
       onClose();

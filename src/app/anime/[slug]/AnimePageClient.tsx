@@ -86,6 +86,19 @@ export default function AnimePageClient({
     } catch {}
   }, [data, searchParams, serverLastWatched]);
 
+  // Listen for live episode updates from player or background sync
+  useEffect(() => {
+    const handleWatchUpdated = (e: any) => {
+      if (e.detail?.animeSlug === data?.slug && e.detail?.episodeId) {
+        setLastWatchedEpisode(e.detail.episodeId);
+      }
+    };
+    window.addEventListener("aniwavex_watch_updated", handleWatchUpdated);
+    return () => {
+      window.removeEventListener("aniwavex_watch_updated", handleWatchUpdated);
+    };
+  }, [data?.slug]);
+
   if (!data) return <div className="text-white p-10">Loading...</div>;
 
   return (
@@ -96,7 +109,10 @@ export default function AnimePageClient({
           <InPageVideoPlayer 
             episode={activeEpisode} 
             episodes={data.episodes}
-            onEpisodeChange={setActiveEpisode}
+            onEpisodeChange={(ep) => {
+              setActiveEpisode(ep);
+              if (ep?.id) setLastWatchedEpisode(ep.id);
+            }}
             onClose={() => setActiveEpisode(null)}
             animeSlug={data.slug}
             animeTitle={data.title}
