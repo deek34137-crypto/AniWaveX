@@ -60,3 +60,15 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
+
+/* Mobile Safe Area Insets for notches, status bar, and navigation gesture bar */
+.mobile-safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.mobile-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.mobile-safe-area {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

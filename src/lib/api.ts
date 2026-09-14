@@ -23,6 +23,19 @@ function formatAnimeData(anime: any, included?: any[]) {
   const attr = anime.attributes;
   const duration = attr.episodeLength || 24;
   const tags = extractCategories(anime, included);
+  const poster =
+    attr.posterImage?.large ||
+    attr.posterImage?.medium ||
+    attr.posterImage?.original ||
+    attr.posterImage?.small ||
+    "";
+  const background =
+    attr.coverImage?.large ||
+    attr.coverImage?.original ||
+    attr.coverImage?.small ||
+    poster ||
+    "";
+
   return {
     id: anime.id,
     slug: attr.slug,
@@ -34,8 +47,8 @@ function formatAnimeData(anime: any, included?: any[]) {
     tags,
     description: attr.synopsis,
     duration: duration > 60 ? `${Math.floor(duration / 60)}h ${duration % 60}m` : `${duration}m`,
-    posterImage: attr.posterImage?.original || "",
-    backgroundImage: attr.coverImage?.original || attr.posterImage?.original || "",
+    posterImage: poster,
+    backgroundImage: background,
   };
 }
 

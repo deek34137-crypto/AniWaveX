@@ -34,7 +34,7 @@ export default function MobileAppShell({ children }: { children: React.ReactNode
       try {
         await StatusBar.setStyle({ style: Style.Dark });
         await StatusBar.setBackgroundColor({ color: "#0a0a0c" });
-        await StatusBar.setOverlaysWebView({ overlay: true });
+        await StatusBar.setOverlaysWebView({ overlay: false });
       } catch {}
 
       try {
