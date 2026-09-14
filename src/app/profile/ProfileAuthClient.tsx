@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Loader2, Mail, Lock, Sparkles, Film, Bookmark, RefreshCw } from "lucide-react";
+import Image from "next/image";
 
 export default function ProfileAuthClient() {
   const [isLogin, setIsLogin] = useState(true);
@@ -58,9 +59,17 @@ export default function ProfileAuthClient() {
     <div className="max-w-md mx-auto px-4 py-6 sm:py-10">
       {/* Brand & Intro */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 shadow-xl shadow-blue-500/20 mb-4">
-          <span className="text-2xl font-black text-white">AW</span>
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl overflow-hidden shadow-xl shadow-blue-500/20 mb-4 border border-white/10 bg-slate-900 relative">
+          <Image
+            src="/logo.png"
+            alt="AniWaveX"
+            width={64}
+            height={64}
+            className="w-full h-full object-cover"
+            priority
+          />
         </div>
+
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">
           {isLogin ? "Welcome to AniWaveX" : "Create Your Account"}
         </h1>

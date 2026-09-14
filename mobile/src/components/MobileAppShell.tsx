@@ -61,7 +61,7 @@ export default function MobileAppShell({ children }: { children: React.ReactNode
           const isFullscreen = !!document.fullscreenElement;
           if (isFullscreen) {
             try {
-              await ScreenOrientation.unlock();
+              await ScreenOrientation.lock({ orientation: "landscape" });
             } catch {}
           } else {
             try {

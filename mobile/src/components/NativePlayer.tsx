@@ -39,7 +39,7 @@ export default function NativePlayer({
   const player = externalRef || internalRef;
 
 
-  // Automatically lock screen orientation to horizontal (landscape) on mobile when entering fullscreen
+  // Automatically lock screen orientation to horizontal (landscape) on mobile ONLY when entering fullscreen via button
   useEffect(() => {
     const handleFullscreenChange = async () => {
       const isFullscreen = Boolean(
@@ -51,7 +51,10 @@ export default function NativePlayer({
 
       if (isFullscreen) {
         try {
-          if (screen.orientation && 'lock' in screen.orientation) {
+          const CapOrientation = (window as any)?.Capacitor?.Plugins?.ScreenOrientation;
+          if (CapOrientation) {
+            await CapOrientation.lock({ orientation: 'landscape' }).catch(() => {});
+          } else if (screen.orientation && 'lock' in screen.orientation) {
             await (screen.orientation as any).lock('landscape').catch(() => {});
           }
         } catch {
@@ -59,7 +62,12 @@ export default function NativePlayer({
         }
       } else {
         try {
-          if (screen.orientation && 'unlock' in screen.orientation) {
+          const CapOrientation = (window as any)?.Capacitor?.Plugins?.ScreenOrientation;
+          if (CapOrientation) {
+            await CapOrientation.lock({ orientation: 'portrait' }).catch(() => {});
+          } else if (screen.orientation && 'lock' in screen.orientation) {
+            await (screen.orientation as any).lock('portrait').catch(() => {});
+          } else if (screen.orientation && 'unlock' in screen.orientation) {
             screen.orientation.unlock();
           }
         } catch {

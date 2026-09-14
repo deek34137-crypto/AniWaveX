@@ -190,7 +190,7 @@ export default function Hero({
   const bgImage = anime.backgroundImage || anime.posterImage;
 
   return (
-    <div className="relative w-full min-h-[550px] md:min-h-[620px] flex items-end overflow-hidden pt-24 md:pt-32 pb-8 md:pb-16">
+    <div className="relative w-full min-h-[460px] sm:min-h-[540px] md:min-h-[620px] flex items-end overflow-hidden pt-16 sm:pt-24 md:pt-32 pb-6 md:pb-16">
       {/* Background Image */}
       {bgImage ? (
         <div className="absolute inset-0">
@@ -200,7 +200,7 @@ export default function Hero({
             fill
             priority
             sizes="100vw"
-            className="object-cover object-center"
+            className="object-cover object-top sm:object-center"
           />
         </div>
       ) : null}
@@ -211,7 +211,7 @@ export default function Hero({
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent h-1/2 bottom-0" />
 
       {/* Content Container */}
-      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 z-10 flex flex-col md:flex-row gap-6 md:gap-10 items-end">
+      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 z-10 flex flex-col md:flex-row gap-4 sm:gap-6 md:gap-10 items-end">
         
         {/* Poster (Hidden on mobile, visible on md+) */}
         {anime.posterImage ? (
@@ -227,58 +227,58 @@ export default function Hero({
         ) : null}
 
         {/* Text Details */}
-        <div className="flex-1 flex flex-col gap-4">
+        <div className="flex-1 flex flex-col gap-2.5 sm:gap-4 w-full">
           {/* Status & Genre Badges */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
             {anime.status && (
-              <span className="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs font-bold uppercase tracking-wider rounded-md border border-blue-500/30">
+              <span className="px-2.5 py-0.5 bg-blue-600/20 text-blue-400 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-md border border-blue-500/30">
                 {anime.status}
               </span>
             )}
             {anime.tags && anime.tags.length > 0 ? (
-              anime.tags.map((tag: string) => (
-                <span key={tag} className="px-3 py-1 bg-white/5 text-slate-300 text-xs font-medium rounded-md border border-white/5">
+              anime.tags.slice(0, 5).map((tag: string) => (
+                <span key={tag} className="px-2.5 py-0.5 bg-white/5 text-slate-300 text-[11px] sm:text-xs font-medium rounded-md border border-white/5">
                   {tag}
                 </span>
               ))
             ) : null}
           </div>
 
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black text-white tracking-tight drop-shadow-xl leading-tight">
+          <h1 className="text-2xl sm:text-4xl md:text-6xl font-black text-white tracking-tight drop-shadow-xl leading-tight line-clamp-2">
             {anime.title}
           </h1>
 
-          <div className="flex items-center gap-6 text-sm font-medium text-slate-300">
-            <div className="flex items-center gap-1.5 text-yellow-400">
-              <Star className="w-5 h-5 fill-current" />
-              <span className="text-lg font-bold">{anime.rating}</span>
+          <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs sm:text-sm font-medium text-slate-300">
+            <div className="flex items-center gap-1 text-yellow-400">
+              <Star className="w-4 h-4 fill-current" />
+              <span className="text-sm sm:text-base font-bold">{anime.rating}</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4" />
+            <div className="flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
               <span>{anime.year}</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4" />
+            <div className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span>{anime.duration || '24m'}</span>
             </div>
-            <span className="px-2 py-0.5 bg-white/10 text-white rounded text-xs border border-white/10">HD</span>
-            <span className="px-2 py-0.5 bg-white/10 text-white rounded text-xs border border-white/10">CC</span>
+            <span className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] sm:text-xs border border-white/10 font-bold">HD</span>
+            <span className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] sm:text-xs border border-white/10 font-bold">CC</span>
           </div>
 
-          <p className="text-slate-300 text-base md:text-lg max-w-3xl line-clamp-3 mt-2 leading-relaxed">
+          <p className="text-slate-300 text-xs sm:text-base md:text-lg max-w-3xl line-clamp-2 sm:line-clamp-3 mt-1 leading-relaxed">
             {anime.description}
           </p>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mt-6 w-full sm:w-auto">
+          <div className="flex flex-row items-center gap-2.5 sm:gap-4 mt-3 sm:mt-6 w-full sm:w-auto">
             {lastWatchedEpisode ? (
               <button 
                 onClick={() => {
                   const ep = anime.episodes?.find((e: any) => e.id === lastWatchedEpisode);
                   if (ep && onPlayEpisode) onPlayEpisode(ep);
                 }}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-[0_0_30px_rgba(37,99,235,0.4)] transition-all hover:scale-105 active:scale-95"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 sm:px-8 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(37,99,235,0.4)] transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
               >
-                <Play className="w-5 h-5 fill-current" />
+                <Play className="w-4 h-4 fill-current" />
                 Continue Ep {lastWatchedEpisode}
               </button>
             ) : (
@@ -287,19 +287,19 @@ export default function Hero({
                   const ep = anime.episodes?.[0];
                   if (ep && onPlayEpisode) onPlayEpisode(ep);
                 }}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl shadow-[0_0_30px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
               >
-                <Play className="w-5 h-5 fill-current" />
+                <Play className="w-4 h-4 fill-current" />
                 Watch Episode {anime.episodes?.[0]?.id ?? 1}
               </button>
             )}
             
-            {/* Categorized Watchlist Dropdown (Feature 3.5) */}
-            <div className="relative w-full sm:w-auto">
+            {/* Categorized Watchlist Dropdown */}
+            <div className="relative flex-1 sm:flex-initial">
               <div className={`flex items-center rounded-xl backdrop-blur-md transition-all border ${
                 isBookmarked 
                   ? 'bg-blue-600/20 text-blue-400 border-blue-500/30' 
-                  : 'bg-slate-800/50 hover:bg-slate-700/50 text-white border-white/10'
+                  : 'bg-slate-800/80 hover:bg-slate-700/80 text-white border-white/10'
               }`}>
                 <button 
                   onClick={() => {
@@ -310,16 +310,17 @@ export default function Hero({
                     }
                   }}
                   disabled={isSaving}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-4 font-semibold hover:scale-105 active:scale-95 transition-all"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 sm:px-6 sm:py-4 text-xs sm:text-base font-semibold hover:scale-105 active:scale-95 transition-all whitespace-nowrap"
                 >
-                  <Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-current' : ''}`} />
+                  <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
                   {isSaving ? "Saving..." : isBookmarked ? activeStatusConfig.label : "Add to Watchlist"}
                 </button>
 
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="px-3 py-4 border-l border-white/10 hover:bg-white/10 text-slate-300 hover:text-white rounded-r-xl transition-colors"
-                  title="Change watchlist status"
+                  disabled={isSaving}
+                  className="p-3 sm:py-4 sm:pr-3 text-slate-400 hover:text-white transition-colors border-l border-white/10"
+                  aria-label="Change Watchlist Status"
                 >
                   <ChevronDown className="w-4 h-4" />
                 </button>

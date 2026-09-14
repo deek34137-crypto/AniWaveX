@@ -1022,31 +1022,35 @@ export default function InPageVideoPlayer({
         </div>
 
         {/* Footer Navigation */}
-        <div className="flex flex-col sm:flex-row items-center sm:justify-between mt-4 gap-4">
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between mt-3 gap-3">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-start">
             {/* Episode Navigation */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={handlePrev}
                 disabled={!hasPrev}
-                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 whitespace-nowrap active:scale-95 ${
                   hasPrev 
                     ? "bg-slate-800 hover:bg-slate-700 text-white border border-white/10" 
-                    : "bg-slate-900 text-slate-600 cursor-not-allowed border border-transparent"
+                    : "bg-slate-900/60 text-slate-600 cursor-not-allowed border border-transparent"
                 }`}
+                title="Previous Episode"
               >
-                Previous Ep
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Prev Ep</span>
               </button>
               <button
                 onClick={handleNext}
                 disabled={!hasNext}
-                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 whitespace-nowrap active:scale-95 ${
                   hasNext 
                     ? "bg-slate-800 hover:bg-slate-700 text-white border border-white/10" 
-                    : "bg-slate-900 text-slate-600 cursor-not-allowed border border-transparent"
+                    : "bg-slate-900/60 text-slate-600 cursor-not-allowed border border-transparent"
                 }`}
+                title="Next Episode"
               >
-                Next Ep
+                <span>Next Ep</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
 

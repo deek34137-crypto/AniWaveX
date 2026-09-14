@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 const subscribe = () => () => {};
 
@@ -82,9 +83,20 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <X className="w-5 h-5" />
         </button>
 
-        <h2 id="auth-modal-title" className="text-2xl font-bold text-white mb-6">
-          {isLogin ? "Welcome back" : "Create an account"}
-        </h2>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 relative shrink-0 bg-slate-800">
+            <Image
+              src="/logo.png"
+              alt="AniWaveX"
+              width={40}
+              height={40}
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <h2 id="auth-modal-title" className="text-xl sm:text-2xl font-bold text-white">
+            {isLogin ? "Welcome back" : "Create an account"}
+          </h2>
+        </div>
 
         {error && (
           <div className="p-3 mb-4 text-sm text-red-400 bg-red-950/50 border border-red-900 rounded-lg">
