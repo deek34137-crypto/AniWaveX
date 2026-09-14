@@ -248,10 +248,12 @@ export default function PublicProfileClient({
     // Listen to live watch progress updates and storage events so stats react dynamically
     const handleWatchUpdate = () => refreshData();
     window.addEventListener("aniwavex_watch_updated", handleWatchUpdate);
+    window.addEventListener("aniwavex_watchlist_updated", handleWatchUpdate);
     window.addEventListener("storage", handleWatchUpdate);
 
     return () => {
       window.removeEventListener("aniwavex_watch_updated", handleWatchUpdate);
+      window.removeEventListener("aniwavex_watchlist_updated", handleWatchUpdate);
       window.removeEventListener("storage", handleWatchUpdate);
     };
   }, [authUser, isOwner, supabase]);
@@ -259,8 +261,19 @@ export default function PublicProfileClient({
   // Dynamically compute stats from all watched anime and episodes
   const totalEpisodesWatched = useMemo(() => {
     let sumFromHistory = 0;
+    const countedSlugs = new Set<string>();
+
     history.forEach((item) => {
       sumFromHistory += Math.max(1, Number(item.last_episode_watched) || 1);
+      if (item.anime_slug) countedSlugs.add(item.anime_slug);
+    });
+
+    // Also include episodes from completed shows in bookmarks that are not in active continue watching history
+    bookmarks.forEach((b) => {
+      if (b.status === "completed" && b.anime_slug && !countedSlugs.has(b.anime_slug)) {
+        countedSlugs.add(b.anime_slug);
+        sumFromHistory += Math.max(1, Number(b.last_episode_watched) || 12);
+      }
     });
 
     let distinctLocalKeys = 0;
@@ -278,7 +291,7 @@ export default function PublicProfileClient({
     }
 
     return Math.max(sumFromHistory, distinctLocalKeys);
-  }, [history]);
+  }, [history, bookmarks]);
 
   const estimatedHours = useMemo(() => {
     if (totalEpisodesWatched <= 0) return 0;

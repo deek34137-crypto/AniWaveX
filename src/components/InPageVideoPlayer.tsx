@@ -6,6 +6,7 @@ import NativePlayer from "./NativePlayer";
 import { useAuth } from "@/providers/AuthProvider";
 import { benchmarkStreamSources, getFastestServerIndex, formatLatencyBadge } from "@/lib/latency-benchmarker";
 import { syncProgressToAniList } from "@/lib/sync/anilist-sync";
+import { handleSequelPlaybackStarted } from "@/lib/franchise";
 import type { MediaPlayerInstance } from "@vidstack/react";
 
 interface StreamSource {
@@ -33,6 +34,7 @@ interface InPageVideoPlayerProps {
   animePosterImage?: string;
   user?: any;
   anilistId?: number | null;
+  animeId?: string | number;
 }
 
 export default function InPageVideoPlayer({ 
@@ -45,7 +47,8 @@ export default function InPageVideoPlayer({
   onEpisodeChange,
   onClose,
   user: initialUser,
-  anilistId
+  anilistId,
+  animeId
 }: InPageVideoPlayerProps) {
   const { user: authUser, supabase } = useAuth();
   const [activeTab, setActiveTab] = useState<"sub" | "dub" | "hindi">("sub");
@@ -245,6 +248,23 @@ export default function InPageVideoPlayer({
       }
     };
   }, [episode?.id, animeSlug, syncToSupabase, initialTime]);
+
+  // When user starts playing this anime, check if it is a sequel of a completed prequel.
+  // If so, remove the completed prequel from Continue Watching and ensure it is preserved in Watched Anime (completed).
+  useEffect(() => {
+    if (!episode) return;
+    const activeUserId = currentUserRef.current?.id || currentUser?.id || authUser?.id || initialUser?.id;
+    handleSequelPlaybackStarted({
+      currentAnime: {
+        slug: animeSlug,
+        title: animeTitle,
+        animeId,
+        posterImage: animePosterImage,
+      },
+      supabase,
+      userId: activeUserId,
+    });
+  }, [animeSlug, animeTitle, animeId, animePosterImage, episode?.id, authUser?.id, initialUser?.id, supabase]);
 
   // Window beforeunload listener to flush progress on page close/reload
   useEffect(() => {
@@ -522,6 +542,7 @@ export default function InPageVideoPlayer({
     // If final episode of series has ended, automatically mark anime as completed
     if (!hasNext) {
       const activeUserId = currentUserRef.current?.id || currentUser?.id || authUser?.id || initialUser?.id;
+      const finalEp = episode?.id || episodes?.length || 12;
       if (activeUserId) {
         supabase
           .from("bookmarks")
@@ -531,6 +552,7 @@ export default function InPageVideoPlayer({
             anime_title: animeTitle,
             poster_image: animePosterImage,
             status: "completed",
+            last_episode_watched: finalEp,
             updated_at: new Date().toISOString()
           }, { onConflict: "user_id,anime_slug" })
           .then(() => {});
@@ -540,17 +562,25 @@ export default function InPageVideoPlayer({
         const idx = localWatchlist.findIndex((it: any) => it.anime_slug === animeSlug);
         if (idx >= 0) {
           localWatchlist[idx].status = "completed";
+          localWatchlist[idx].last_episode_watched = finalEp;
         } else {
           localWatchlist.unshift({
             anime_slug: animeSlug,
             anime_title: animeTitle,
             poster_image: animePosterImage,
             status: "completed",
+            last_episode_watched: finalEp,
             created_at: new Date().toISOString()
           });
         }
         localStorage.setItem("aniwavex_watchlist", JSON.stringify(localWatchlist));
       } catch {}
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("aniwavex_watchlist_updated", {
+          detail: { animeSlug, status: "completed" }
+        }));
+      }
     }
 
     if (typeof window !== "undefined") {

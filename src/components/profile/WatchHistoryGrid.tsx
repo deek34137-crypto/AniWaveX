@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Star, Trash2 } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import AnimeImage from "@/components/AnimeImage";
+import { filterActiveSequelPrequels } from "@/lib/franchise";
 
 interface WatchHistoryItem {
   id: string;
@@ -118,7 +119,9 @@ export default function WatchHistoryGrid({
     }
   };
 
-  if (!items || items.length === 0) return null;
+  const visibleItems = filterActiveSequelPrequels(items);
+
+  if (!visibleItems || visibleItems.length === 0) return null;
 
   return (
     <div className="mb-16">
@@ -127,7 +130,7 @@ export default function WatchHistoryGrid({
         Continue Watching
       </h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const resolvedDuration = localMeta[item.id]?.duration || item.duration_seconds || 1440;
           const resolvedProgress = localMeta[item.id]?.progress || item.progress_seconds || 0;
           const progressPercent = Math.min(100, Math.max(5, (resolvedProgress / resolvedDuration) * 100));

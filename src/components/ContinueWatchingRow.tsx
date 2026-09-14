@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Play, PlayCircle, X } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import { useAuth } from "@/providers/AuthProvider";
+import { filterActiveSequelPrequels } from "@/lib/franchise";
 
 interface WatchHistoryItem {
   animeSlug: string;
@@ -98,7 +99,41 @@ export default function ContinueWatchingRow() {
         (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)
       );
 
-      setItems(mergedList.slice(0, 12));
+      // Collect completed anime slugs from localStorage & Supabase
+      const completedSlugs = new Set<string>();
+      try {
+        const rawWatchlist = localStorage.getItem("aniwavex_watchlist");
+        if (rawWatchlist) {
+          const parsed = JSON.parse(rawWatchlist);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((w: any) => {
+              if (w.status === "completed" && w.anime_slug) {
+                completedSlugs.add(w.anime_slug);
+              }
+            });
+          }
+        }
+      } catch {}
+
+      if (user) {
+        try {
+          const { data: dbCompleted } = await supabase
+            .from("bookmarks")
+            .select("anime_slug")
+            .eq("user_id", user.id)
+            .eq("status", "completed");
+          if (dbCompleted) {
+            dbCompleted.forEach((b: any) => {
+              if (b.anime_slug) completedSlugs.add(b.anime_slug);
+            });
+          }
+        } catch {}
+      }
+
+      // If user is actively watching a sequel, remove the completed prequel from Continue Watching
+      const filteredList = filterActiveSequelPrequels(mergedList, completedSlugs);
+
+      setItems(filteredList.slice(0, 12));
     } catch (err) {
       console.error("Failed to load continue watching history:", err);
     } finally {
@@ -114,10 +149,12 @@ export default function ContinueWatchingRow() {
     };
 
     window.addEventListener("aniwavex_watch_updated", handleWatchUpdate);
+    window.addEventListener("aniwavex_watchlist_updated", handleWatchUpdate);
     window.addEventListener("storage", handleWatchUpdate);
 
     return () => {
       window.removeEventListener("aniwavex_watch_updated", handleWatchUpdate);
+      window.removeEventListener("aniwavex_watchlist_updated", handleWatchUpdate);
       window.removeEventListener("storage", handleWatchUpdate);
     };
   }, [loadWatchHistory]);
