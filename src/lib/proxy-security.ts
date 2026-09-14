@@ -54,9 +54,22 @@ export function createSignedProxyUrl(
   expiresInSeconds = DEFAULT_EXPIRY_SECONDS,
   referer?: string
 ): string {
+  if (!targetUrl) return "";
+
+  const base = getProxyBaseUrl();
+
+  // Guard against double proxying: if targetUrl is already proxied, do not re-wrap it
+  if (
+    targetUrl.includes("?url=") ||
+    targetUrl.includes("&url=") ||
+    targetUrl.startsWith("/api/proxy") ||
+    (base && targetUrl.startsWith(base))
+  ) {
+    return targetUrl;
+  }
+
   const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
   const sig = generateProxySignature(targetUrl, exp);
-  const base = getProxyBaseUrl();
 
   let signedUrl = `${base}?url=${encodeURIComponent(targetUrl)}&exp=${exp}&sig=${sig}`;
   if (referer) {

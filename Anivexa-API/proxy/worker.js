@@ -119,6 +119,9 @@ function rewriteM3U8(text, baseUrl, workerOrigin, referer) {
         } catch {
           absUri = new URL(uri, basePath).href;
         }
+        if (absUri.startsWith(workerOrigin) || absUri.includes("?url=") || absUri.includes("&url=")) {
+          return `URI="${absUri}"`;
+        }
         let childReferer = referer;
         try {
           childReferer = resolveReferer(new URL(absUri), referer);
@@ -132,6 +135,10 @@ function rewriteM3U8(text, baseUrl, workerOrigin, referer) {
       new URL(t);
     } catch {
       absUrl = new URL(t, basePath).href;
+    }
+
+    if (absUrl.startsWith(workerOrigin) || absUrl.includes("?url=") || absUrl.includes("&url=")) {
+      return absUrl;
     }
 
     let childReferer = referer;
@@ -205,13 +212,28 @@ export default {
     }
 
     const requestUrl = new URL(request.url);
-    const target = requestUrl.searchParams.get("url");
+    let target = requestUrl.searchParams.get("url");
 
     if (!target) {
       return new Response(JSON.stringify({ status: "ok", message: "AniWaveX Stream Proxy Edge Worker Active" }), {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
+    }
+
+    // Recursively unwrap nested ?url= parameters to prevent self-referential loops
+    while (target && (target.includes("?url=") || target.includes("&url="))) {
+      try {
+        const innerUrl = new URL(target);
+        const innerTarget = innerUrl.searchParams.get("url");
+        if (innerTarget && innerTarget !== target) {
+          target = innerTarget;
+        } else {
+          break;
+        }
+      } catch {
+        break;
+      }
     }
 
     let targetUrl;

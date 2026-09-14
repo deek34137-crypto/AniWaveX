@@ -356,6 +356,9 @@ function rewriteM3U8Content(
         } catch {
           absUri = new URL(uri, basePath).href;
         }
+        if (absUri.startsWith(proxyBase) || absUri.includes("?url=") || absUri.includes("&url=")) {
+          return `URI="${absUri}"`;
+        }
         let childReferer = referer;
         try {
           childReferer = resolveReferer(new URL(absUri), referer);
@@ -371,6 +374,10 @@ function rewriteM3U8Content(
       new URL(t);
     } catch {
       absUrl = new URL(t, basePath).href;
+    }
+
+    if (absUrl.startsWith(proxyBase) || absUrl.includes("?url=") || absUrl.includes("&url=")) {
+      return absUrl;
     }
 
     let childReferer = referer;
@@ -444,12 +451,28 @@ function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
 export async function GET(request: NextRequest) {
   const corsHeaders = getCorsHeaders(request);
   const { searchParams } = new URL(request.url);
-  const target = searchParams.get("url");
+  const rawTarget = searchParams.get("url");
   const exp = searchParams.get("exp");
   const sig = searchParams.get("sig");
 
-  if (!target) {
+  if (!rawTarget) {
     return NextResponse.json({ error: "Missing required ?url= parameter" }, { status: 400, headers: corsHeaders });
+  }
+
+  let target: string = rawTarget;
+  // Recursively unwrap nested ?url= parameters to prevent self-referential loops
+  while (target.includes("?url=") || target.includes("&url=")) {
+    try {
+      const parsedUrl: URL = new URL(target);
+      const innerTarget: string | null = parsedUrl.searchParams.get("url");
+      if (innerTarget && innerTarget !== target) {
+        target = innerTarget;
+      } else {
+        break;
+      }
+    } catch {
+      break;
+    }
   }
 
   let targetUrl: URL;

@@ -33,10 +33,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing visitorId" }, { status: 400 });
     }
 
+    // Sanitize userId to ensure it is a valid UUID before sending to PostgreSQL
+    const isValidUuid = typeof userId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId.trim());
+    const sanitizedUserId = isValidUuid ? userId.trim() : null;
+
     // Call stored procedure to upsert heartbeat atomically
     const { error } = await supabase.rpc("record_heartbeat", {
       p_visitor_id: visitorId.slice(0, 100),
-      p_user_id: userId || null,
+      p_user_id: sanitizedUserId,
       p_current_path: (currentPath || "/").slice(0, 200),
       p_device_type: (deviceType || "desktop").slice(0, 30),
     });
@@ -56,8 +60,14 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // 1. Verify caller has admin permission
-    const serverSupabase = await createServerClient();
-    const { data: { user } } = await serverSupabase.auth.getUser();
+    let user: any = null;
+    try {
+      const serverSupabase = await createServerClient();
+      const { data } = await serverSupabase.auth.getUser();
+      user = data?.user || null;
+    } catch {
+      user = null;
+    }
 
     const { searchParams } = new URL(request.url);
     const keyParam = searchParams.get("key");
@@ -67,15 +77,32 @@ export async function GET(request: NextRequest) {
     const hasKeyAccess = Boolean(adminKey && (keyParam === adminKey || keyHeader === adminKey));
     const hasAdminSession = isAdminUser(user);
 
+    // If caller is not an admin, return public concurrent count without 403 error
+    // to keep client badges responsive and avoid console errors while keeping analytics private.
     if (!hasAdminSession && !hasKeyAccess) {
+      let concurrentUsers = 1;
+      try {
+        const { data: count, error: countErr } = await supabase.rpc("get_concurrent_users_count");
+        if (!countErr && typeof count === "number") {
+          concurrentUsers = Math.max(1, count);
+        }
+      } catch {
+        concurrentUsers = 1;
+      }
+
       return NextResponse.json(
-        { error: "Unauthorized. Admin privileges are required to view live heartbeat stats." },
-        { status: 403 }
+        { concurrentUsers },
+        {
+          headers: {
+            "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
+          },
+        }
       );
     }
 
     // Use authenticated serverSupabase client (transmits admin JWT) or service_role key for admin key access
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const serverSupabase = await createServerClient();
     const clientToQuery = (hasKeyAccess && serviceRoleKey)
       ? createAdminClient(supabaseUrl, serviceRoleKey)
       : serverSupabase;
@@ -86,7 +113,7 @@ export async function GET(request: NextRequest) {
       console.error("Failed to fetch heartbeat analytics:", error);
       return NextResponse.json(
         {
-          concurrentUsers: 0,
+          concurrentUsers: 1,
           dailyUniqueUsers: 0,
           totalUniqueUsers: 0,
           topPages: [],
