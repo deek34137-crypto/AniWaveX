@@ -86,7 +86,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
 
             {/* Content */}
-            <div className="absolute bottom-0 left-0 w-full max-w-4xl p-4 sm:p-8 md:p-16 flex flex-col justify-end h-full">
+            <div className="absolute bottom-0 left-0 w-full max-w-4xl p-4 pb-12 sm:p-8 sm:pb-8 md:p-16 flex flex-col justify-end h-full">
               <h1 className={`text-2xl sm:text-4xl md:text-6xl font-black text-white tracking-tight mb-2 sm:mb-4 drop-shadow-2xl transition-all duration-700 delay-300 transform line-clamp-2 ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 {anime.title}
               </h1>
@@ -132,16 +132,17 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
         <ChevronRight className="w-6 h-6 md:w-8 md:h-8" />
       </button>
 
-      {/* Pagination Dots */}
-      <div className="absolute bottom-6 right-8 z-20 flex items-center gap-3">
+      {/* Pagination Dots (Centered at bottom on mobile to prevent overlapping with buttons, bottom-right on desktop) */}
+      <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 sm:left-auto sm:right-8 sm:translate-x-0 z-20 flex items-center gap-2 sm:gap-3">
         {animeList.map((_, idx) => (
           <button
             key={idx}
             onClick={() => setCurrentIndex(idx)}
+            aria-label={`Go to slide ${idx + 1}`}
             className={`transition-all duration-300 rounded-full ${
               idx === currentIndex 
-                ? 'w-8 h-2 bg-blue-500' 
-                : 'w-2 h-2 bg-white/40 hover:bg-white/70'
+                ? 'w-7 sm:w-8 h-1.5 sm:h-2 bg-blue-500' 
+                : 'w-1.5 sm:w-2 h-1.5 sm:h-2 bg-white/40 hover:bg-white/70'
             }`}
           />
         ))}

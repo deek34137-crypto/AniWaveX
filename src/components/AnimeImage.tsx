@@ -67,9 +67,9 @@ export default function AnimeImage({
   let computedWidth = targetWidth;
   if (!computedWidth && sizes) {
     if (sizes.includes("100vw")) {
-      computedWidth = 1400; // Banner size
+      computedWidth = 1100; // Balanced high-fidelity banner size (~60-70KB)
     } else {
-      computedWidth = 450; // High-density 2x poster card
+      computedWidth = 400; // High-density 2x poster card (~25-35KB)
     }
   }
 
