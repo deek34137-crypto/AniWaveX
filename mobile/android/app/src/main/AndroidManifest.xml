@@ -18,9 +18,19 @@
             android:launchMode="singleTask"
             android:exported="true">
 
+            <!-- App launcher icon -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Deep link: any link to aniwavex.bond opens this app instead of Chrome -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="aniwavex.bond" />
+                <data android:scheme="https" android:host="www.aniwavex.bond" />
             </intent-filter>
 
         </activity>
