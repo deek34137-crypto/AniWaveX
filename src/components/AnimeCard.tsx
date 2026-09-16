@@ -143,7 +143,7 @@ export default function AnimeCard({
           onClick={handleQuickBookmark}
           disabled={isBookmarking}
           aria-label={isBookmarked ? `Remove ${anime.title} from watchlist` : `Add ${anime.title} to watchlist`}
-          className={`absolute bottom-[34px] right-3.5 z-20 shrink-0 p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100 backdrop-blur-sm ${
+          className={`absolute bottom-[34px] right-3.5 z-20 shrink-0 p-1.5 rounded-md transition-all sm:opacity-0 sm:group-hover:opacity-100 backdrop-blur-sm ${
             isBookmarked
               ? "bg-blue-600 text-white shadow-sm"
               : "bg-black/60 hover:bg-blue-600 text-slate-300 hover:text-white border border-white/10"

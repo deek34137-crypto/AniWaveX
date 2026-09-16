@@ -167,37 +167,17 @@ export default function EpisodesGrid({
   }, [episodes, searchQuery, rangeChunks, safeRangeIndex, hydratedTitles]);
 
   return (
-    <div className="w-full mt-16 px-2">
+    <div className="w-full mt-12 sm:mt-16 px-2">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <h2 className="text-3xl font-bold text-white tracking-tight">Episodes</h2>
-          <span className="text-xs font-semibold px-2.5 py-1 bg-white/10 text-slate-300 rounded-full">
-            {episodes.length} Total
-          </span>
-        </div>
-        
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Episode Quick Search / Jump */}
-          <div className="relative w-full sm:w-60">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search or Jump to Ep #"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder:text-slate-500 outline-none focus:border-blue-500 transition-colors"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+      <div className="flex flex-col gap-3 mb-5">
+        {/* Title row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Episodes</h2>
+            <span className="text-xs font-semibold px-2.5 py-1 bg-white/10 text-slate-300 rounded-full">
+              {episodes.length} Total
+            </span>
           </div>
-
           {/* View Mode Toggle */}
           <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10 shrink-0">
             <button 
@@ -215,6 +195,26 @@ export default function EpisodesGrid({
               <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        {/* Search row — full width on mobile for easy tapping */}
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search or jump to episode #"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-8 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 transition-colors"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 

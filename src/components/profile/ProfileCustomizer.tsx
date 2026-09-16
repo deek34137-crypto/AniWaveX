@@ -354,7 +354,7 @@ export default function ProfileCustomizer({ user }: { user: any }) {
                   {/* Delete Button */}
                   <button
                     onClick={() => handleRemoveFavorite(anime.slug)}
-                    className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm"
+                    className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors sm:opacity-0 sm:group-hover:opacity-100 backdrop-blur-sm"
                     title="Remove"
                   >
                     <Trash2 className="w-3 h-3" />

@@ -25,8 +25,8 @@ export default async function Home() {
         
         <ContinueWatchingRow />
 
-        <AnimeRow title="Trending Now" items={trendingRow} />
-        <AnimeRow title="Highest Rated" items={topRated} />
+        <AnimeRow title="Trending Now" items={trendingRow} viewAllHref="/catalog?sort=trending" />
+        <AnimeRow title="Highest Rated" items={topRated} viewAllHref="/catalog?sort=rated" />
       </div>
     </main>
   );
