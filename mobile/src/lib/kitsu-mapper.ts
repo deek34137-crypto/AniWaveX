@@ -219,3 +219,125 @@ export async function resolveAnilistIdFromSlugOrKitsu(
 
   return null;
 }
+
+// 24-hour cache for successful reverse mappings (AniList -> Kitsu)
+const anilistToKitsuCache = new BoundedLRU<string, string | null>(1000);
+
+/**
+ * Fetch Kitsu ID from ARM using AniList ID.
+ */
+async function fetchKitsuFromARM(anilistId: string | number): Promise<string | null> {
+  try {
+    const res = await fetch(`https://arm.haglund.dev/api/v2/ids?source=anilist&id=${encodeURIComponent(anilistId)}`, {
+      headers: HEADERS,
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const kitsuId = json?.kitsu;
+    if (kitsuId !== undefined && kitsuId !== null) {
+      return String(kitsuId);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch Kitsu ID from AniZip using AniList ID.
+ */
+async function fetchKitsuFromAniZip(anilistId: string | number): Promise<string | null> {
+  try {
+    const res = await fetch(`https://api.ani.zip/mappings?anilist_id=${encodeURIComponent(anilistId)}`, {
+      headers: HEADERS,
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const kitsuId = json?.mappings?.kitsu_id;
+    if (kitsuId !== undefined && kitsuId !== null) {
+      return String(kitsuId);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Deterministically resolve Kitsu ID from an AniList ID.
+ */
+export async function resolveKitsuIdFromAnilistId(
+  anilistId: string | number
+): Promise<string | null> {
+  const cacheKey = String(anilistId);
+  const cached = anilistToKitsuCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  // 1. Try ARM
+  const armKitsuId = await fetchKitsuFromARM(anilistId);
+  if (armKitsuId) {
+    anilistToKitsuCache.set(cacheKey, armKitsuId, CACHE_TTL_SUCCESS_MS);
+    return armKitsuId;
+  }
+
+  // 2. Try AniZip
+  const aniZipKitsuId = await fetchKitsuFromAniZip(anilistId);
+  if (aniZipKitsuId) {
+    anilistToKitsuCache.set(cacheKey, aniZipKitsuId, CACHE_TTL_SUCCESS_MS);
+    return aniZipKitsuId;
+  }
+
+  anilistToKitsuCache.set(cacheKey, null, CACHE_TTL_MISS_MS);
+  return null;
+}
+
+/**
+ * Resolve Kitsu slug (and ID) from an AniList Media object or AniList ID.
+ */
+export async function resolveKitsuSlugFromAnilist(
+  anilistId: string | number,
+  fallbackTitles?: { romaji?: string; english?: string }
+): Promise<{ id: string; slug: string } | null> {
+  const kitsuId = await resolveKitsuIdFromAnilistId(anilistId);
+  if (kitsuId) {
+    try {
+      const res = await fetch(`https://kitsu.io/api/edge/anime/${kitsuId}?fields[anime]=slug,canonicalTitle`, {
+        headers: KITSU_HEADERS,
+        signal: AbortSignal.timeout(4000)
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const slug = json?.data?.attributes?.slug;
+        if (slug) {
+          return { id: kitsuId, slug };
+        }
+      }
+      return { id: kitsuId, slug: kitsuId };
+    } catch {
+      return { id: kitsuId, slug: kitsuId };
+    }
+  }
+
+  // Fallback to title search if ARM/AniZip didn't have mapping
+  const searchTitle = fallbackTitles?.romaji || fallbackTitles?.english;
+  if (searchTitle) {
+    try {
+      const clean = searchTitle.replace(/[-_]/g, " ").replace(/[^\p{L}\p{N}\s]/gu, "").trim();
+      const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(clean)}&fields[anime]=slug,canonicalTitle&page[limit]=1`, {
+        headers: KITSU_HEADERS,
+        signal: AbortSignal.timeout(4000)
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const first = json?.data?.[0];
+        if (first?.id && first?.attributes?.slug) {
+          return { id: first.id, slug: first.attributes.slug };
+        }
+      }
+    } catch {}
+  }
+
+  return null;
+}

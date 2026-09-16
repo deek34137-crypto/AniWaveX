@@ -12,6 +12,7 @@ interface NativePlayerProps {
   poster?: string;
   subtitles?: any[];
   initialTime?: number;
+  autoPlay?: boolean;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onEnded?: () => void;
   onError?: (error: any) => void;
@@ -30,6 +31,7 @@ export default function NativePlayer({
   poster, 
   subtitles, 
   initialTime = 0,
+  autoPlay = true,
   onTimeUpdate,
   onEnded,
   onError,
@@ -39,9 +41,51 @@ export default function NativePlayer({
   const player = externalRef || internalRef;
 
 
-  // Automatically lock screen orientation to horizontal (landscape) on mobile ONLY when entering fullscreen via button
+  // Lock orientation to landscape on fullscreen, unlock on exit
   useEffect(() => {
-    const handleFullscreenChange = async () => {
+    const lockLandscape = async () => {
+      try {
+        // 1. Capacitor native plugin (highest priority in Android APK)
+        const CapOrientation = (window as any)?.Capacitor?.Plugins?.ScreenOrientation;
+        if (CapOrientation) {
+          await CapOrientation.lock({ orientation: 'landscape' }).catch(() => {});
+          return;
+        }
+        // 2. Web Screen Orientation API — requires 'landscape-primary', NOT just 'landscape'
+        if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
+          await (screen.orientation as any).lock('landscape-primary').catch(() => {});
+          return;
+        }
+        // 3. CSS transform fallback for older Androids / WebViews that block the API
+        const el = document.fullscreenElement || (document as any).webkitFullscreenElement;
+        if (el instanceof HTMLElement) {
+          el.style.transform = 'rotate(0deg)';
+        }
+      } catch {
+        // Silently ignore — fullscreen still works, just won't auto-rotate
+      }
+    };
+
+    const unlockPortrait = async () => {
+      try {
+        const CapOrientation = (window as any)?.Capacitor?.Plugins?.ScreenOrientation;
+        if (CapOrientation) {
+          await CapOrientation.lock({ orientation: 'portrait' }).catch(() => {});
+          return;
+        }
+        if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
+          await (screen.orientation as any).lock('portrait-primary').catch(() => {});
+          return;
+        }
+        if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+          screen.orientation.unlock();
+        }
+      } catch {
+        // Ignore unlock errors
+      }
+    };
+
+    const handleFullscreenChange = () => {
       const isFullscreen = Boolean(
         document.fullscreenElement ||
         (document as any).webkitFullscreenElement ||
@@ -50,29 +94,9 @@ export default function NativePlayer({
       );
 
       if (isFullscreen) {
-        try {
-          const CapOrientation = (window as any)?.Capacitor?.Plugins?.ScreenOrientation;
-          if (CapOrientation) {
-            await CapOrientation.lock({ orientation: 'landscape' }).catch(() => {});
-          } else if (screen.orientation && 'lock' in screen.orientation) {
-            await (screen.orientation as any).lock('landscape').catch(() => {});
-          }
-        } catch {
-          // Ignore orientation lock errors on unsupported devices
-        }
+        lockLandscape();
       } else {
-        try {
-          const CapOrientation = (window as any)?.Capacitor?.Plugins?.ScreenOrientation;
-          if (CapOrientation) {
-            await CapOrientation.lock({ orientation: 'portrait' }).catch(() => {});
-          } else if (screen.orientation && 'lock' in screen.orientation) {
-            await (screen.orientation as any).lock('portrait').catch(() => {});
-          } else if (screen.orientation && 'unlock' in screen.orientation) {
-            screen.orientation.unlock();
-          }
-        } catch {
-          // Ignore unlock errors
-        }
+        unlockPortrait();
       }
     };
 
@@ -114,6 +138,7 @@ export default function NativePlayer({
       fullscreenOrientation="landscape"
       crossOrigin
       currentTime={initialTime}
+      autoPlay={autoPlay}
       onTimeUpdate={(detail) => {
         if (onTimeUpdate && typeof detail.currentTime === 'number') {
           const dur = player.current?.duration;

@@ -269,17 +269,17 @@ export default function Hero({
             {anime.description}
           </p>
 
-          <div className="flex flex-row items-center gap-2.5 sm:gap-4 mt-3 sm:mt-6 w-full sm:w-auto">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:items-center sm:gap-4 mt-3 sm:mt-6 w-full sm:w-auto">
             {lastWatchedEpisode ? (
               <button 
                 onClick={() => {
                   const ep = anime.episodes?.find((e: any) => e.id === lastWatchedEpisode);
                   if (ep && onPlayEpisode) onPlayEpisode(ep);
                 }}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 sm:px-8 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(37,99,235,0.4)] transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
+                className="min-w-0 flex items-center justify-center gap-1.5 px-3 py-3 sm:px-8 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(37,99,235,0.4)] transition-all hover:scale-105 active:scale-95"
               >
-                <Play className="w-4 h-4 fill-current" />
-                Continue Ep {lastWatchedEpisode}
+                <Play className="w-4 h-4 fill-current shrink-0" />
+                <span className="truncate">Continue Ep {lastWatchedEpisode}</span>
               </button>
             ) : (
               <button 
@@ -287,15 +287,15 @@ export default function Hero({
                   const ep = anime.episodes?.[0];
                   if (ep && onPlayEpisode) onPlayEpisode(ep);
                 }}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
+                className="min-w-0 flex items-center justify-center gap-1.5 px-3 py-3 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95"
               >
-                <Play className="w-4 h-4 fill-current" />
-                Watch Episode {anime.episodes?.[0]?.id ?? 1}
+                <Play className="w-4 h-4 fill-current shrink-0" />
+                <span className="truncate">Watch Ep {anime.episodes?.[0]?.id ?? 1}</span>
               </button>
             )}
             
             {/* Categorized Watchlist Dropdown */}
-            <div className="relative flex-1 sm:flex-initial">
+            <div className="relative min-w-0">
               <div className={`flex items-center rounded-xl backdrop-blur-md transition-all border ${
                 isBookmarked 
                   ? 'bg-blue-600/20 text-blue-400 border-blue-500/30' 
@@ -310,25 +310,27 @@ export default function Hero({
                     }
                   }}
                   disabled={isSaving}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 sm:px-6 sm:py-4 text-xs sm:text-base font-semibold hover:scale-105 active:scale-95 transition-all whitespace-nowrap"
+                  className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-2.5 py-3 sm:px-6 sm:py-4 text-xs sm:text-base font-semibold hover:scale-105 active:scale-95 transition-all"
                 >
-                  <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
-                  {isSaving ? "Saving..." : isBookmarked ? activeStatusConfig.label : "Add to Watchlist"}
+                  <Bookmark className={`w-4 h-4 shrink-0 ${isBookmarked ? 'fill-current' : ''}`} />
+                  <span className="truncate">
+                    {isSaving ? "Saving..." : isBookmarked ? activeStatusConfig.label : "Watchlist"}
+                  </span>
                 </button>
 
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                   disabled={isSaving}
-                  className="p-3 sm:py-4 sm:pr-3 text-slate-400 hover:text-white transition-colors border-l border-white/10"
+                  className="p-2.5 sm:py-4 sm:pr-3 text-slate-400 hover:text-white transition-colors border-l border-white/10 shrink-0"
                   aria-label="Change Watchlist Status"
                 >
-                  <ChevronDown className="w-4 h-4" />
+                  <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
               </div>
 
               {/* Status Dropdown Menu */}
               {isDropdownOpen && (
-                <div className="absolute left-0 bottom-full mb-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-2 flex flex-col z-50 animate-in fade-in zoom-in-95">
+                <div className="absolute right-0 sm:left-0 bottom-full mb-2 w-48 sm:w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-2 flex flex-col z-50 animate-in fade-in zoom-in-95">
                   <div className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
                     Watchlist Status
                   </div>

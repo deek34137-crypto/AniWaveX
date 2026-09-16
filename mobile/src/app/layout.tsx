@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   description: "Discover, track, and stream your favorite anime in high quality without interruptions.",
 };
 
+import NotificationManager from "@/components/NotificationManager";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,6 +39,7 @@ export default function RootLayout({
         <MobileAppShell>
           <AuthProvider>
             <HeartbeatProvider />
+            <NotificationManager />
             {children}
             <CommandPalette />
             <MobileBottomNav />

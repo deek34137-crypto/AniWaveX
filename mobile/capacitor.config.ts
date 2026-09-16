@@ -30,6 +30,7 @@ const config: CapacitorConfig = {
       resize: 'body',
       style: 'DARK',
     },
+    ScreenOrientation: {},
   },
 };
 

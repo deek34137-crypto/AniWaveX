@@ -43,6 +43,8 @@ export const metadata: Metadata = {
   },
 };
 
+import NotificationManager from "@/components/NotificationManager";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -53,6 +55,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col pb-20 md:pb-0">
         <AuthProvider>
           <HeartbeatProvider />
+          <NotificationManager />
           {children}
           <CommandPalette />
           <MobileBottomNav />

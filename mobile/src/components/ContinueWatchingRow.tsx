@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Play, PlayCircle, X } from "lucide-react";
+import { Play, PlayCircle, X, Bookmark } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import { useAuth } from "@/providers/AuthProvider";
+import { filterActiveSequelPrequels, checkAnimeHasSequel } from "@/lib/franchise";
 
 interface WatchHistoryItem {
   animeSlug: string;
@@ -20,83 +21,176 @@ interface WatchHistoryItem {
 export default function ContinueWatchingRow() {
   const [items, setItems] = useState<WatchHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user, supabase } = useAuth();
+  const { user, supabase, isBookmarked: checkBookmarked, toggleBookmark } = useAuth();
 
-  useEffect(() => {
-    async function loadWatchHistory() {
-      try {
-        // 1. Try fetching from Supabase if logged in
-        if (user) {
-          const { data: records } = await supabase
-            .from("watch_history")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("updated_at", { ascending: false })
-            .limit(12);
+  const loadWatchHistory = useCallback(async () => {
+    try {
+      let dbMapped: WatchHistoryItem[] = [];
+      if (user) {
+        const { data: records } = await supabase
+          .from("watch_history")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(12);
 
-          if (records && records.length > 0) {
-            const mapped: WatchHistoryItem[] = records.map((r: any) => {
-              const slug = r.anime_slug;
-              const epId = r.last_episode_watched || 1;
+        if (records && records.length > 0) {
+          dbMapped = records.map((r: any) => {
+            const slug = r.anime_slug;
+            const epId = r.last_episode_watched || 1;
 
-              // Pull per-episode localStorage progress as a more accurate source
-              let localProgress = 0;
-              let localDuration = 0;
-              try {
-                const localRaw = localStorage.getItem(`watch_progress_${slug}_ep_${epId}`);
-                if (localRaw) {
-                  const lp = JSON.parse(localRaw);
-                  localProgress = lp.currentTime || 0;
-                  localDuration = lp.duration || 0;
-                }
-              } catch {}
+            // Pull per-episode localStorage progress as a more accurate source
+            let localProgress = 0;
+            let localDuration = 0;
+            try {
+              const localRaw = localStorage.getItem(`watch_progress_${slug}_ep_${epId}`);
+              if (localRaw) {
+                const lp = JSON.parse(localRaw);
+                localProgress = lp.currentTime || 0;
+                localDuration = lp.duration || 0;
+              }
+            } catch {}
 
-              // Use the higher of DB vs localStorage progress
-              const dbProgress = r.progress_seconds || 0;
-              const bestProgress = Math.max(dbProgress, Math.floor(localProgress));
+            // Use the higher of DB vs localStorage progress
+            const dbProgress = r.progress_seconds || 0;
+            const bestProgress = Math.max(dbProgress, Math.floor(localProgress));
 
-              // Use localStorage duration if DB has none yet
-              const dbDuration = r.total_seconds > 0 ? r.total_seconds : 0;
-              const bestDuration = dbDuration > 0 ? dbDuration : (localDuration > 0 ? Math.floor(localDuration) : 1440);
+            // Use localStorage duration if DB has none yet
+            const dbDuration = r.total_seconds > 0 ? r.total_seconds : 0;
+            const bestDuration = dbDuration > 0 ? dbDuration : (localDuration > 0 ? Math.floor(localDuration) : 1440);
 
-              return {
-                animeSlug: slug,
-                animeTitle: r.anime_title,
-                posterImage: r.poster_image,
-                episodeId: epId,
-                progressSeconds: bestProgress,
-                totalSeconds: bestDuration,
-                updatedAt: new Date(r.updated_at).getTime(),
-              };
-            });
-            setItems(mapped);
-            setLoading(false);
-            return;
-          }
-
-          // User is authenticated but has no history records in database
-          setItems([]);
-          setLoading(false);
-          return;
+            return {
+              animeSlug: slug,
+              animeTitle: r.anime_title,
+              posterImage: r.poster_image,
+              episodeId: epId,
+              progressSeconds: bestProgress,
+              totalSeconds: bestDuration,
+              updatedAt: new Date(r.updated_at).getTime(),
+            };
+          });
         }
+      }
 
-        // 2. Fallback to localStorage for guests
+      // Read from localStorage
+      let localItems: WatchHistoryItem[] = [];
+      try {
         const raw = localStorage.getItem("aniwavex_recent_watches");
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setItems(parsed);
+          if (Array.isArray(parsed)) {
+            localItems = parsed;
           }
         }
-      } catch (err) {
-        console.error("Failed to load continue watching history:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
+      } catch {}
 
-    loadWatchHistory();
+      // Merge DB items with local items (DB items take precedence)
+      const mergedMap = new Map<string, WatchHistoryItem>();
+      dbMapped.forEach((it) => {
+        if (it.animeSlug) mergedMap.set(it.animeSlug, it);
+      });
+      localItems.forEach((it) => {
+        if (it.animeSlug && !mergedMap.has(it.animeSlug)) {
+          mergedMap.set(it.animeSlug, it);
+        }
+      });
+
+      const mergedList = Array.from(mergedMap.values()).sort(
+        (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)
+      );
+
+      // Collect completed anime slugs from localStorage & Supabase
+      const completedSlugs = new Set<string>();
+      try {
+        const rawWatchlist = localStorage.getItem("aniwavex_watchlist");
+        if (rawWatchlist) {
+          const parsed = JSON.parse(rawWatchlist);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((w: any) => {
+              if (w.status === "completed" && w.anime_slug) {
+                completedSlugs.add(w.anime_slug);
+              }
+            });
+          }
+        }
+      } catch {}
+
+      if (user) {
+        try {
+          const { data: dbCompleted } = await supabase
+            .from("bookmarks")
+            .select("anime_slug")
+            .eq("user_id", user.id)
+            .eq("status", "completed");
+          if (dbCompleted) {
+            dbCompleted.forEach((b: any) => {
+              if (b.anime_slug) completedSlugs.add(b.anime_slug);
+            });
+          }
+        } catch {}
+      }
+
+      // If user is actively watching a sequel, remove the completed prequel from Continue Watching
+      const filteredList = filterActiveSequelPrequels(mergedList, completedSlugs);
+
+      setItems(filteredList.slice(0, 12));
+
+      // Check any completed anime in background: if it has NO sequel, remove it from Continue Watching
+      mergedList.forEach((item) => {
+        const isDone = completedSlugs.has(item.animeSlug) || (item.episodeId && item.episodeId >= 11);
+        if (isDone) {
+          checkAnimeHasSequel({ slug: item.animeSlug, title: item.animeTitle }).then((hasSequel) => {
+            if (!hasSequel) {
+              // Remove from localStorage
+              try {
+                const rawRecent = localStorage.getItem("aniwavex_recent_watches");
+                if (rawRecent) {
+                  const list = JSON.parse(rawRecent);
+                  const updated = list.filter((x: any) => (x.animeSlug || x.slug) !== item.animeSlug);
+                  localStorage.setItem("aniwavex_recent_watches", JSON.stringify(updated));
+                }
+              } catch {}
+
+              // Remove from Supabase
+              if (user) {
+                supabase
+                  .from("watch_history")
+                  .delete()
+                  .eq("user_id", user.id)
+                  .eq("anime_slug", item.animeSlug)
+                  .then(() => {});
+              }
+
+              // Update local state
+              setItems((prev) => prev.filter((it) => it.animeSlug !== item.animeSlug));
+            }
+          });
+        }
+      });
+    } catch (err) {
+      console.error("Failed to load continue watching history:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [user, supabase]);
+
+  useEffect(() => {
+    loadWatchHistory();
+
+    const handleWatchUpdate = () => {
+      loadWatchHistory();
+    };
+
+    window.addEventListener("aniwavex_watch_updated", handleWatchUpdate);
+    window.addEventListener("aniwavex_watchlist_updated", handleWatchUpdate);
+    window.addEventListener("storage", handleWatchUpdate);
+
+    return () => {
+      window.removeEventListener("aniwavex_watch_updated", handleWatchUpdate);
+      window.removeEventListener("aniwavex_watchlist_updated", handleWatchUpdate);
+      window.removeEventListener("storage", handleWatchUpdate);
+    };
+  }, [loadWatchHistory]);
 
   const handleRemove = (e: React.MouseEvent, animeSlug: string) => {
     e.preventDefault();
@@ -128,6 +222,17 @@ export default function ContinueWatchingRow() {
     }
   };
 
+  const handleToggleBookmark = async (e: React.MouseEvent, item: WatchHistoryItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    await toggleBookmark({
+      slug: item.animeSlug,
+      title: item.animeTitle,
+      posterImage: item.posterImage,
+    });
+  };
+
   if (loading || items.length === 0) return null;
 
   return (
@@ -149,6 +254,7 @@ export default function ContinueWatchingRow() {
           const totalSec = item.totalSeconds || 1440;
           const progSec = item.progressSeconds || 0;
           const pct = Math.min(100, Math.round((progSec / totalSec) * 100));
+          const isSaved = checkBookmarked(item.animeSlug);
 
           return (
             <div
@@ -157,7 +263,7 @@ export default function ContinueWatchingRow() {
             >
               {/* Media & Title Link */}
               <Link
-                href={`/anime/${item.animeSlug}?ep=${item.episodeId}`}
+                href={`/anime/${item.animeSlug}`}
                 className="block relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer"
                 aria-label={`Continue watching ${item.animeTitle} Episode ${item.episodeId}`}
               >
@@ -208,16 +314,34 @@ export default function ContinueWatchingRow() {
                 </div>
               </Link>
 
-              {/* Remove Button (Sibling overlay, NOT inside Link) */}
-              <button
-                type="button"
-                onClick={(e) => handleRemove(e, item.animeSlug)}
-                className="absolute top-2.5 right-2.5 z-20 p-1 bg-black/70 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm border border-white/10"
-                title="Remove from Continue Watching"
-                aria-label={`Remove ${item.animeTitle} from continue watching`}
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+              {/* Action Buttons: Add to List + Remove from Continue Watching (Always visible on touch/mobile, hover on desktop) */}
+              <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                {/* Add/Remove to Watchlist Button */}
+                <button
+                  type="button"
+                  onClick={(e) => handleToggleBookmark(e, item)}
+                  className={`p-1.5 rounded-full transition-colors backdrop-blur-md border border-white/10 ${
+                    isSaved
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-black/75 hover:bg-blue-600 text-slate-300 hover:text-white"
+                  }`}
+                  title={isSaved ? "In Watchlist" : "Add to Watchlist"}
+                  aria-label={isSaved ? `In watchlist` : `Add ${item.animeTitle} to watchlist`}
+                >
+                  <Bookmark className={`w-3.5 h-3.5 ${isSaved ? "fill-current" : ""}`} />
+                </button>
+
+                {/* Remove from Continue Watching Button */}
+                <button
+                  type="button"
+                  onClick={(e) => handleRemove(e, item.animeSlug)}
+                  className="p-1.5 bg-black/75 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors backdrop-blur-md border border-white/10"
+                  title="Remove from Continue Watching"
+                  aria-label={`Remove ${item.animeTitle} from continue watching`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           );
         })}

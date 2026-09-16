@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Play, PlayCircle, X } from "lucide-react";
+import { Play, PlayCircle, X, Bookmark } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import { useAuth } from "@/providers/AuthProvider";
 import { filterActiveSequelPrequels, checkAnimeHasSequel } from "@/lib/franchise";
@@ -21,7 +21,7 @@ interface WatchHistoryItem {
 export default function ContinueWatchingRow() {
   const [items, setItems] = useState<WatchHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user, supabase } = useAuth();
+  const { user, supabase, isBookmarked: checkBookmarked, toggleBookmark } = useAuth();
 
   const loadWatchHistory = useCallback(async () => {
     try {
@@ -222,6 +222,17 @@ export default function ContinueWatchingRow() {
     }
   };
 
+  const handleToggleBookmark = async (e: React.MouseEvent, item: WatchHistoryItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    await toggleBookmark({
+      slug: item.animeSlug,
+      title: item.animeTitle,
+      posterImage: item.posterImage,
+    });
+  };
+
   if (loading || items.length === 0) return null;
 
   return (
@@ -243,6 +254,7 @@ export default function ContinueWatchingRow() {
           const totalSec = item.totalSeconds || 1440;
           const progSec = item.progressSeconds || 0;
           const pct = Math.min(100, Math.round((progSec / totalSec) * 100));
+          const isSaved = checkBookmarked(item.animeSlug);
 
           return (
             <div
@@ -251,7 +263,7 @@ export default function ContinueWatchingRow() {
             >
               {/* Media & Title Link */}
               <Link
-                href={`/anime/${item.animeSlug}?ep=${item.episodeId}`}
+                href={`/anime/${item.animeSlug}`}
                 className="block relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer"
                 aria-label={`Continue watching ${item.animeTitle} Episode ${item.episodeId}`}
               >
@@ -302,16 +314,34 @@ export default function ContinueWatchingRow() {
                 </div>
               </Link>
 
-              {/* Remove Button (Sibling overlay, NOT inside Link) */}
-              <button
-                type="button"
-                onClick={(e) => handleRemove(e, item.animeSlug)}
-                className="absolute top-2.5 right-2.5 z-20 p-1 bg-black/70 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm border border-white/10"
-                title="Remove from Continue Watching"
-                aria-label={`Remove ${item.animeTitle} from continue watching`}
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+              {/* Action Buttons: Add to List + Remove from Continue Watching (Always visible on touch/mobile, hover on desktop) */}
+              <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                {/* Add/Remove to Watchlist Button */}
+                <button
+                  type="button"
+                  onClick={(e) => handleToggleBookmark(e, item)}
+                  className={`p-1.5 rounded-full transition-colors backdrop-blur-md border border-white/10 ${
+                    isSaved
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-black/75 hover:bg-blue-600 text-slate-300 hover:text-white"
+                  }`}
+                  title={isSaved ? "In Watchlist" : "Add to Watchlist"}
+                  aria-label={isSaved ? `In watchlist` : `Add ${item.animeTitle} to watchlist`}
+                >
+                  <Bookmark className={`w-3.5 h-3.5 ${isSaved ? "fill-current" : ""}`} />
+                </button>
+
+                {/* Remove from Continue Watching Button */}
+                <button
+                  type="button"
+                  onClick={(e) => handleRemove(e, item.animeSlug)}
+                  className="p-1.5 bg-black/75 hover:bg-red-600 text-slate-300 hover:text-white rounded-full transition-colors backdrop-blur-md border border-white/10"
+                  title="Remove from Continue Watching"
+                  aria-label={`Remove ${item.animeTitle} from continue watching`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           );
         })}
