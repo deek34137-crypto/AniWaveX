@@ -222,8 +222,8 @@ export default function ProfileClient({
         </button>
       </div>
 
-      {/* ── Tab Bar ── */}
-      <div className="flex items-center gap-1.5 mb-5 bg-slate-900/50 p-1.5 rounded-2xl border border-white/5 overflow-x-auto scrollbar-none">
+      {/* ── Tab Bar (Balanced 4-column grid on mobile so no tabs are cut off) ── */}
+      <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-5 bg-slate-900/50 p-1.5 rounded-2xl border border-white/5">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -231,7 +231,7 @@ export default function ProfileClient({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap flex-1 justify-center ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-2 sm:py-2.5 rounded-xl font-bold text-[11px] sm:text-xs transition-all justify-center w-full ${
                 isActive
                   ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
                   : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -239,7 +239,7 @@ export default function ProfileClient({
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />
               <span className="hidden sm:inline">{tab.label}</span>
-              <span className="sm:hidden">{tab.shortLabel}</span>
+              <span className="sm:hidden truncate">{tab.shortLabel}</span>
             </button>
           );
         })}

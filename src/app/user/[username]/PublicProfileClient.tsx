@@ -377,12 +377,12 @@ export default function PublicProfileClient({
         {/* Ambient Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent z-0" />
 
-        {/* Top Right Share & Tier List Actions */}
-        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2 z-10 flex-wrap justify-end">
+        {/* Top Action Buttons (Mobile: clean row at top, Desktop: absolute top-right) */}
+        <div className="flex sm:absolute sm:top-6 sm:right-6 items-center gap-2 z-10 flex-wrap justify-start sm:justify-end mb-4 sm:mb-0 w-full sm:w-auto">
           {isOwner && (
             <Link
               href="/profile"
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold transition-all border border-white/10 backdrop-blur-md shadow-lg hover:scale-105"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-xl sm:rounded-2xl text-xs font-bold transition-all border border-white/10 backdrop-blur-md shadow-lg active:scale-95"
             >
               <Settings className="w-3.5 h-3.5 text-blue-400" />
               <span>Edit Profile</span>
@@ -391,18 +391,18 @@ export default function PublicProfileClient({
 
           <Link
             href="/tier-list"
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold transition-all border border-white/10 backdrop-blur-md shadow-lg hover:scale-105"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-xl sm:rounded-2xl text-xs font-bold transition-all border border-white/10 backdrop-blur-md shadow-lg active:scale-95"
           >
             <Layers className="w-3.5 h-3.5 text-blue-400" />
-            <span>Create Tier List</span>
+            <span>Tier List</span>
           </Link>
 
           <button
             onClick={handleShare}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-bold transition-all shadow-lg hover:scale-105"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl sm:rounded-2xl text-xs font-bold transition-all shadow-lg active:scale-95"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span>{copied ? "Link Copied!" : "Share Profile"}</span>
+            <span>{copied ? "Copied!" : "Share Profile"}</span>
           </button>
         </div>
 
@@ -544,7 +544,7 @@ export default function PublicProfileClient({
       </div>
 
       {/* 3. Navigation Tabs */}
-      <div ref={tabsRef} className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto">
+      <div ref={tabsRef} className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto hide-scrollbar">
         <button
           onClick={() => setActiveTab("showcase")}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all shrink-0 ${

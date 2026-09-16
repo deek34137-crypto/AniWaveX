@@ -137,7 +137,25 @@ export default function WatchHistoryGrid({
 
   const visibleItems = filterActiveSequelPrequels(items);
 
-  if (!visibleItems || visibleItems.length === 0) return null;
+  if (!visibleItems || visibleItems.length === 0) {
+    return (
+      <div className="w-full text-center py-16 px-4 bg-slate-900/40 border border-white/5 rounded-3xl flex flex-col items-center justify-center gap-3 animate-in fade-in duration-300">
+        <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-1">
+          <Star className="w-6 h-6 text-yellow-400 fill-current" />
+        </div>
+        <h3 className="text-base font-bold text-white">No Watch History Yet</h3>
+        <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+          Your recently watched anime episodes will automatically appear here.
+        </p>
+        <Link
+          href="/catalog"
+          className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg hover:scale-105 active:scale-95"
+        >
+          Discover Anime
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-16">
