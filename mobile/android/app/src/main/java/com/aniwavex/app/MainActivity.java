@@ -8,6 +8,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebViewClient;
 
 public class MainActivity extends BridgeActivity {
 
@@ -22,9 +23,9 @@ public class MainActivity extends BridgeActivity {
             webView.getSettings().setUserAgentString(currentUa + " AniWaveX-APK");
         }
 
-        // Override WebViewClient after Capacitor bridge is initialized.
-        // This intercepts ALL URL navigations and keeps aniwavex.bond inside the app.
-        webView.setWebViewClient(new WebViewClient() {
+        // Extend BridgeWebViewClient after Capacitor bridge is initialized.
+        // This intercepts external navigations while preserving all Capacitor bridge functionality.
+        webView.setWebViewClient(new BridgeWebViewClient(this.getBridge()) {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
