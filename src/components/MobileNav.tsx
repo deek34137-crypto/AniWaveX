@@ -73,8 +73,7 @@ export default function MobileNav() {
             role="dialog"
             aria-modal="true"
             aria-label="Mobile Navigation Menu"
-            className="absolute top-0 left-0 bottom-0 w-72 max-w-[80vw] border-r border-white/10 shadow-2xl flex flex-col z-10 transition-transform overflow-y-auto"
-            style={{ backgroundColor: "#0b0f19" }}
+            className="absolute top-0 left-0 bottom-0 h-full w-72 max-w-[85vw] border-r border-white/10 shadow-2xl flex flex-col z-10 bg-[#0b0f19]"
           >
             {/* Safe area top padded header */}
             <div 
@@ -151,8 +150,8 @@ export default function MobileNav() {
               </div>
             )}
             
-            {/* Main Nav Links */}
-            <nav className="flex flex-col py-3 px-3 gap-1">
+            {/* Main Nav Links — flex-1 min-h-0 with smooth scrolling if needed */}
+            <nav className="flex-1 min-h-0 overflow-y-auto py-3 px-3 flex flex-col gap-1">
               {navLinks.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
@@ -175,7 +174,7 @@ export default function MobileNav() {
             </nav>
 
             <div 
-              className="mt-auto p-4 border-t border-white/10 text-xs text-slate-500 shrink-0"
+              className="p-4 border-t border-white/10 text-xs text-slate-500 shrink-0"
               style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom, 1rem))" }}
             >
               AniWaveX &bull; Stream Anywhere
