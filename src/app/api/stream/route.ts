@@ -314,12 +314,16 @@ function formatStreamResponse(sources: any[], subtitles: any[], audio: 'sub' | '
     return 0;
   });
 
+  const isHindiFallback = audio === 'hindi' && !sources.some(s => s.isHindi);
+
   return {
     sources: sortedSources,
-    sub: audio === 'sub' ? sortedSources : [],
+    sub: (audio === 'sub' || isHindiFallback) ? sortedSources : [],
     dub: audio === 'dub' ? sortedSources : [],
     hindi: audio === 'hindi' ? sortedSources : [],
-    audio: audio,
+    audio: isHindiFallback ? 'sub' : audio,
+    isFallback: isHindiFallback,
+    fallbackReason: isHindiFallback ? 'hindi_unavailable' : undefined,
     nativeStream: {
       subtitles: subtitles || []
     }
@@ -355,6 +359,63 @@ async function fetchWorkerProvider(
     const data = await res.json();
     const extracted = extractWorkerSources(data, provider, audio);
     return extracted.sources.length > 0 ? extracted : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchHindiWorkerStream(
+  hindiWorkerUrl: string,
+  anilistId: number | null,
+  title: string,
+  ep: number,
+  signal?: AbortSignal,
+  timeoutMs = 5000
+): Promise<ExtractedStreamResult | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const combinedSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+
+  try {
+    const idParam = `id=${anilistId || 0}&`;
+    const titleParam = encodeURIComponent(title);
+    const url = `${hindiWorkerUrl}/stream?${idParam}title=${titleParam}&ep=${ep}`;
+
+    const res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: combinedSignal,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const streamList = Array.isArray(data.streams) 
+      ? data.streams 
+      : (Array.isArray(data.stream?.sources) ? data.stream.sources : []);
+
+    const sources: any[] = [];
+    for (const s of streamList) {
+      if (!s.url) continue;
+      const isM3U8 = s.isM3U8 === true || (typeof s.url === 'string' && s.url.includes('.m3u8'));
+      sources.push({
+        url: s.url,
+        quality: s.quality || `${s.server || 'ToonStream'} [Hindi Dub]`,
+        isM3U8,
+        isHindi: true,
+      });
+    }
+
+    if (sources.length === 0 && data.stream_url) {
+      const isM3U8 = typeof data.stream_url === 'string' && data.stream_url.includes('.m3u8');
+      sources.push({
+        url: data.stream_url,
+        quality: "ToonStream [Hindi Dub]",
+        isM3U8,
+        isHindi: true,
+      });
+    }
+
+    return sources.length > 0 ? { sources, subtitles: data.subtitles || [] } : null;
   } catch {
     return null;
   } finally {
@@ -472,11 +533,12 @@ async function multiProviderProbeEngine(
       }
     };
 
-    const tryLocalAnikoto = async () => {
-      if (isCompleted || audio === 'hindi' || excluded.has('local-anikoto') || (target && target !== 'local-anikoto')) return;
+    const tryLocalAnikoto = async (forceSub = false) => {
+      if (isCompleted || (audio === 'hindi' && !forceSub) || excluded.has('local-anikoto') || (target && target !== 'local-anikoto')) return;
       const startTime = Date.now();
       try {
-        const anikotoRes = await getAnikotoStream(title, parsedEp, audio as 'sub' | 'dub', resolvedAnilistId);
+        const queryAudio = forceSub ? 'sub' : (audio as 'sub' | 'dub');
+        const anikotoRes = await getAnikotoStream(title, parsedEp, queryAudio, resolvedAnilistId);
         if (anikotoRes) {
           const sources: any[] = [];
           const subtitles = anikotoRes.subtitles || [];
@@ -484,7 +546,7 @@ async function multiProviderProbeEngine(
           if (anikotoRes.stream_url) {
             sources.push({
               url: createSignedProxyUrl(anikotoRes.stream_url, 86400, "https://flixcloud.cc/"),
-              quality: "MegaCloud (HD-1)",
+              quality: forceSub ? "MegaCloud (HD-1) [Japanese / Sub Fallback]" : "MegaCloud (HD-1)",
               isM3U8: true,
             });
           }
@@ -494,7 +556,9 @@ async function multiProviderProbeEngine(
               .filter((s: any) => s.type === "embed" && s.url && !s.url.includes("animeapps.top") && !s.url.includes("filmu.in"))
               .map((s: any) => ({
                 url: s.url,
-                quality: s.server ? `MegaCloud (${s.server})` : "MegaCloud Embed",
+                quality: s.server 
+                  ? (forceSub ? `MegaCloud (${s.server}) [Japanese / Sub Fallback]` : `MegaCloud (${s.server})`)
+                  : (forceSub ? "MegaCloud Embed [Japanese / Sub Fallback]" : "MegaCloud Embed"),
                 isM3U8: false
               }));
 
@@ -513,18 +577,36 @@ async function multiProviderProbeEngine(
 
     // Dynamically sort provider candidates by circuit health and historical latency
     if (audio === 'hindi') {
-      const hindiProviders = providerCircuitBreaker.sortProvidersByHealth(['anibd']);
-      const dubFallbackProviders = providerCircuitBreaker.sortProvidersByHealth(['reanime', 'justanime', 'anikoto', 'kaa']);
+      const HINDI_WORKER_URL = process.env.HINDI_STREAM_API_URL || "https://aniwavex-hindi-worker.rajverma159310.workers.dev";
+      const japFallbackProviders = providerCircuitBreaker.sortProvidersByHealth(['reanime', 'justanime', 'anikoto', 'kaa']);
 
-      // t = 0ms: Primary Hindi provider with short 1000ms timeout to prevent hanging
-      hindiProviders.forEach(p => tryProvider(p, 'hindi', 1000));
-
-      // t = 250ms: Concurrently launch Eng dub fallback providers if Hindi source is slow or unavailable
-      setTimeout(() => {
-        if (!isCompleted) {
-          dubFallbackProviders.forEach(p => tryProvider(p, 'dub', 2500));
+      // t = 0ms: Speculatively invoke the standalone Hindi worker
+      (async () => {
+        const startTime = Date.now();
+        try {
+          const res = await fetchHindiWorkerStream(
+            HINDI_WORKER_URL,
+            resolvedAnilistId,
+            title,
+            parsedEp,
+            masterController.signal,
+            4500
+          );
+          if (res && res.sources.length > 0) {
+            onProviderSuccess('hindi-worker', res, Date.now() - startTime);
+          }
+        } catch {
+          // Worker failure gracefully handled by fallback
         }
-      }, 250);
+      })();
+
+      // t = 1200ms: If Hindi worker is slow or has no dub for this anime, load Japanese (sub) as fallback!
+      setTimeout(() => {
+        if (!isCompleted && gatheredResults.length === 0) {
+          japFallbackProviders.forEach(p => tryProvider(p, 'sub', 2500));
+          tryLocalAnikoto(true);
+        }
+      }, 1200);
     } else {
       const allTier1 = ['reanime', 'justanime', 'anikoto'];
       const allTier2 = ['kaa', 'animegg', 'animenosub'];

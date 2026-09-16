@@ -1,0 +1,8 @@
+name = "aniwavex-hindi-worker"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "6a34199b721520c45f514c103a1af82f"
+
+[vars]
+CORS_ALLOW_ORIGIN = "*"
