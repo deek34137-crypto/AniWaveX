@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Server, ChevronLeft, ChevronRight, RotateCcw, Activity } from "lucide-react";
+import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity } from "lucide-react";
 import NativePlayer from "./NativePlayer";
 import { useAuth } from "@/providers/AuthProvider";
 import { benchmarkStreamSources, getFastestServerIndex, formatLatencyBadge } from "@/lib/latency-benchmarker";
 import { syncProgressToAniList } from "@/lib/sync/anilist-sync";
 import { handleSequelPlaybackStarted, handleAnimeCompleted } from "@/lib/franchise";
+import { lockToLandscape } from "@/lib/orientation";
 import type { MediaPlayerInstance } from "@vidstack/react";
 
 interface StreamSource {
@@ -864,6 +865,23 @@ export default function InPageVideoPlayer({
                 HINDI DUB
               </button>
             </div>
+
+            {/* Quick Fullscreen Landscape Button */}
+            <button
+              onClick={() => {
+                lockToLandscape();
+                try {
+                  mediaPlayerRef.current?.enterFullscreen();
+                } catch (e) {
+                  console.warn("enterFullscreen error", e);
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer"
+              title="Watch in Landscape Fullscreen"
+            >
+              <RotateCw className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Landscape 📱</span>
+            </button>
           </div>
         </div>
 
