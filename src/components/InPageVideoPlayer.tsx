@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Server, ChevronLeft, ChevronRight, RotateCcw, Activity } from "lucide-react";
 import NativePlayer from "./NativePlayer";
 import { useAuth } from "@/providers/AuthProvider";
@@ -52,10 +52,10 @@ export default function InPageVideoPlayer({
 }: InPageVideoPlayerProps) {
   const { user: authUser, supabase } = useAuth();
   const [activeTab, setActiveTab] = useState<"sub" | "dub" | "hindi">("sub");
-  const [streams, setStreams] = useState<{ sub: StreamSource[], dub: StreamSource[], hindi?: StreamSource[], nativeStream?: any } | null>(null);
+  const [streams, setStreams] = useState<{ sub: StreamSource[], dub: StreamSource[], hindi?: StreamSource[], sources?: StreamSource[], nativeStream?: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingFallback, setIsFetchingFallback] = useState(false);
-  const [autoplayNext, setAutoplayNext] = useState(false);
+  const [autoplayNext, setAutoplayNext] = useState(true);
   const [ambientMode, setAmbientMode] = useState(true);
   const [selectedServerIndex, setSelectedServerIndex] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -81,6 +81,7 @@ export default function InPageVideoPlayer({
     setCurrentUser(liveUser);
     currentUserRef.current = liveUser;
   }, [authUser, initialUser]);
+
 
   // Track duration separately so it can be saved to Supabase
   const lastKnownDurationRef = useRef(0);
@@ -280,7 +281,8 @@ export default function InPageVideoPlayer({
   // Read autoplay & ambient preferences from localStorage on mount
   useEffect(() => {
     const storedAutoplay = localStorage.getItem("autoplayNext");
-    if (storedAutoplay) setAutoplayNext(storedAutoplay === "true");
+    // Default is ON — only turn off if user explicitly set it to "false"
+    if (storedAutoplay !== null) setAutoplayNext(storedAutoplay !== "false");
 
     const storedAmbient = localStorage.getItem("ambientMode");
     if (storedAmbient !== null) setAmbientMode(storedAmbient === "true");
@@ -329,9 +331,40 @@ export default function InPageVideoPlayer({
     toastTimeoutRef.current = setTimeout(() => setServerToast(null), 3500);
   }, []);
 
-  const activeSources: StreamSource[] | undefined = activeTab === "hindi" 
-    ? streams?.hindi 
-    : (activeTab === "sub" ? streams?.sub : streams?.dub);
+  const activeSources: StreamSource[] | undefined = useMemo(() => {
+    if (!streams) return undefined;
+
+    if (activeTab === "hindi") {
+      const rawHindi = streams.hindi || [];
+      const strictlyHindi = rawHindi.filter((s: any) => 
+        s.isHindi === true || 
+        /hindi|toonstream|as-cdn/i.test(s.quality || '') ||
+        /hindi|toonstream|as-cdn/i.test(s.server || '')
+      );
+      if (strictlyHindi.length > 0) return strictlyHindi;
+      return rawHindi;
+    }
+
+    if (activeTab === "sub") {
+      const rawSub = streams.sub || streams.sources || [];
+      return rawSub.filter((s: any) => 
+        !s.isHindi && 
+        !/hindi|toonstream/i.test(s.quality || '') &&
+        !/eng dub|\[dub\]|\(dub\)/i.test(s.quality || '')
+      );
+    }
+
+    if (activeTab === "dub") {
+      const rawDub = streams.dub || streams.sources || [];
+      return rawDub.filter((s: any) => 
+        !s.isHindi && 
+        !/hindi|toonstream/i.test(s.quality || '') &&
+        (/eng dub|\[dub\]|\(dub\)/i.test(s.quality || '') || !/\[sub\]|\(sub\)/i.test(s.quality || ''))
+      );
+    }
+
+    return streams.sources;
+  }, [streams, activeTab]);
 
   // Ensure selectedServerIndex is within bounds
   const validServerIndex = activeSources && activeSources.length > 0 ? Math.min(selectedServerIndex, activeSources.length - 1) : 0;
@@ -490,8 +523,25 @@ export default function InPageVideoPlayer({
           return;
         }
 
-        if (!data.error) {
+        if (!data.error && data.sources && data.sources.length > 0) {
           setStreams(data);
+          if (activeTab === 'hindi') {
+            if (data.isFallback || data.fallbackReason === 'hindi_unavailable') {
+              showToast("Hindi Dub unavailable for this episode — playing Japanese Sub fallback 🇯🇵");
+            } else {
+              showToast("Playing Hindi Dub 🇮🇳");
+            }
+          }
+        } else {
+          // If Hindi stream returned no sources or error, gracefully fallback to Japanese (sub)
+          if (activeTab === 'hindi') {
+            showToast("Hindi Dub not found — switching to Japanese Sub 🇯🇵");
+            setActiveTab("sub");
+            return;
+          }
+          if (data.error) {
+            setPlayerError(true);
+          }
         }
       } catch (error: any) {
         if (error.name === 'AbortError' || controller.signal.aborted) {
@@ -500,6 +550,11 @@ export default function InPageVideoPlayer({
         }
         if (requestIdRef.current === currentRequestId) {
           console.error("Failed to fetch stream", error);
+          if (activeTab === 'hindi') {
+            showToast("Hindi Dub failed — switching to Japanese Sub 🇯🇵");
+            setActiveTab("sub");
+            return;
+          }
         }
       } finally {
         if (requestIdRef.current === currentRequestId && !controller.signal.aborted) {
@@ -966,6 +1021,7 @@ export default function InPageVideoPlayer({
                 className="w-full h-full border-0 bg-black"
                 allow="autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write"
                 referrerPolicy="no-referrer-when-downgrade"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
                 onError={() => setPlayerError(true)}
               />
             ) : isM3U8 && currentUrl ? (

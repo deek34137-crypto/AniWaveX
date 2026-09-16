@@ -316,11 +316,16 @@ function formatStreamResponse(sources: any[], subtitles: any[], audio: 'sub' | '
 
   const isHindiFallback = audio === 'hindi' && !sources.some(s => s.isHindi);
 
+  // Strictly segregate sources by audio type so tabs only see their corresponding servers:
+  const strictlyHindi = sortedSources.filter(s => s.isHindi === true || /hindi|toonstream|as-cdn/i.test(s.quality || ''));
+  const strictlyDub = sortedSources.filter(s => !s.isHindi && !/hindi|toonstream/i.test(s.quality || '') && (/eng dub|\[dub\]|\(dub\)/i.test(s.quality || '') || !/\[sub\]|\(sub\)/i.test(s.quality || '')));
+  const strictlySub = sortedSources.filter(s => !s.isHindi && !/hindi|toonstream/i.test(s.quality || '') && !/eng dub|\[dub\]|\(dub\)/i.test(s.quality || ''));
+
   return {
     sources: sortedSources,
-    sub: (audio === 'sub' || isHindiFallback) ? sortedSources : [],
-    dub: audio === 'dub' ? sortedSources : [],
-    hindi: audio === 'hindi' ? sortedSources : [],
+    sub: audio === 'sub' ? strictlySub : (isHindiFallback ? sortedSources : []),
+    dub: audio === 'dub' ? strictlyDub : [],
+    hindi: audio === 'hindi' ? (strictlyHindi.length > 0 ? strictlyHindi : sortedSources) : [],
     audio: isHindiFallback ? 'sub' : audio,
     isFallback: isHindiFallback,
     fallbackReason: isHindiFallback ? 'hindi_unavailable' : undefined,
