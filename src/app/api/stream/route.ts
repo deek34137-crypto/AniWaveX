@@ -439,9 +439,14 @@ async function fetchHindiWorkerStream(
         const sources: any[] = [];
         for (const s of streamList) {
           if (!s.url) continue;
-          const isM3U8 = s.isM3U8 === true || (typeof s.url === 'string' && s.url.includes('.m3u8'));
+          const rawUrl = s.url;
+          const isM3U8 = s.isM3U8 === true || (typeof rawUrl === 'string' && rawUrl.includes('.m3u8'));
+          const resolvedUrl = (isM3U8 && typeof rawUrl === 'string' && rawUrl.includes('workers.dev'))
+            ? `/api/stream/hindi-manifest?url=${encodeURIComponent(rawUrl)}`
+            : rawUrl;
+
           sources.push({
-            url: s.url,
+            url: resolvedUrl,
             quality: s.quality || `${s.server || 'ToonStream'} [Hindi Dub]`,
             isM3U8,
             isHindi: true,
@@ -449,9 +454,14 @@ async function fetchHindiWorkerStream(
         }
 
         if (sources.length === 0 && data.stream_url) {
-          const isM3U8 = typeof data.stream_url === 'string' && data.stream_url.includes('.m3u8');
+          const rawUrl = data.stream_url;
+          const isM3U8 = typeof rawUrl === 'string' && rawUrl.includes('.m3u8');
+          const resolvedUrl = (isM3U8 && typeof rawUrl === 'string' && rawUrl.includes('workers.dev'))
+            ? `/api/stream/hindi-manifest?url=${encodeURIComponent(rawUrl)}`
+            : rawUrl;
+
           sources.push({
-            url: data.stream_url,
+            url: resolvedUrl,
             quality: "ToonStream [Hindi Dub]",
             isM3U8,
             isHindi: true,
@@ -544,6 +554,12 @@ async function multiProviderProbeEngine(
       completedProviders.add(provider);
       providerCircuitBreaker.recordSuccess(provider, latencyMs);
       gatheredResults.push(result);
+
+      // If audio is hindi and we found Hindi streams, finish immediately!
+      if (audio === 'hindi' && provider === 'hindi-worker') {
+        finishAndResolve();
+        return;
+      }
 
       // If we reached the target count (e.g. 3 providers), finish immediately
       if (gatheredResults.length >= maxProviders) {
@@ -641,7 +657,7 @@ async function multiProviderProbeEngine(
             title,
             parsedEp,
             masterController.signal,
-            4500
+            6000
           );
           if (res && res.sources.length > 0) {
             onProviderSuccess('hindi-worker', res, Date.now() - startTime);
@@ -651,13 +667,13 @@ async function multiProviderProbeEngine(
         }
       })();
 
-      // t = 1200ms: If Hindi worker is slow or has no dub for this anime, load Japanese (sub) as fallback!
+      // t = 3500ms: If Hindi worker has no dub for this anime, load Japanese (sub) as fallback!
       setTimeout(() => {
         if (!isCompleted && gatheredResults.length === 0) {
           japFallbackProviders.forEach(p => tryProvider(p, 'sub', 2500));
           tryLocalAnikoto(true);
         }
-      }, 1200);
+      }, 3500);
     } else {
       const allTier1 = ['reanime', 'justanime', 'anikoto'];
       const allTier2 = ['kaa', 'animegg', 'animenosub'];
