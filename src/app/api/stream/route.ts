@@ -371,6 +371,37 @@ async function fetchWorkerProvider(
   }
 }
 
+function getHindiTitleVariations(rawTitle: string): string[] {
+  const cleaned = rawTitle
+    .replace(/\(TV\)/gi, '')
+    .replace(/\(Dub\)/gi, '')
+    .replace(/\(Sub\)/gi, '')
+    .replace(/\[Dub\]/gi, '')
+    .replace(/\[Sub\]/gi, '')
+    .replace(/Season\s+\d+/gi, '')
+    .replace(/2nd\s+Season/gi, '')
+    .replace(/3rd\s+Season/gi, '')
+    .replace(/Part\s+\d+/gi, '')
+    .replace(/:\s*Season\s*\d+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const variations = [rawTitle.trim()];
+  if (cleaned && cleaned.toLowerCase() !== rawTitle.trim().toLowerCase()) {
+    variations.push(cleaned);
+  }
+
+  // Also try base title before colon if present (e.g. "Demon Slayer: Kimetsu no Yaiba" -> "Demon Slayer")
+  if (cleaned.includes(':')) {
+    const beforeColon = cleaned.split(':')[0].trim();
+    if (beforeColon.length >= 3 && !variations.some(v => v.toLowerCase() === beforeColon.toLowerCase())) {
+      variations.push(beforeColon);
+    }
+  }
+
+  return Array.from(new Set(variations));
+}
+
 async function fetchHindiWorkerStream(
   hindiWorkerUrl: string,
   anilistId: number | null,
@@ -384,43 +415,58 @@ async function fetchHindiWorkerStream(
   const combinedSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
 
   try {
-    const idParam = `id=${anilistId || 0}&`;
-    const titleParam = encodeURIComponent(title);
-    const url = `${hindiWorkerUrl}/stream?${idParam}title=${titleParam}&ep=${ep}`;
+    const titleCandidates = getHindiTitleVariations(title);
 
-    const res = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: combinedSignal,
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const streamList = Array.isArray(data.streams) 
-      ? data.streams 
-      : (Array.isArray(data.stream?.sources) ? data.stream.sources : []);
+    for (const candTitle of titleCandidates) {
+      if (controller.signal.aborted) break;
+      try {
+        const idParam = `id=${anilistId || 0}&`;
+        const titleParam = encodeURIComponent(candTitle);
+        const url = `${hindiWorkerUrl}/stream?${idParam}title=${titleParam}&ep=${ep}`;
 
-    const sources: any[] = [];
-    for (const s of streamList) {
-      if (!s.url) continue;
-      const isM3U8 = s.isM3U8 === true || (typeof s.url === 'string' && s.url.includes('.m3u8'));
-      sources.push({
-        url: s.url,
-        quality: s.quality || `${s.server || 'ToonStream'} [Hindi Dub]`,
-        isM3U8,
-        isHindi: true,
-      });
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          signal: combinedSignal,
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data.error || !data.success) continue;
+
+        const streamList = Array.isArray(data.streams) 
+          ? data.streams 
+          : (Array.isArray(data.stream?.sources) ? data.stream.sources : []);
+
+        const sources: any[] = [];
+        for (const s of streamList) {
+          if (!s.url) continue;
+          const isM3U8 = s.isM3U8 === true || (typeof s.url === 'string' && s.url.includes('.m3u8'));
+          sources.push({
+            url: s.url,
+            quality: s.quality || `${s.server || 'ToonStream'} [Hindi Dub]`,
+            isM3U8,
+            isHindi: true,
+          });
+        }
+
+        if (sources.length === 0 && data.stream_url) {
+          const isM3U8 = typeof data.stream_url === 'string' && data.stream_url.includes('.m3u8');
+          sources.push({
+            url: data.stream_url,
+            quality: "ToonStream [Hindi Dub]",
+            isM3U8,
+            isHindi: true,
+          });
+        }
+
+        if (sources.length > 0) {
+          return { sources, subtitles: data.subtitles || [] };
+        }
+      } catch {
+        // Try next candidate title
+      }
     }
 
-    if (sources.length === 0 && data.stream_url) {
-      const isM3U8 = typeof data.stream_url === 'string' && data.stream_url.includes('.m3u8');
-      sources.push({
-        url: data.stream_url,
-        quality: "ToonStream [Hindi Dub]",
-        isM3U8,
-        isHindi: true,
-      });
-    }
-
-    return sources.length > 0 ? { sources, subtitles: data.subtitles || [] } : null;
+    return null;
   } catch {
     return null;
   } finally {
