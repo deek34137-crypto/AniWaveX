@@ -51,9 +51,9 @@ export default function NativePlayer({
           await CapOrientation.lock({ orientation: 'landscape' }).catch(() => {});
           return;
         }
-        // 2. Web Screen Orientation API — requires 'landscape-primary', NOT just 'landscape'
+        // 2. Web Screen Orientation API — accepts 'landscape' (sensor landscape)
         if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
-          await (screen.orientation as any).lock('landscape-primary').catch(() => {});
+          await (screen.orientation as any).lock('landscape').catch(() => {});
           return;
         }
         // 3. CSS transform fallback for older Androids / WebViews that block the API
@@ -66,15 +66,11 @@ export default function NativePlayer({
       }
     };
 
-    const unlockPortrait = async () => {
+    const unlockOrientation = async () => {
       try {
         const CapOrientation = (window as any)?.Capacitor?.Plugins?.ScreenOrientation;
         if (CapOrientation) {
-          await CapOrientation.lock({ orientation: 'portrait' }).catch(() => {});
-          return;
-        }
-        if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
-          await (screen.orientation as any).lock('portrait-primary').catch(() => {});
+          await CapOrientation.unlock().catch(() => {});
           return;
         }
         if (screen.orientation && typeof screen.orientation.unlock === 'function') {
@@ -96,7 +92,7 @@ export default function NativePlayer({
       if (isFullscreen) {
         lockLandscape();
       } else {
-        unlockPortrait();
+        unlockOrientation();
       }
     };
 
@@ -106,6 +102,7 @@ export default function NativePlayer({
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
 
     return () => {
+      unlockOrientation();
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
@@ -137,6 +134,7 @@ export default function NativePlayer({
       streamType="on-demand" 
       fullscreenOrientation="landscape"
       crossOrigin
+      playsInline
       currentTime={initialTime}
       autoPlay={autoPlay}
       onTimeUpdate={(detail) => {
