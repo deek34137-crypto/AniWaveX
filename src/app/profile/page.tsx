@@ -2,6 +2,7 @@ import Navbar from "@/components/Navbar";
 import { createClient } from "@/lib/supabase/server";
 import ProfileClient from "./ProfileClient";
 import ProfileAuthClient from "./ProfileAuthClient";
+import { Suspense } from "react";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -37,8 +38,10 @@ export default async function ProfilePage() {
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
       <Navbar />
-      <div className="h-16 sm:h-20"></div>
-      <ProfileClient user={user} history={history || []} bookmarks={bookmarks || []} />
+      <div className="page-top-spacer"></div>
+      <Suspense fallback={<div className="h-40" />}>
+        <ProfileClient user={user} history={history || []} bookmarks={bookmarks || []} />
+      </Suspense>
     </main>
   );
 }

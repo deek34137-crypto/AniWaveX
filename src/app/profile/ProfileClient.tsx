@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import WatchHistoryGrid from "@/components/profile/WatchHistoryGrid";
 import WatchlistGrid from "@/components/profile/WatchlistGrid";
 import AvatarPicker from "@/components/profile/AvatarPicker";
 import PasswordForm from "@/components/profile/PasswordForm";
+import UsernameForm from "@/components/profile/UsernameForm";
 import ProfileCustomizer from "@/components/profile/ProfileCustomizer";
 import AniListSyncModal from "@/components/sync/AniListSyncModal";
 import ProfileAuthClient from "./ProfileAuthClient";
@@ -47,11 +48,24 @@ export default function ProfileClient({
 }) {
   const { user: authUser, supabase: authSupabase, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as Tab | null;
 
   // Prefer live client-side user — fixes "not logged in" bug on mobile bottom nav
   const user = authUser || ssrUser;
 
-  const [activeTab, setActiveTab] = useState<Tab>("history");
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (tabParam && ["history", "watchlist", "customize", "settings"].includes(tabParam)) {
+      return tabParam;
+    }
+    return "history";
+  });
+
+  useEffect(() => {
+    if (tabParam && ["history", "watchlist", "customize", "settings"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [history, setHistory] = useState<any[]>(ssrHistory || []);
   const [bookmarks, setBookmarks] = useState<any[]>(ssrBookmarks || []);
@@ -274,9 +288,35 @@ export default function ProfileClient({
           )}
 
           {activeTab === "settings" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-400">
+            <div className="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-400">
+              {/* Change Username Form */}
+              <UsernameForm currentUsername={username} />
+
+              {/* Avatar Picker */}
               <AvatarPicker currentAvatarId={user.user_metadata?.avatar_id} />
+
+              {/* Password Management */}
               <PasswordForm />
+
+              {/* Quick Link to Public Profile Bio, Banner & Showcase */}
+              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl max-w-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-blue-400" />
+                    Public Bio &amp; Banner
+                  </h3>
+                  <p className="text-slate-400 text-xs leading-relaxed">
+                    Customize your public profile bio, cyberpunk/neon banner themes, and top 5 anime showcase.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("customize")}
+                  className="px-4 py-2.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl text-xs font-bold shrink-0 transition-all active:scale-95 text-center"
+                >
+                  Edit Bio &amp; Showcase
+                </button>
+              </div>
 
               {/* Notification Preferences */}
               <div className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-4 sm:p-5 shadow-lg">

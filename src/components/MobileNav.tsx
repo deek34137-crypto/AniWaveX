@@ -128,7 +128,7 @@ export default function MobileNav() {
                 My Profile
               </Link>
               <Link
-                href="/profile"
+                href="/profile?tab=settings"
                 onClick={() => setIsOpen(false)}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/10 text-xs font-semibold transition-all"
               >

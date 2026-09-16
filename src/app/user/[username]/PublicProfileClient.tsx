@@ -381,7 +381,7 @@ export default function PublicProfileClient({
         <div className="flex sm:absolute sm:top-6 sm:right-6 items-center gap-2 z-10 flex-wrap justify-start sm:justify-end mb-4 sm:mb-0 w-full sm:w-auto">
           {isOwner && (
             <Link
-              href="/profile"
+              href="/profile?tab=settings"
               className="flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-xl sm:rounded-2xl text-xs font-bold transition-all border border-white/10 backdrop-blur-md shadow-lg active:scale-95"
             >
               <Settings className="w-3.5 h-3.5 text-blue-400" />
