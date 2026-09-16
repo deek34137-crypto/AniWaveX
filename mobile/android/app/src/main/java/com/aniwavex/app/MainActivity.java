@@ -15,9 +15,16 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Append custom token to UserAgent so web application knows it is running inside the APK
+        WebView webView = this.getBridge().getWebView();
+        String currentUa = webView.getSettings().getUserAgentString();
+        if (currentUa != null && !currentUa.contains("AniWaveX-APK")) {
+            webView.getSettings().setUserAgentString(currentUa + " AniWaveX-APK");
+        }
+
         // Override WebViewClient after Capacitor bridge is initialized.
         // This intercepts ALL URL navigations and keeps aniwavex.bond inside the app.
-        this.getBridge().getWebView().setWebViewClient(new WebViewClient() {
+        webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();

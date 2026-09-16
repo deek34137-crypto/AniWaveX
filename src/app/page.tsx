@@ -2,12 +2,16 @@ import Navbar from "@/components/Navbar";
 import HeroSlider from "@/components/HeroSlider";
 import AnimeRow from "@/components/AnimeRow";
 import ContinueWatchingRow from "@/components/ContinueWatchingRow";
-import { getTrendingAnime, getTopRatedAnime } from "@/lib/api";
+import ApkHomeSections from "@/components/ApkHomeSections";
+import { getTrendingAnime, getTopRatedAnime, getGenreAnime } from "@/lib/api";
 
 export default async function Home() {
-  const [trending, topRated] = await Promise.all([
+  const [trending, topRated, romance, comedy, isekai] = await Promise.all([
     getTrendingAnime(),
-    getTopRatedAnime()
+    getTopRatedAnime(),
+    getGenreAnime("romance", 12),
+    getGenreAnime("comedy", 12),
+    getGenreAnime("isekai", 12),
   ]);
 
   // Use top 5 trending anime for the hero slider
@@ -27,7 +31,15 @@ export default async function Home() {
 
         <AnimeRow title="Trending Now" items={trendingRow} viewAllHref="/catalog?sort=trending" />
         <AnimeRow title="Highest Rated" items={topRated} viewAllHref="/catalog?sort=rated" />
+
+        {/* Extra discovery rows rendered exclusively inside the APK */}
+        <ApkHomeSections
+          romance={romance}
+          comedy={comedy}
+          isekai={isekai}
+        />
       </div>
     </main>
   );
 }
+

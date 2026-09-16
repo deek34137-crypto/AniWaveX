@@ -632,6 +632,27 @@ export const SEASON_MAP: Record<string, string> = {
   fall: "fall"
 };
 
+export const getGenreAnime = cache(async (genre: string, limit: number = 15) => {
+  try {
+    const categorySlug = GENRE_MAP[genre.toLowerCase()] || genre.toLowerCase();
+    const res = await fetch(`https://kitsu.io/api/edge/anime?filter[categories]=${encodeURIComponent(categorySlug)}&sort=-userCount&page[limit]=${limit}`, {
+      headers: {
+        "Accept": "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      },
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 } // 1 hour ISR cache
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.data || []).map((a: any) => formatAnimeData(a));
+  } catch (error) {
+    console.error(`Failed to fetch ${genre} anime:`, error);
+    return [];
+  }
+});
+
 export async function getCatalogAnime(filters: CatalogFilters) {
   let url = 'https://kitsu.io/api/edge/anime?';
   const queryParams = new URLSearchParams();
