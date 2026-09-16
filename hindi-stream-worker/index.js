@@ -93,15 +93,20 @@ async function getAnilistTitles(anilistId) {
 
 // 3. Find Best ToonStream Series for Title or AniList ID
 async function resolveSeriesSlug(queryOrId, fallbackTitle = "") {
-  // If it's already a slug formatted with hyphens, test direct access
+  const candidateQueries = [];
+
   if (queryOrId && !/^\d+$/.test(queryOrId)) {
-    return queryOrId;
+    // If it's strictly a lowercase hyphenated slug (no spaces, no uppercase)
+    if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(queryOrId)) {
+      return queryOrId;
+    }
+    // Otherwise it's a title string (e.g. "Chainsaw Man")
+    candidateQueries.push(queryOrId);
   }
 
-  const candidateQueries = [];
   if (fallbackTitle) candidateQueries.push(fallbackTitle);
 
-  if (/^\d+$/.test(queryOrId)) {
+  if (queryOrId && /^\d+$/.test(queryOrId)) {
     const anilistTitles = await getAnilistTitles(queryOrId);
     candidateQueries.push(...anilistTitles);
   }
@@ -447,7 +452,7 @@ export default {
 
     // 4. Episodes Route
     let m = path.match(/^\/episodes\/([^\/]+)\/?$/);
-    const slugQuery = url.searchParams.get("slug") || url.searchParams.get("id");
+    const slugQuery = url.searchParams.get("slug") || url.searchParams.get("id") || url.searchParams.get("title");
     const epSlug = m ? m[1] : slugQuery;
 
     if (epSlug && (path.startsWith("/episodes") || path === "/episodes")) {
@@ -474,7 +479,7 @@ export default {
     let targetEp = m ? m[2] : null;
 
     if (!targetSlug) {
-      targetSlug = url.searchParams.get("slug") || url.searchParams.get("id");
+      targetSlug = url.searchParams.get("slug") || url.searchParams.get("id") || url.searchParams.get("title");
       targetEp = url.searchParams.get("ep") || url.searchParams.get("episode") || "1";
     }
 
