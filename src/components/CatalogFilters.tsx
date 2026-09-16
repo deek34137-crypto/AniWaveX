@@ -65,7 +65,10 @@ export default function CatalogFilters() {
   const years = Array.from({ length: currentYearNum - 1990 + 2 }, (_, i) => (currentYearNum + 1 - i).toString());
 
   return (
-    <div className="bg-slate-900/50 backdrop-blur-xl border-y border-white/10 sticky top-16 z-40 shadow-xl">
+    <div
+      className="bg-slate-900/50 backdrop-blur-xl border-y border-white/10 sticky z-40 shadow-xl"
+      style={{ top: "var(--navbar-total, 3.5rem)" }}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
           

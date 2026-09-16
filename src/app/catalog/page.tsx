@@ -51,7 +51,7 @@ export default async function CatalogPage(props: {
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
       <Navbar />
-      <div className="h-16"></div>
+      <div className="page-top-spacer"></div>
       
       {/* Sticky Filter Bar */}
       <Suspense fallback={<div className="h-20" />}>

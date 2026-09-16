@@ -17,7 +17,7 @@ export default async function AiringPage() {
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
       <Navbar />
-      <div className="h-24" />
+      <div className="page-top-spacer" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <AiringScheduleClient animeList={airingAnime} />

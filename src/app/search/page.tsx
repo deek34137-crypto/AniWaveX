@@ -26,7 +26,7 @@ export default async function SearchPage({
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
       <Navbar />
-      <div className="h-16 sm:h-20"></div>
+      <div className="page-top-spacer"></div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
         {/* In-page interactive search input */}

@@ -20,7 +20,7 @@ export default async function TierListPage() {
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
       <Navbar />
-      <div className="h-20" />
+      <div className="page-top-spacer" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <Suspense fallback={<div className="text-white py-12 text-center text-sm font-bold">Loading Tier Maker...</div>}>

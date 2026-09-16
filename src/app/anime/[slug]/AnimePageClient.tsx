@@ -102,7 +102,7 @@ export default function AnimePageClient({
   if (!data) return <div className="text-white p-10">Loading...</div>;
 
   return (
-    <main className="min-h-screen bg-slate-950 pb-32 pt-14 sm:pt-20">
+    <main className="min-h-screen bg-slate-950 pb-32" style={{ paddingTop: "var(--navbar-total, 3.5rem)" }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         
         {activeEpisode ? (

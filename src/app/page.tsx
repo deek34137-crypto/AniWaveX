@@ -18,7 +18,7 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
       <Navbar />
-      <div className="h-14 sm:h-20"></div>
+      <div className="page-top-spacer"></div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6">
         <HeroSlider animeList={heroAnimeList} />
