@@ -152,8 +152,9 @@ function normalizeSearchQuery(query: string): string {
 export const searchAnime = cache(async (query: string, limit: number = 20) => {
   if (!query) return [];
   const normalizedQuery = normalizeSearchQuery(query);
+  const effectiveLimit = Math.min(Math.max(1, limit), 20);
   try {
-    const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(normalizedQuery)}&page[limit]=${limit}`, {
+    const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(normalizedQuery)}&page[limit]=${effectiveLimit}`, {
       headers: {
         "Accept": "application/vnd.api+json",
         "Content-Type": "application/vnd.api+json",

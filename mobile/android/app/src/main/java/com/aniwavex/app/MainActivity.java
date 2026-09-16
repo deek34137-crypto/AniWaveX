@@ -28,6 +28,11 @@ public class MainActivity extends BridgeActivity {
         webView.setWebViewClient(new BridgeWebViewClient(this.getBridge()) {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                // Ignore subframe / iframe ad navigations so they never switch to Chrome
+                if (!request.isForMainFrame()) {
+                    return true;
+                }
+
                 Uri uri = request.getUrl();
                 String host = uri.getHost();
                 String scheme = uri.getScheme();

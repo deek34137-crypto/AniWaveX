@@ -23,6 +23,33 @@ function isValidEmbedUrl(url: string | null | undefined): boolean {
   return url.startsWith("http://") || url.startsWith("https://");
 }
 
+function isMegaOrVidstream(s: any): boolean {
+  if (!s) return false;
+  const q = (s.quality || '').toLowerCase();
+  const u = (s.url || '').toLowerCase();
+  const srv = (s.server || '').toLowerCase();
+  return (
+    q.includes('megacloud') ||
+    q.includes('vidstream') ||
+    srv.includes('megacloud') ||
+    srv.includes('vidstream') ||
+    u.includes('megaplay.buzz') ||
+    u.includes('vidstream')
+  );
+}
+
+function sortSourcesWithMegaLast(list: StreamSource[]): StreamSource[] {
+  return [...list].sort((a, b) => {
+    if (a.isM3U8 && !b.isM3U8) return -1;
+    if (!a.isM3U8 && b.isM3U8) return 1;
+    const aMega = isMegaOrVidstream(a);
+    const bMega = isMegaOrVidstream(b);
+    if (!aMega && bMega) return -1;
+    if (aMega && !bMega) return 1;
+    return 0;
+  });
+}
+
 interface InPageVideoPlayerProps {
   episode: any;
   episodes?: any[];
@@ -334,6 +361,8 @@ export default function InPageVideoPlayer({
   const activeSources: StreamSource[] | undefined = useMemo(() => {
     if (!streams) return undefined;
 
+    let selected: StreamSource[] = [];
+
     if (activeTab === "hindi") {
       const rawHindi = streams.hindi || [];
       const strictlyHindi = rawHindi.filter((s: any) => 
@@ -341,29 +370,26 @@ export default function InPageVideoPlayer({
         /hindi|toonstream|as-cdn/i.test(s.quality || '') ||
         /hindi|toonstream|as-cdn/i.test(s.server || '')
       );
-      if (strictlyHindi.length > 0) return strictlyHindi;
-      return rawHindi;
-    }
-
-    if (activeTab === "sub") {
+      selected = strictlyHindi.length > 0 ? strictlyHindi : rawHindi;
+    } else if (activeTab === "sub") {
       const rawSub = streams.sub || streams.sources || [];
-      return rawSub.filter((s: any) => 
+      selected = rawSub.filter((s: any) => 
         !s.isHindi && 
         !/hindi|toonstream/i.test(s.quality || '') &&
         !/eng dub|\[dub\]|\(dub\)/i.test(s.quality || '')
       );
-    }
-
-    if (activeTab === "dub") {
+    } else if (activeTab === "dub") {
       const rawDub = streams.dub || streams.sources || [];
-      return rawDub.filter((s: any) => 
+      selected = rawDub.filter((s: any) => 
         !s.isHindi && 
         !/hindi|toonstream/i.test(s.quality || '') &&
         (/eng dub|\[dub\]|\(dub\)/i.test(s.quality || '') || !/\[sub\]|\(sub\)/i.test(s.quality || ''))
       );
+    } else {
+      selected = streams.sources || [];
     }
 
-    return streams.sources;
+    return sortSourcesWithMegaLast(selected);
   }, [streams, activeTab]);
 
   // Ensure selectedServerIndex is within bounds
@@ -1003,7 +1029,13 @@ export default function InPageVideoPlayer({
                     handleSelectServer(otherHlsIdx, true);
                     return;
                   }
-                  // 2. Only if no unfailed HLS servers remain, fallback to a working embed server
+                  // 2. Try non-MegaCloud / non-Vidstream embed servers first
+                  const nonMegaEmbedIdx = activeSources?.findIndex((s, i) => !failedServersRef.current.has(i) && !s.isM3U8 && isValidEmbedUrl(s.url) && !isMegaOrVidstream(s));
+                  if (nonMegaEmbedIdx !== undefined && nonMegaEmbedIdx !== -1) {
+                    handleSelectServer(nonMegaEmbedIdx, true);
+                    return;
+                  }
+                  // 3. Last resort: MegaCloud / Vidstream embed
                   const embedIdx = activeSources?.findIndex((s, i) => !failedServersRef.current.has(i) && !s.isM3U8 && isValidEmbedUrl(s.url));
                   if (embedIdx !== undefined && embedIdx !== -1) {
                     handleSelectServer(embedIdx, true);

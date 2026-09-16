@@ -16,7 +16,7 @@ export default async function SearchPage({
 
   // If query is present, search anime; otherwise fetch trending anime by default
   const [searchResults, defaultTrending] = await Promise.all([
-    query ? searchAnime(query, 24) : Promise.resolve([]),
+    query ? searchAnime(query, 20) : Promise.resolve([]),
     !query ? getTrendingAnime() : Promise.resolve([]),
   ]);
 

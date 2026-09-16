@@ -307,10 +307,32 @@ function isPlayableStream(result: any): boolean {
   });
 }
 
+function isMegaOrVidstream(s: any): boolean {
+  const q = (s?.quality || '').toLowerCase();
+  const u = (s?.url || '').toLowerCase();
+  const srv = (s?.server || '').toLowerCase();
+  return (
+    q.includes('megacloud') ||
+    q.includes('vidstream') ||
+    srv.includes('megacloud') ||
+    srv.includes('vidstream') ||
+    u.includes('megaplay.buzz') ||
+    u.includes('vidstream')
+  );
+}
+
 function formatStreamResponse(sources: any[], subtitles: any[], audio: 'sub' | 'dub' | 'hindi') {
   const sortedSources = [...sources].sort((a, b) => {
+    // 1. M3U8 always comes before embeds
     if (a.isM3U8 && !b.isM3U8) return -1;
     if (!a.isM3U8 && b.isM3U8) return 1;
+
+    // 2. Put Vidstream / MegaCloud to the very last of the sources list
+    const aMega = isMegaOrVidstream(a);
+    const bMega = isMegaOrVidstream(b);
+    if (!aMega && bMega) return -1;
+    if (aMega && !bMega) return 1;
+
     return 0;
   });
 
