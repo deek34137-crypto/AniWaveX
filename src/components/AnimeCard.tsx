@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Star, Play, Plus, Check } from "lucide-react";
+import { Star, Play, Plus, Check, Loader2 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import AuthModal from "@/components/AuthModal";
 import { useAuth } from "@/providers/AuthProvider";
@@ -29,6 +29,7 @@ interface AnimeCardProps {
 
 export default function AnimeCard({
   anime,
+  priority,
   sizes,
   className = "",
   aspectRatio = "poster",
@@ -83,6 +84,7 @@ export default function AnimeCard({
           <AnimeImage
             src={bgImg}
             alt={anime.title}
+            priority={priority}
             sizes={sizes || "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"}
             className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
@@ -143,17 +145,19 @@ export default function AnimeCard({
           onClick={handleQuickBookmark}
           disabled={isBookmarking}
           aria-label={isBookmarked ? `Remove ${anime.title} from watchlist` : `Add ${anime.title} to watchlist`}
-          className={`absolute bottom-[34px] right-3.5 z-20 shrink-0 p-1.5 rounded-md transition-all sm:opacity-0 sm:group-hover:opacity-100 backdrop-blur-sm ${
+          className={`absolute bottom-[32px] right-2.5 sm:bottom-[34px] sm:right-3.5 z-20 shrink-0 w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg sm:rounded-md transition-all active:scale-90 touch-manipulation sm:opacity-0 sm:group-hover:opacity-100 backdrop-blur-sm ${
             isBookmarked
               ? "bg-blue-600 text-white shadow-sm"
               : "bg-black/60 hover:bg-blue-600 text-slate-300 hover:text-white border border-white/10"
           }`}
           title={isBookmarked ? "In Watchlist" : "Add to Watchlist"}
         >
-          {isBookmarked ? (
-            <Check className="w-3.5 h-3.5" />
+          {isBookmarking ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : isBookmarked ? (
+            <Check className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           ) : (
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           )}
         </button>
       </div>

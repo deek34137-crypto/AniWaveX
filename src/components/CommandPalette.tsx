@@ -178,6 +178,9 @@ export default function CommandPalette() {
 
   // Live search debounced query
   useEffect(() => {
+    // Reset selection to top on every new query (bug #17)
+    setSelectedIndex(0);
+
     if (!query.trim()) {
       setResults([]);
       setIsSearching(false);

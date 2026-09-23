@@ -112,8 +112,10 @@ export default function AnimePageClient({
             onEpisodeChange={(ep) => {
               setActiveEpisode(ep);
               if (ep?.id) setLastWatchedEpisode(ep.id);
-              // Scroll to top so the player is visible on mobile
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              // Only scroll to top if not in fullscreen mode
+              if (typeof document !== 'undefined' && !document.fullscreenElement) {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
             }}
             onClose={() => setActiveEpisode(null)}
             animeSlug={data.slug}

@@ -3,59 +3,25 @@ import { createSignedProxyUrl } from '@/lib/proxy-security';
 import { getAnikotoStream, getAnilistId } from "@/lib/providers/anikoto-wrapper";
 import { resolveAnilistIdFromSlugOrKitsu } from "@/lib/kitsu-mapper";
 import { unstable_cache } from "next/cache";
-
-interface CacheEntry {
-  data: any;
-  expiresAt: number;
-}
-
-class BoundedLRU {
-  private max: number;
-  private cache: Map<string, CacheEntry>;
-
-  constructor(max = 200) {
-    this.max = max;
-    this.cache = new Map();
-  }
-
-  get(key: string): any | null {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    // Refresh LRU order (most recently used at end)
-    this.cache.delete(key);
-    this.cache.set(key, entry);
-    return entry.data;
-  }
-
-  set(key: string, data: any, ttlMs: number): void {
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.max) {
-      // Evict oldest entry (first item in Map)
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey !== undefined) {
-        this.cache.delete(oldestKey);
-      }
-    }
-    this.cache.set(key, {
-      data,
-      expiresAt: Date.now() + ttlMs,
-    });
-  }
-}
+import { BoundedLRU } from "@/lib/lru-cache";
+import { resolveRefererForStream } from "@/lib/referer-resolver";
 
 // Bounded LRU cache: 200 items, 3-minute TTL (conservative for signed stream URLs)
 const streamCache = new BoundedLRU(200);
 const STREAM_CACHE_TTL_MS = 3 * 60 * 1000;
 
-// In-flight request deduplication Map
+// In-flight request deduplication Map (bounded to 500 entries, FIFO eviction)
+const MAX_IN_FLIGHT = 500;
 const inFlightRequests = new Map<string, Promise<any>>();
+
+function setInFlight(key: string, promise: Promise<any>) {
+  if (inFlightRequests.size >= MAX_IN_FLIGHT) {
+    // Evict oldest entry (first item in insertion order)
+    const oldest = inFlightRequests.keys().next().value;
+    if (oldest !== undefined) inFlightRequests.delete(oldest);
+  }
+  inFlightRequests.set(key, promise);
+}
 
 // Provider Circuit-Breaker & Adaptive Health Prioritizer
 interface ProviderMetrics {
@@ -134,62 +100,7 @@ function getRefererForStream(url: string, streamObj?: any, data?: any): string {
   if (data?.referer) return data.referer;
   if (data?.headers?.Referer) return data.headers.Referer;
 
-  const lower = url.toLowerCase();
-  if (
-    lower.includes("streamzone") ||
-    lower.includes("imgnex") ||
-    lower.includes("akirax.buzz") ||
-    lower.includes("shiora.top") ||
-    lower.includes("mikora.top") ||
-    lower.includes("watching.onl") ||
-    lower.includes("megaplay.buzz") ||
-    lower.includes("anivideo") ||
-    lower.includes("cloudbuzz") ||
-    lower.includes("vaelith") ||
-    lower.includes("orphiq") ||
-    lower.includes("kryntal") ||
-    lower.includes("sugevideo") ||
-    lower.includes("sugevids")
-  ) {
-    return "https://megaplay.buzz/";
-  }
-  if (lower.includes("krussdomi")) {
-    return "https://krussdomi.com/";
-  }
-  if (lower.includes("vidtube.site")) {
-    return "https://vidtube.site/";
-  }
-  if (lower.includes("bibiemb.xyz") || lower.includes("vibevibe.workers.dev")) {
-    return "https://bibiemb.xyz/";
-  }
-  if (lower.includes("vivibebe.site")) {
-    return "https://vivibebe.site/";
-  }
-  if (lower.includes("animeapps.top")) {
-    return "https://playeng.animeapps.top/";
-  }
-  if (lower.includes("anime-dunya.com")) {
-    return "https://anime-dunya.com/";
-  }
-  if (lower.includes("megacloud.tv") || lower.includes("atomic4cdn.top")) {
-    return "https://megacloud.tv/";
-  }
-  if (lower.includes("rabbitstream.net")) {
-    return "https://rabbitstream.net/";
-  }
-  if (lower.includes("dokicloud.one")) {
-    return "https://dokicloud.one/";
-  }
-  if (lower.includes("mcloud.to")) {
-    return "https://mcloud.to/";
-  }
-  if (lower.includes("vidcloud.co") || lower.includes("vidcloud.fun")) {
-    return "https://vidcloud.co/";
-  }
-  if (lower.includes("vidstream.pro")) {
-    return "https://vidstream.pro/";
-  }
-  return "https://flixcloud.cc/";
+  return resolveRefererForStream(url);
 }
 
 function extractWorkerSources(
@@ -874,7 +785,7 @@ export async function GET(request: Request) {
       );
       return streamResult;
     })();
-    inFlightRequests.set(cacheKey, requestPromise);
+    setInFlight(cacheKey, requestPromise);
   }
 
   try {

@@ -68,9 +68,11 @@ export default function InPageVideoPlayer({
   const [playerError, setPlayerError] = useState(false);
   const [isScrolledPast, setIsScrolledPast] = useState(false);
   const [isMiniPlayerDismissed, setIsMiniPlayerDismissed] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const currentUserRef = useRef<any>(authUser || initialUser);
   const playerRef = useRef<HTMLDivElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const mediaPlayerRef = useRef<MediaPlayerInstance>(null);
   const lastSavedTimeRef = useRef(0);
   const lastSupabaseSyncRef = useRef(0);
@@ -82,6 +84,13 @@ export default function InPageVideoPlayer({
     currentUserRef.current = liveUser;
   }, [authUser, initialUser]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   // Track duration separately so it can be saved to Supabase
   const lastKnownDurationRef = useRef(0);
@@ -502,11 +511,13 @@ export default function InPageVideoPlayer({
 
     const fetchStream = async () => {
       setIsLoading(true);
-      setStreams(null);
+      // Keep previous streams mounted during episode transitions so the player DOM is not destroyed (retains fullscreen)
       failedServersRef.current.clear();
       setSelectedServerIndex(0); // Reset server index
       setFallbackToIframe(false);
       setPlayerError(false);
+      setInitialTime(0);
+      lastSavedTimeRef.current = 0;
       try {
         const typeParam = animeType ? `&type=${encodeURIComponent(animeType)}` : '';
         const audioParam = `&audio=${activeTab}`;
@@ -568,7 +579,7 @@ export default function InPageVideoPlayer({
     return () => {
       controller.abort();
     };
-  }, [episode, animeSlug, animeTitle, animeType, activeTab, anilistId]);
+  }, [episode, animeSlug, animeTitle, animeType, activeTab, anilistId, showToast]);
 
   const currentIndex = episodes ? episodes.findIndex((ep) => ep.id === episode?.id) : -1;
   const hasNext = episodes && currentIndex !== -1 && currentIndex < episodes.length - 1;
@@ -576,15 +587,23 @@ export default function InPageVideoPlayer({
 
   const handleNext = useCallback(() => {
     if (hasNext && onEpisodeChange && episodes) {
-      onEpisodeChange(episodes[currentIndex + 1]);
+      setInitialTime(0);
+      lastSavedTimeRef.current = 0;
+      const nextEp = episodes[currentIndex + 1];
+      showToast(`Loading Episode ${nextEp?.id} ⏭`);
+      onEpisodeChange(nextEp);
     }
-  }, [hasNext, onEpisodeChange, episodes, currentIndex]);
+  }, [hasNext, onEpisodeChange, episodes, currentIndex, showToast]);
 
   const handlePrev = useCallback(() => {
     if (hasPrev && onEpisodeChange && episodes) {
-      onEpisodeChange(episodes[currentIndex - 1]);
+      setInitialTime(0);
+      lastSavedTimeRef.current = 0;
+      const prevEp = episodes[currentIndex - 1];
+      showToast(`Loading Episode ${prevEp?.id} ⏮`);
+      onEpisodeChange(prevEp);
     }
-  }, [hasPrev, onEpisodeChange, episodes, currentIndex]);
+  }, [hasPrev, onEpisodeChange, episodes, currentIndex, showToast]);
 
   const handleEnded = useCallback(() => {
     const anilistToken = typeof window !== 'undefined' ? localStorage.getItem("anilist_token") : null;
@@ -628,6 +647,24 @@ export default function InPageVideoPlayer({
     }
   }, [anilistId, episode?.id, autoplayNext, hasNext, handleNext, showToast, currentUser?.id, authUser?.id, initialUser?.id, animeSlug, animeTitle, animePosterImage, supabase]);
 
+  // Unified fullscreen toggle: works for both native HLS player and embed iframes (bug #3)
+  const toggleFullscreen = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      const player = mediaPlayerRef.current;
+      const container = videoContainerRef.current;
+      if (!fallbackToIframe && isM3U8 && player) {
+        player.enterFullscreen().catch(() => {
+          container?.requestFullscreen().catch(() => {});
+        });
+      } else if (container) {
+        container.requestFullscreen().catch(() => {});
+      }
+    }
+  }, [fallbackToIframe, isM3U8]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is in an input field or any modal dialog/overlay/palette is active
@@ -669,14 +706,8 @@ export default function InPageVideoPlayer({
           break;
         case 'f':
         case 'F':
-          if (player) {
-            e.preventDefault();
-            if (document.fullscreenElement) {
-              document.exitFullscreen().catch(() => {});
-            } else {
-              player.enterFullscreen().catch(() => {});
-            }
-          }
+          e.preventDefault();
+          toggleFullscreen();
           break;
         case 'm':
         case 'M':
@@ -736,7 +767,7 @@ export default function InPageVideoPlayer({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasNext, hasPrev, handleNext, handlePrev, handleNextSource, handlePrevSource]);
+  }, [hasNext, hasPrev, handleNext, handlePrev, handleNextSource, handlePrevSource, showShortcuts, toggleFullscreen]);
 
   if (!episode) return null;
 
@@ -897,6 +928,7 @@ export default function InPageVideoPlayer({
 
           {/* Single Unified Video Player Container (Docked or Floating PiP) */}
           <div 
+            ref={videoContainerRef}
             className={`group transition-all duration-300 ${
               isFloatingPiP
                 ? "fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] md:bottom-6 right-4 sm:right-6 z-50 w-72 sm:w-96 aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-[0_15px_50px_rgba(0,0,0,0.9)] border border-white/20 animate-in slide-in-from-bottom-5"
@@ -981,7 +1013,6 @@ export default function InPageVideoPlayer({
               </div>
             ) : !fallbackToIframe && isM3U8 && currentUrl ? (
               <NativePlayer 
-                key={currentUrl}
                 playerRef={mediaPlayerRef}
                 url={currentUrl} 
                 title={`${animeTitle} - Episode ${episode.id}`}
@@ -1026,7 +1057,6 @@ export default function InPageVideoPlayer({
               />
             ) : isM3U8 && currentUrl ? (
               <NativePlayer 
-                key={currentUrl}
                 playerRef={mediaPlayerRef}
                 url={currentUrl} 
                 title={`${animeTitle} - Episode ${episode.id}`}

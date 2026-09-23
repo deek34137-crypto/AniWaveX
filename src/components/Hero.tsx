@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Play, Bookmark, Star, Calendar, Clock, ChevronDown, Check } from "lucide-react";
+import { Play, Bookmark, Star, Calendar, Clock, ChevronDown, Check, Loader2 } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
 import AnimeImage from "@/components/AnimeImage";
@@ -25,13 +25,37 @@ export default function Hero({
   lastWatchedEpisode, 
   onPlayEpisode 
 }: HeroProps) {
-  const { user: authUser, supabase, addBookmarkSlug, removeBookmarkSlug } = useAuth();
+  const { user: authUser, supabase, addBookmarkSlug, removeBookmarkSlug, isBookmarked: checkBookmarked } = useAuth();
   const currentUser = authUser || initialUser;
   const [isBookmarked, setIsBookmarked] = useState(initialBookmarked);
   const [currentStatus, setCurrentStatus] = useState<WatchlistStatus>(initialBookmarkStatus || 'watching');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Sync with AuthProvider bookmark state when global auth state updates (bug #15)
+  useEffect(() => {
+    if (anime?.slug && !isSaving) {
+      const bookmarked = checkBookmarked(anime.slug);
+      setIsBookmarked(bookmarked);
+    }
+  }, [anime?.slug, checkBookmarked, isSaving]);
+
+  // Sync when other components dispatch aniwavex_watchlist_updated (bug #15)
+  useEffect(() => {
+    const handleWatchlistUpdated = (e: any) => {
+      if (e.detail?.animeSlug === anime?.slug && !isSaving) {
+        if (e.detail.status) {
+          setIsBookmarked(true);
+          setCurrentStatus(e.detail.status);
+        } else {
+          setIsBookmarked(false);
+        }
+      }
+    };
+    window.addEventListener("aniwavex_watchlist_updated", handleWatchlistUpdated);
+    return () => window.removeEventListener("aniwavex_watchlist_updated", handleWatchlistUpdated);
+  }, [anime?.slug, isSaving]);
 
   const handleSetStatus = async (status: WatchlistStatus) => {
     let activeUser = currentUser;
@@ -313,8 +337,13 @@ export default function Hero({
                   className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-2.5 py-3 sm:px-6 sm:py-4 text-xs sm:text-base font-semibold hover:scale-105 active:scale-95 transition-all"
                 >
                   <Bookmark className={`w-4 h-4 shrink-0 ${isBookmarked ? 'fill-current' : ''}`} />
-                  <span className="truncate">
-                    {isSaving ? "Saving..." : isBookmarked ? activeStatusConfig.label : "Watchlist"}
+                  <span className="truncate flex items-center gap-1.5">
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Saving...
+                      </>
+                    ) : isBookmarked ? activeStatusConfig.label : "Watchlist"}
                   </span>
                 </button>
 

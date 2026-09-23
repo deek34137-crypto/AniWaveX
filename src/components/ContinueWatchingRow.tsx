@@ -135,11 +135,13 @@ export default function ContinueWatchingRow() {
 
       setItems(filteredList.slice(0, 12));
 
-      // Check any completed anime in background: if it has NO sequel, remove it from Continue Watching
-      mergedList.forEach((item) => {
-        const isDone = completedSlugs.has(item.animeSlug) || (item.episodeId && item.episodeId >= 11);
-        if (isDone) {
-          checkAnimeHasSequel({ slug: item.animeSlug, title: item.animeTitle }).then((hasSequel) => {
+      // Check completed anime in batch: if they have NO sequel, remove from Continue Watching
+      // Only use completedSlugs as the source of truth (not the >= 11 magic number) (bug #5)
+      const completedItems = mergedList.filter((item) => completedSlugs.has(item.animeSlug));
+      if (completedItems.length > 0) {
+        await Promise.all(
+          completedItems.map(async (item) => {
+            const hasSequel = await checkAnimeHasSequel({ slug: item.animeSlug, title: item.animeTitle });
             if (!hasSequel) {
               // Remove from localStorage
               try {
@@ -164,9 +166,9 @@ export default function ContinueWatchingRow() {
               // Update local state
               setItems((prev) => prev.filter((it) => it.animeSlug !== item.animeSlug));
             }
-          });
-        }
-      });
+          })
+        );
+      }
     } catch (err) {
       console.error("Failed to load continue watching history:", err);
     } finally {
@@ -181,14 +183,21 @@ export default function ContinueWatchingRow() {
       loadWatchHistory();
     };
 
+    // Only reload on relevant localStorage keys — not every 2s progress write (bug #20)
+    const handleStorageUpdate = (e: StorageEvent) => {
+      if (!e.key || e.key === "aniwavex_recent_watches" || e.key === "aniwavex_watchlist") {
+        loadWatchHistory();
+      }
+    };
+
     window.addEventListener("aniwavex_watch_updated", handleWatchUpdate);
     window.addEventListener("aniwavex_watchlist_updated", handleWatchUpdate);
-    window.addEventListener("storage", handleWatchUpdate);
+    window.addEventListener("storage", handleStorageUpdate);
 
     return () => {
       window.removeEventListener("aniwavex_watch_updated", handleWatchUpdate);
       window.removeEventListener("aniwavex_watchlist_updated", handleWatchUpdate);
-      window.removeEventListener("storage", handleWatchUpdate);
+      window.removeEventListener("storage", handleStorageUpdate);
     };
   }, [loadWatchHistory]);
 
@@ -251,9 +260,11 @@ export default function ContinueWatchingRow() {
       {/* Horizontal Carousel with Vertical Rectangle Cards */}
       <div className="flex overflow-x-auto gap-4 pb-4 px-1 snap-x snap-mandatory hide-scrollbar">
         {items.map((item) => {
-          const totalSec = item.totalSeconds || 1440;
+          const totalSec = item.totalSeconds || 0;
           const progSec = item.progressSeconds || 0;
-          const pct = Math.min(100, Math.round((progSec / totalSec) * 100));
+          // Only show progress if we have both timestamps; avoid misleading % with a hardcoded duration fallback (bug #26)
+          const hasDuration = totalSec > 0;
+          const pct = hasDuration ? Math.min(100, Math.round((progSec / totalSec) * 100)) : 0;
           const isSaved = checkBookmarked(item.animeSlug);
 
           return (
@@ -301,16 +312,18 @@ export default function ContinueWatchingRow() {
                   </h3>
                   <div className="flex items-center justify-between text-[11px] text-slate-300 font-medium">
                     <span className="text-slate-400">Episode {item.episodeId}</span>
-                    <span className="text-blue-400 font-bold">{pct}%</span>
+                    {hasDuration && <span className="text-blue-400 font-bold">{pct}%</span>}
                   </div>
 
-                  {/* Bottom Progress Bar */}
-                  <div className="mt-2 w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(59,130,246,0.8)]"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
+                  {/* Bottom Progress Bar — only rendered when we know total duration (bug #26) */}
+                  {hasDuration && (
+                    <div className="mt-2 w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(59,130,246,0.8)]"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               </Link>
 

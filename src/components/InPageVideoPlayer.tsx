@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity } from "lucide-react";
+import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity } from "lucide-react";
 import NativePlayer from "./NativePlayer";
 import { useAuth } from "@/providers/AuthProvider";
 import { benchmarkStreamSources, getFastestServerIndex, formatLatencyBadge } from "@/lib/latency-benchmarker";
@@ -95,15 +95,25 @@ export default function InPageVideoPlayer({
   const [playerError, setPlayerError] = useState(false);
   const [isScrolledPast, setIsScrolledPast] = useState(false);
   const [isMiniPlayerDismissed, setIsMiniPlayerDismissed] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const currentUserRef = useRef<any>(authUser || initialUser);
   const playerRef = useRef<HTMLDivElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const mediaPlayerRef = useRef<MediaPlayerInstance>(null);
   const lastSavedTimeRef = useRef(0);
   const lastSupabaseSyncRef = useRef(0);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Timestamp of the last manual server switch — auto-failover is suppressed for 8s after a manual switch
   const manualSwitchAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
 
   useEffect(() => {
     const liveUser = authUser || initialUser;
@@ -201,9 +211,9 @@ export default function InPageVideoPlayer({
     setResumedBanner(null);
   }, [episode, animeSlug]);
 
-  // Scroll to player when episode changes
+  // Scroll to player when episode changes (only when not in fullscreen)
   useEffect(() => {
-    if (episode && playerRef.current) {
+    if (episode && playerRef.current && typeof document !== 'undefined' && !document.fullscreenElement) {
       playerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [episode]);
@@ -537,11 +547,13 @@ export default function InPageVideoPlayer({
 
     const fetchStream = async () => {
       setIsLoading(true);
-      setStreams(null);
+      // Keep previous streams mounted during episode transitions so the player DOM element is not destroyed (retains fullscreen)
       failedServersRef.current.clear();
       setSelectedServerIndex(0); // Reset server index
       setFallbackToIframe(false);
       setPlayerError(false);
+      setInitialTime(0);
+      lastSavedTimeRef.current = 0;
       try {
         const typeParam = animeType ? `&type=${encodeURIComponent(animeType)}` : '';
         const audioParam = `&audio=${activeTab}`;
@@ -603,7 +615,7 @@ export default function InPageVideoPlayer({
     return () => {
       controller.abort();
     };
-  }, [episode, animeSlug, animeTitle, animeType, activeTab, anilistId]);
+  }, [episode, animeSlug, animeTitle, animeType, activeTab, anilistId, showToast]);
 
   const currentIndex = episodes ? episodes.findIndex((ep) => ep.id === episode?.id) : -1;
   const hasNext = episodes && currentIndex !== -1 && currentIndex < episodes.length - 1;
@@ -611,15 +623,23 @@ export default function InPageVideoPlayer({
 
   const handleNext = useCallback(() => {
     if (hasNext && onEpisodeChange && episodes) {
-      onEpisodeChange(episodes[currentIndex + 1]);
+      setInitialTime(0);
+      lastSavedTimeRef.current = 0;
+      const nextEp = episodes[currentIndex + 1];
+      showToast(`Loading Episode ${nextEp?.id} ⏭`);
+      onEpisodeChange(nextEp);
     }
-  }, [hasNext, onEpisodeChange, episodes, currentIndex]);
+  }, [hasNext, onEpisodeChange, episodes, currentIndex, showToast]);
 
   const handlePrev = useCallback(() => {
     if (hasPrev && onEpisodeChange && episodes) {
-      onEpisodeChange(episodes[currentIndex - 1]);
+      setInitialTime(0);
+      lastSavedTimeRef.current = 0;
+      const prevEp = episodes[currentIndex - 1];
+      showToast(`Loading Episode ${prevEp?.id} ⏮`);
+      onEpisodeChange(prevEp);
     }
-  }, [hasPrev, onEpisodeChange, episodes, currentIndex]);
+  }, [hasPrev, onEpisodeChange, episodes, currentIndex, showToast]);
 
   const handleEnded = useCallback(() => {
     const anilistToken = typeof window !== 'undefined' ? localStorage.getItem("anilist_token") : null;
@@ -661,7 +681,49 @@ export default function InPageVideoPlayer({
     if (autoplayNext && hasNext) {
       handleNext();
     }
-  }, [anilistId, episode?.id, autoplayNext, hasNext, handleNext, showToast, currentUser?.id, authUser?.id, initialUser?.id, animeSlug, animeTitle, animePosterImage, supabase]);
+  }, [anilistId, episode, autoplayNext, hasNext, handleNext, showToast, currentUser, authUser, initialUser, animeSlug, animeTitle, animePosterImage, supabase, episodes, animeId]);
+
+  const toggleFullscreen = useCallback(() => {
+    if (typeof document === "undefined") return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      const player = mediaPlayerRef.current;
+      const container = videoContainerRef.current;
+      if (!fallbackToIframe && isM3U8 && player) {
+        player.enterFullscreen().catch(() => {
+          container?.requestFullscreen().catch(() => {});
+        });
+      } else if (container) {
+        container.requestFullscreen().catch(() => {});
+      }
+    }
+  }, [fallbackToIframe, isM3U8]);
+
+  // Listen for video ended events dispatched via postMessage from embed providers
+  useEffect(() => {
+    const handleWindowMessage = (event: MessageEvent) => {
+      try {
+        let data = event.data;
+        if (typeof data === "string") {
+          try { data = JSON.parse(data); } catch {}
+        }
+        const eventName = (data?.event || data?.type || data?.action || (typeof data === "string" ? data : "")).toLowerCase();
+        if (
+          eventName === "ended" ||
+          eventName === "video:ended" ||
+          eventName === "player:ended" ||
+          eventName === "player_ended" ||
+          eventName === "finish" ||
+          data?.status === "ended"
+        ) {
+          handleEnded();
+        }
+      } catch {}
+    };
+    window.addEventListener("message", handleWindowMessage);
+    return () => window.removeEventListener("message", handleWindowMessage);
+  }, [handleEnded]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -704,14 +766,8 @@ export default function InPageVideoPlayer({
           break;
         case 'f':
         case 'F':
-          if (player) {
-            e.preventDefault();
-            if (document.fullscreenElement) {
-              document.exitFullscreen().catch(() => {});
-            } else {
-              player.enterFullscreen().catch(() => {});
-            }
-          }
+          e.preventDefault();
+          toggleFullscreen();
           break;
         case 'm':
         case 'M':
@@ -771,7 +827,7 @@ export default function InPageVideoPlayer({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasNext, hasPrev, handleNext, handlePrev, handleNextSource, handlePrevSource]);
+  }, [hasNext, hasPrev, handleNext, handlePrev, handleNextSource, handlePrevSource, toggleFullscreen, showShortcuts]);
 
   if (!episode) return null;
 
@@ -932,10 +988,19 @@ export default function InPageVideoPlayer({
 
           {/* Single Unified Video Player Container (Docked or Floating PiP) */}
           <div 
+            ref={videoContainerRef}
+            onMouseEnter={() => {
+              if (typeof window !== 'undefined') window.focus();
+            }}
+            onMouseMove={() => {
+              if (typeof window !== 'undefined' && document.activeElement?.tagName === 'IFRAME') {
+                window.focus();
+              }
+            }}
             className={`group transition-all duration-300 ${
               isFloatingPiP
                 ? "fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] md:bottom-6 right-4 sm:right-6 z-50 w-72 sm:w-96 aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-[0_15px_50px_rgba(0,0,0,0.9)] border border-white/20 animate-in slide-in-from-bottom-5"
-                : "relative w-full h-full bg-black rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-white/10 flex items-center justify-center"
+                : "relative w-full h-full bg-black rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-white/10 flex items-center justify-center [&:fullscreen]:w-screen [&:fullscreen]:h-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0 [&:fullscreen]:max-w-none"
             }`}
           >
             {/* Floating Mini Player Controls Overlay */}
@@ -965,12 +1030,56 @@ export default function InPageVideoPlayer({
               </div>
             )}
 
-            {isLoading ? (
-              <div className="flex flex-col items-center justify-center gap-4 text-slate-400">
-                <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
-                <p className="font-semibold tracking-wide">Resolving Stream Servers...</p>
+            {/* Quick Action Floating HUD (Hover / Fullscreen across all providers) */}
+            {!isFloatingPiP && (
+              <div 
+                className="absolute top-3 left-3 z-30 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-auto"
+                onMouseEnter={() => {
+                  if (typeof window !== 'undefined') window.focus();
+                }}
+              >
+                {hasPrev && (
+                  <button
+                    onClick={handlePrev}
+                    className="px-2.5 py-1.5 rounded-lg bg-black/80 hover:bg-slate-800 text-white text-xs font-semibold backdrop-blur-md border border-white/15 shadow-xl flex items-center gap-1 transition-transform active:scale-95"
+                    title="Previous Episode (P)"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span className="font-mono text-[10px] text-slate-400">P</span>
+                  </button>
+                )}
+                {hasNext && (
+                  <button
+                    onClick={handleNext}
+                    className="px-2.5 py-1.5 rounded-lg bg-black/80 hover:bg-slate-800 text-white text-xs font-semibold backdrop-blur-md border border-white/15 shadow-xl flex items-center gap-1.5 transition-transform active:scale-95"
+                    title="Next Episode (N)"
+                  >
+                    <span>Next Ep</span>
+                    <span className="font-mono text-[10px] bg-white/20 text-white px-1 py-0.5 rounded">N</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  onClick={toggleFullscreen}
+                  className="p-1.5 rounded-lg bg-black/80 hover:bg-slate-800 text-white backdrop-blur-md border border-white/15 shadow-xl transition-transform active:scale-95"
+                  title={isFullscreen ? "Exit Fullscreen (F)" : "Enter Fullscreen (F)"}
+                >
+                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
               </div>
-            ) : playerError ? (
+            )}
+
+            {/* Loading Overlay (keeps player mounted underneath during episode transitions to maintain fullscreen) */}
+            {isLoading && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-sm gap-4 text-slate-400 pointer-events-auto animate-in fade-in duration-200">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                <p className="font-semibold tracking-wide text-white">
+                  {episode ? `Loading Episode ${episode.id}...` : "Resolving Stream Servers..."}
+                </p>
+              </div>
+            )}
+
+            {playerError ? (
               <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/90">
                 <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
                   <AlertCircle className="w-6 h-6" />
@@ -1016,7 +1125,6 @@ export default function InPageVideoPlayer({
               </div>
             ) : !fallbackToIframe && isM3U8 && currentUrl ? (
               <NativePlayer 
-                key={currentUrl}
                 playerRef={mediaPlayerRef}
                 url={currentUrl} 
                 title={`${animeTitle} - Episode ${episode.id}`}
@@ -1073,7 +1181,6 @@ export default function InPageVideoPlayer({
               />
             ) : isM3U8 && currentUrl ? (
               <NativePlayer 
-                key={currentUrl}
                 playerRef={mediaPlayerRef}
                 url={currentUrl} 
                 title={`${animeTitle} - Episode ${episode.id}`}
@@ -1084,7 +1191,7 @@ export default function InPageVideoPlayer({
                 onError={() => setPlayerError(true)}
                 onEnded={handleEnded}
               />
-            ) : (
+            ) : !isLoading ? (
               <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/80">
                 <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
                   <Tv className="w-6 h-6" />
@@ -1120,7 +1227,7 @@ export default function InPageVideoPlayer({
                   )}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -1224,6 +1331,16 @@ export default function InPageVideoPlayer({
               </button>
             )}
 
+            {/* Fullscreen Toggle Button */}
+            <button
+              onClick={toggleFullscreen}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900/50 hover:bg-slate-800/80 text-slate-400 hover:text-white rounded-lg text-xs font-semibold border border-white/5 transition-colors"
+              title={isFullscreen ? "Exit Fullscreen (F)" : "Enter Fullscreen (F)"}
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              <span className="hidden sm:inline">{isFullscreen ? "Exit Fullscreen" : "Fullscreen"}</span>
+            </button>
+
             {/* Keyboard Shortcuts Info Button */}
             <button
               onClick={() => setShowShortcuts((prev) => !prev)}
@@ -1254,12 +1371,12 @@ export default function InPageVideoPlayer({
           <div className="mt-4 p-4 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-slate-300 grid grid-cols-2 sm:grid-cols-4 gap-3 animate-in fade-in">
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">Space</kbd> / <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white">K</kbd> Play / Pause</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">F</kbd> Fullscreen</div>
+            <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">N</kbd> Next Ep (All Providers)</div>
+            <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">P</kbd> Previous Ep</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">M</kbd> Mute / Unmute</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">←</kbd> / <kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">→</kbd> Seek 5s</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">S</kbd> Next Source</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">Shift+S</kbd> Prev Source</div>
-            <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">N</kbd> Next Episode</div>
-            <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">P</kbd> Previous Episode</div>
           </div>
         )}
       </div>

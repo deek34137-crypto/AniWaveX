@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyProxySignature, generateProxySignature, getProxyBaseUrl } from "@/lib/proxy-security";
+import { BoundedLRU } from "@/lib/lru-cache";
+import { resolveRefererForStream } from "@/lib/referer-resolver";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
@@ -87,8 +89,7 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 // In-memory cache for converted WebVTT subtitles (bounded to 200 items, 24h TTL)
-const vttConversionCache = new Map<string, { vtt: string; expiresAt: number }>();
-const MAX_VTT_CACHE_SIZE = 200;
+const vttConversionCache = new BoundedLRU<string>(200);
 const VTT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Precompiled Regex for high-performance subtitle parsing
@@ -105,11 +106,11 @@ function convertAssToVtt(assText: string, cacheKey?: string): string {
   if (!assText || typeof assText !== "string") return "WEBVTT\n\n";
   if (assText.trim().startsWith("WEBVTT")) return assText;
 
-  // 1. Check in-memory cache
+  // 1. Check in-memory LRU cache
   const key = cacheKey || (assText.length > 64 ? `${assText.length}_${assText.slice(0, 64)}` : assText);
   const cached = vttConversionCache.get(key);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.vtt;
+  if (cached) {
+    return cached;
   }
 
   const lines = assText.split(/\r?\n/);
@@ -196,11 +197,7 @@ function convertAssToVtt(assText: string, cacheKey?: string): string {
   const resultVtt = vttLines.length > 2 ? vttLines.join("\n") : "WEBVTT\n\n";
 
   // Store in LRU cache
-  if (vttConversionCache.size >= MAX_VTT_CACHE_SIZE) {
-    const oldestKey = vttConversionCache.keys().next().value;
-    if (oldestKey) vttConversionCache.delete(oldestKey);
-  }
-  vttConversionCache.set(key, { vtt: resultVtt, expiresAt: Date.now() + VTT_CACHE_TTL_MS });
+  vttConversionCache.set(key, resultVtt, VTT_CACHE_TTL_MS);
 
   return resultVtt;
 }
@@ -359,10 +356,7 @@ function rewriteM3U8Content(
         if (absUri.startsWith(proxyBase) || absUri.includes("?url=") || absUri.includes("&url=")) {
           return `URI="${absUri}"`;
         }
-        let childReferer = referer;
-        try {
-          childReferer = resolveReferer(new URL(absUri), referer);
-        } catch {}
+        const childReferer = resolveRefererForStream(absUri, referer);
         const sig = generateProxySignature(absUri, tokenExpiry);
         return `URI="${proxyBase}?url=${encodeURIComponent(absUri)}&exp=${tokenExpiry}&sig=${sig}&referer=${encodeURIComponent(childReferer)}"`;
       });
@@ -380,72 +374,10 @@ function rewriteM3U8Content(
       return absUrl;
     }
 
-    let childReferer = referer;
-    try {
-      childReferer = resolveReferer(new URL(absUrl), referer);
-    } catch {}
+    const childReferer = resolveRefererForStream(absUrl, referer);
     const sig = generateProxySignature(absUrl, tokenExpiry);
     return `${proxyBase}?url=${encodeURIComponent(absUrl)}&exp=${tokenExpiry}&sig=${sig}&referer=${encodeURIComponent(childReferer)}`;
   }).join("\n");
-}
-
-function resolveReferer(targetUrl: URL, refererParam?: string | null): string {
-  const host = targetUrl.hostname.toLowerCase();
-  if (
-    host.includes("streamzone") ||
-    host.includes("imgnex") ||
-    host.includes("akirax.buzz") ||
-    host.includes("shiora.top") ||
-    host.includes("mikora.top") ||
-    host.includes("anivideo") ||
-    host.includes("cloudbuzz") ||
-    host.includes("vaelith") ||
-    host.includes("orphiq") ||
-    host.includes("kryntal") ||
-    host.includes("watching.onl") ||
-    host.includes("megaplay.buzz") ||
-    host.includes("sugevideo") ||
-    host.includes("sugevids")
-  ) {
-    return "https://megaplay.buzz/";
-  }
-  if (host.includes("krussdomi")) {
-    return "https://krussdomi.com/";
-  }
-  if (host.includes("vidtube.site")) {
-    return "https://vidtube.site/";
-  }
-  if (host.includes("animeapps.top")) {
-    return "https://playeng.animeapps.top/";
-  }
-  if (host.includes("bibiemb.xyz") || host.includes("vibevibe.workers.dev")) {
-    return "https://bibiemb.xyz/";
-  }
-  if (host.includes("anime-dunya.com")) {
-    return "https://anime-dunya.com/";
-  }
-  if (host.includes("megacloud.tv") || host.includes("atomic4cdn.top")) {
-    return "https://megacloud.tv/";
-  }
-  if (host.includes("rabbitstream.net")) {
-    return "https://rabbitstream.net/";
-  }
-  if (host.includes("dokicloud.one")) {
-    return "https://dokicloud.one/";
-  }
-  if (host.includes("mcloud.to")) {
-    return "https://mcloud.to/";
-  }
-  if (host.includes("vidcloud.co") || host.includes("vidcloud.fun")) {
-    return "https://vidcloud.co/";
-  }
-  if (host.includes("vidstream.pro")) {
-    return "https://vidstream.pro/";
-  }
-  if (refererParam && refererParam !== "https://flixcloud.cc/") {
-    return refererParam;
-  }
-  return refererParam || "https://flixcloud.cc/";
 }
 
 export async function GET(request: NextRequest) {
@@ -508,7 +440,7 @@ export async function GET(request: NextRequest) {
 
   // 3. Resolve required Referer and Origin for target CDN
   const rawReferer = searchParams.get("referer");
-  const referer = resolveReferer(targetUrl, rawReferer);
+  const referer = resolveRefererForStream(targetUrl, rawReferer);
 
   let refererOrigin = "https://flixcloud.cc";
   try {
@@ -709,6 +641,15 @@ export async function GET(request: NextRequest) {
     const body = upstreamRes.body;
     const contentLength = upstreamRes.headers.get("Content-Length");
     const contentRange = upstreamRes.headers.get("Content-Range");
+
+    // Reject unreasonably large non-M3U8 responses (>100MB) to prevent OOM (bug #9)
+    const MAX_BODY_BYTES = 100 * 1024 * 1024; // 100MB
+    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+      return NextResponse.json(
+        { error: "Upstream response exceeds maximum allowed size" },
+        { status: 413, headers: corsHeaders }
+      );
+    }
 
     const responseHeaders: Record<string, string> = {
       ...corsHeaders,

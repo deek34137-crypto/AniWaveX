@@ -40,6 +40,12 @@ export default function NativePlayer({
   const internalRef = useRef<MediaPlayerInstance>(null);
   const player = externalRef || internalRef;
 
+  // Reset playback position when the stream URL changes (episode transition without remount)
+  useEffect(() => {
+    if (player.current && initialTime === 0) {
+      player.current.currentTime = 0;
+    }
+  }, [url, initialTime, player]);
 
   // Lock orientation to landscape on fullscreen, unlock on exit
   useEffect(() => {

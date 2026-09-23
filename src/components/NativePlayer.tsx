@@ -4,7 +4,7 @@ import '@vidstack/react/player/styles/default/theme.css';
 import '@vidstack/react/player/styles/default/layouts/video.css';
 import { MediaPlayer, MediaProvider, Track, type MediaPlayerInstance } from '@vidstack/react';
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default';
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 
 interface NativePlayerProps {
   url: string;
@@ -53,6 +53,13 @@ export default function NativePlayer({
     const subLang = (sub.lang || sub.srclang || sub.language || '').toLowerCase();
     return sub.default || subLabel.includes('english') || subLang === 'en';
   });
+
+  // Explicitly reset playback position to 0 when starting a fresh episode without unmounting
+  useEffect(() => {
+    if (player.current && initialTime === 0) {
+      player.current.currentTime = 0;
+    }
+  }, [url, initialTime, player]);
 
   return (
     <MediaPlayer 

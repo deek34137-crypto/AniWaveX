@@ -100,14 +100,14 @@ export default function EpisodesGrid({
     }
   }, [activeEpisodeId, lastWatchedEpisode, rangeChunks.length]);
 
-  // On-demand chunk metadata hydration for episodes > 100
+      // On-demand chunk metadata hydration for all chunks (bug #14: removed > 100 guard)
   useEffect(() => {
     if (!rangeChunks || rangeChunks.length === 0 || !animeSlug) return;
     const currentChunk = rangeChunks[safeRangeIndex];
     if (!currentChunk) return;
 
-    // If chunk starts > 100, check if we need to hydrate titles from API
-    if (currentChunk.start > 100 && !fetchedOffsetsRef.current.has(currentChunk.start - 1)) {
+    // Hydrate titles for any chunk whose offset we haven't fetched yet
+    if (!fetchedOffsetsRef.current.has(currentChunk.start - 1)) {
       const offset = currentChunk.start - 1;
       const limit = CHUNK_SIZE;
       fetchedOffsetsRef.current.add(offset);
@@ -218,7 +218,7 @@ export default function EpisodesGrid({
         </div>
       </div>
 
-      {/* Episode Range Selector (Feature 3.4) */}
+      {/* Episode Range Selector */}
       {!searchQuery && rangeChunks.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-thin scrollbar-thumb-slate-800">
           <span className="text-xs font-semibold text-slate-400 shrink-0 mr-1">Range:</span>
@@ -227,7 +227,7 @@ export default function EpisodesGrid({
               key={chunk.label}
               onClick={() => setSelectedRangeIndex(idx)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                selectedRangeIndex === idx
+                safeRangeIndex === idx
                   ? "bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]"
                   : "bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-white/5"
               }`}
@@ -248,13 +248,19 @@ export default function EpisodesGrid({
       {/* Episodes Container */}
       {displayedEpisodes.length === 0 ? (
         <div className="w-full text-center py-16 bg-slate-900/30 border border-slate-800 rounded-2xl text-slate-400">
-          <p className="text-sm font-semibold">No episodes found matching "{searchQuery}"</p>
-          <button 
-            onClick={() => setSearchQuery("")}
-            className="mt-3 text-xs text-blue-400 hover:underline"
-          >
-            Clear Search
-          </button>
+          {searchQuery.trim() ? (
+            <>
+              <p className="text-sm font-semibold">No episodes found matching "{searchQuery}"</p>
+              <button 
+                onClick={() => setSearchQuery("")}
+                className="mt-3 text-xs text-blue-400 hover:underline"
+              >
+                Clear Search
+              </button>
+            </>
+          ) : (
+            <p className="text-sm font-semibold">No episodes available</p>
+          )}
         </div>
       ) : (
         <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-3"}>

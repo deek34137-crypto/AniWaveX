@@ -35,6 +35,7 @@ export default function SearchBar() {
   const debouncedQuery = useDebounce(query, 300);
   const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasSearchError, setHasSearchError] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const router = useRouter();
@@ -68,6 +69,7 @@ export default function SearchBar() {
     if (!debouncedQuery.trim()) {
       setResults([]);
       setIsSearching(false);
+      setHasSearchError(false);
       return;
     }
 
@@ -76,6 +78,7 @@ export default function SearchBar() {
 
     async function fetchSearch() {
       setIsSearching(true);
+      setHasSearchError(false);
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&limit=5`, {
           signal: controller.signal,
@@ -94,6 +97,10 @@ export default function SearchBar() {
       } catch (error: any) {
         if (error.name !== "AbortError" && !controller.signal.aborted) {
           console.error("Search error:", error);
+          if (searchRequestIdRef.current === currentRequestId) {
+            setHasSearchError(true);
+            setIsOpen(true);
+          }
         }
       } finally {
         if (searchRequestIdRef.current === currentRequestId && !controller.signal.aborted) {
@@ -212,7 +219,11 @@ export default function SearchBar() {
       {/* Dropdown for Live Results */}
       {isOpen && query.trim() && (
         <div className="absolute top-full mt-2 w-full bg-slate-900 border border-slate-700/50 rounded-xl shadow-2xl overflow-hidden z-[100]">
-          {results.length > 0 ? (
+          {hasSearchError ? (
+            <div className="p-4 text-center text-sm text-red-400">
+              Search failed — please try again
+            </div>
+          ) : results.length > 0 ? (
             <div className="flex flex-col">
               {results.map((anime) => (
                 <Link
