@@ -67,6 +67,14 @@ export default function NativePlayer({
       playsInline
       currentTime={initialTime}
       autoPlay={autoPlay}
+      onCanPlay={() => {
+        if (initialTime > 0 && player.current) {
+          const cur = player.current.currentTime || 0;
+          if (Math.abs(cur - initialTime) > 2) {
+            player.current.currentTime = initialTime;
+          }
+        }
+      }}
       onTimeUpdate={(detail) => {
         if (onTimeUpdate && typeof detail.currentTime === 'number') {
           const dur = player.current?.duration;

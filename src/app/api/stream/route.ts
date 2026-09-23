@@ -508,7 +508,8 @@ async function fetchHindiWorkerStream(
 
 /**
  * Multi-Provider speculative probe engine with non-canceling grace window.
- * Gathers streams from top 2-3 responsive providers within a fast window (600ms grace after 1st hit).
+ * Gathers streams from top 2-3 responsive providers within a 1500ms grace window after 1st hit.
+ * Grace window is 1500ms to allow ReAnime (FlixCloud token decryption ~1200ms) to complete.
  */
 async function multiProviderProbeEngine(
   externalApi: string,
@@ -524,7 +525,7 @@ async function multiProviderProbeEngine(
   }
 ): Promise<any | null> {
   const maxProviders = options?.maxProviders || 3;
-  const gracePeriodMs = options?.gracePeriodMs || 600;
+  const gracePeriodMs = options?.gracePeriodMs || 1500;
   const excluded = new Set((options?.excludedProviders || []).map(p => p.toLowerCase().trim()).filter(Boolean));
   const target = options?.targetProvider ? options.targetProvider.toLowerCase().trim() : null;
 
@@ -617,8 +618,12 @@ async function multiProviderProbeEngine(
         } else {
           providerCircuitBreaker.recordFailure(provider);
         }
-      } catch {
-        providerCircuitBreaker.recordFailure(provider);
+      } catch (err: any) {
+        // AbortError is caused by masterController.abort() at grace window close — NOT a real provider failure.
+        // Only record a real failure if this was a genuine network or server error.
+        if (err?.name !== 'AbortError' && !masterController.signal.aborted) {
+          providerCircuitBreaker.recordFailure(provider);
+        }
       }
     };
 
@@ -778,7 +783,7 @@ async function resolveStreamRaw(
       excludedProviders,
       targetProvider,
       maxProviders: 3,
-      gracePeriodMs: 600,
+      gracePeriodMs: 1500,
     }
   );
 

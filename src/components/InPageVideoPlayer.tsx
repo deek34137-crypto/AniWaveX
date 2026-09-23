@@ -102,6 +102,8 @@ export default function InPageVideoPlayer({
   const lastSavedTimeRef = useRef(0);
   const lastSupabaseSyncRef = useRef(0);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Timestamp of the last manual server switch — auto-failover is suppressed for 8s after a manual switch
+  const manualSwitchAtRef = useRef<number>(0);
 
   useEffect(() => {
     const liveUser = authUser || initialUser;
@@ -436,13 +438,20 @@ export default function InPageVideoPlayer({
     const targetIdx = Math.max(0, Math.min(newIdx, activeSources.length - 1));
     const targetSource = activeSources[targetIdx];
 
-    // Grab current playback time
+    // Grab current playback time as accurately as possible
     const liveTime = mediaPlayerRef.current?.currentTime;
     const currentProgress = (typeof liveTime === 'number' && liveTime > 0) ? liveTime : (lastSavedTimeRef.current || initialTime || 0);
 
     if (currentProgress > 0) {
       setInitialTime(Math.floor(currentProgress));
       lastSavedTimeRef.current = currentProgress;
+    }
+
+    if (!isAutoFailover) {
+      // User explicitly clicked — clear any failed mark on the target server so it gets a fresh chance
+      failedServersRef.current.delete(targetIdx);
+      // Record this timestamp so auto-failover is suppressed for 8 seconds after a manual switch
+      manualSwitchAtRef.current = Date.now();
     }
 
     userExplicitlySelectedServerRef.current = true;
@@ -453,7 +462,7 @@ export default function InPageVideoPlayer({
     if (isAutoFailover) {
       showToast(`Auto-switched to ${targetSource.quality}`);
     } else {
-      showToast(`Switched to ${targetSource.quality}`);
+      showToast(`Switching to ${targetSource.quality}...`);
     }
   }, [activeSources, initialTime, showToast]);
 
@@ -467,7 +476,7 @@ export default function InPageVideoPlayer({
       // Gather provider names to exclude based on failed servers
       const excludedNames: string[] = [];
       activeSources?.forEach((src, idx) => {
-        if (failedServersRef.current.has(idx) || activeSources.length <= 2) {
+        if (failedServersRef.current.has(idx)) {
           const lower = src.quality.toLowerCase();
           if (lower.includes('reanime')) excludedNames.push('reanime');
           if (lower.includes('megacloud') || lower.includes('anikoto')) excludedNames.push('anikoto', 'local-anikoto');
@@ -1022,6 +1031,13 @@ export default function InPageVideoPlayer({
                   lastFailoverAtRef.current = now;
 
                   failedServersRef.current.add(validServerIndex);
+
+                  // If the user manually selected this server within the last 8 seconds,
+                  // do NOT auto-bounce away — show error state and let them choose.
+                  if (now - manualSwitchAtRef.current < 8000) {
+                    setPlayerError(true);
+                    return;
+                  }
 
                   // 1. Auto-failover to another unfailed HLS server first
                   const otherHlsIdx = activeSources?.findIndex((s, i) => !failedServersRef.current.has(i) && s.isM3U8);
