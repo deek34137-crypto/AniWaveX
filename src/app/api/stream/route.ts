@@ -417,6 +417,160 @@ async function fetchHindiWorkerStream(
   }
 }
 
+const TOONSTREAM_BASE_URL = "https://toonstream.shop";
+
+async function fetchLocalHindiStream(
+  title: string,
+  ep: number,
+  signal?: AbortSignal,
+  timeoutMs = 4500
+): Promise<ExtractedStreamResult | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const combinedSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+
+  try {
+    const titleCandidates = getHindiTitleVariations(title);
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Referer": `${TOONSTREAM_BASE_URL}/`,
+    };
+
+    let seriesSlug: string | null = null;
+
+    // Search for series slug using candidate titles
+    for (const candTitle of titleCandidates) {
+      if (controller.signal.aborted) break;
+      const clean = candTitle.replace(/[^a-zA-Z0-9\s]/g, " ").trim();
+      if (!clean) continue;
+
+      try {
+        const searchApiUrl = `${TOONSTREAM_BASE_URL}/wp-json/kiranime/v1/anime/search?query=${encodeURIComponent(clean)}`;
+        const res = await fetch(searchApiUrl, { headers, signal: combinedSignal });
+        if (res.ok) {
+          const data = await res.json();
+          const html = data?.result || "";
+          const matches = [...html.matchAll(/<a[^>]*href=["']https?:\/\/[^"']+\/anime\/([^"'/]+)\/?["'][^>]*>([\s\S]*?)<\/a>/gi)];
+          if (matches.length > 0) {
+            const hindiNamed = matches.find(m => /hindi|sony\s*yay/i.test(m[0]));
+            seriesSlug = hindiNamed ? hindiNamed[1] : matches[0][1];
+            break;
+          }
+        }
+      } catch {}
+
+      // Fallback: WP search HTML
+      try {
+        const res = await fetch(`${TOONSTREAM_BASE_URL}/?s=${encodeURIComponent(clean)}`, { headers, signal: combinedSignal });
+        if (res.ok) {
+          const html = await res.text();
+          const match = html.match(/href=["']https?:\/\/[^"']+\/anime\/([^"'/]+)\/?["']/i);
+          if (match) {
+            seriesSlug = match[1];
+            break;
+          }
+        }
+      } catch {}
+    }
+
+    if (!seriesSlug) return null;
+
+    // Episode watch URL candidates
+    const epCandidates = [
+      `${TOONSTREAM_BASE_URL}/watch/${seriesSlug}-episode-${ep}/`,
+      `${TOONSTREAM_BASE_URL}/watch/${seriesSlug}-s1-episode-${ep}/`,
+      `${TOONSTREAM_BASE_URL}/watch/${seriesSlug}-${ep}/`,
+    ];
+
+    let epHtml: string | null = null;
+    for (const epUrl of epCandidates) {
+      if (controller.signal.aborted) break;
+      try {
+        const res = await fetch(epUrl, { headers, signal: combinedSignal });
+        if (res.ok) {
+          epHtml = await res.text();
+          break;
+        }
+      } catch {}
+    }
+
+    // Fallback: find episode link in anime page
+    if (!epHtml) {
+      try {
+        const seriesRes = await fetch(`${TOONSTREAM_BASE_URL}/anime/${seriesSlug}/`, { headers, signal: combinedSignal });
+        if (seriesRes.ok) {
+          const seriesHtml = await seriesRes.text();
+          const epRegex = new RegExp(`href=["'](https?:\\/\\/[^"']+\\/watch\\/[^"']*?-episode-${ep}\\/?)["']`, "i");
+          const match = seriesHtml.match(epRegex);
+          if (match) {
+            const epRes = await fetch(match[1], { headers, signal: combinedSignal });
+            if (epRes.ok) {
+              epHtml = await epRes.text();
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (!epHtml) return null;
+
+    const sources: any[] = [];
+
+    // Parse base64 embed-id attributes (VidPlay, StreamRuby, EmbedWish, MyCloud, VidMoly, etc.)
+    const embedMatches = [...epHtml.matchAll(/embed-id=["']([^"']+)["']/g)].map(m => m[1]);
+    for (const eid of embedMatches) {
+      try {
+        const parts = eid.split(":");
+        const serverName = Buffer.from(parts[0], "base64").toString("utf-8").replace(/dub$/i, "").trim();
+        let serverUrl = parts[1] ? Buffer.from(parts[1], "base64").toString("utf-8").trim() : "";
+
+        const iframeSrc = serverUrl.match(/src=['"]([^'"]+)['"]/i);
+        if (iframeSrc) {
+          serverUrl = iframeSrc[1];
+        }
+
+        if (serverUrl && serverUrl.startsWith("http")) {
+          const isM3U8 = serverUrl.includes(".m3u8");
+          sources.push({
+            server: `${serverName || "ToonStream"} (Hindi Dub)`,
+            url: serverUrl,
+            quality: `${serverName || "ToonStream"} [Hindi Dub]`,
+            isM3U8,
+            isHindi: true,
+          });
+        }
+      } catch {}
+    }
+
+    // Also look for standard iframes on the watch page
+    const iframes = [...epHtml.matchAll(/<iframe[^>]+src=["'](https?:\/\/[^"']+)["']/gi)].map(m => m[1]);
+    for (const ifr of iframes) {
+      if (ifr.includes("a-ads") || ifr.includes("chaty") || ifr.includes("google") || ifr.includes("facebook") || ifr.includes("twitter")) continue;
+      if (!sources.some(s => s.url === ifr)) {
+        const label = ifr.includes("ruby") ? "Ruby" : ifr.includes("wish") ? "Streamwish" : "External Embed";
+        sources.push({
+          server: `${label} (Hindi Dub)`,
+          url: ifr,
+          quality: `${label} [Hindi Dub]`,
+          isM3U8: false,
+          isHindi: true,
+        });
+      }
+    }
+
+    if (sources.length > 0) {
+      return { sources, subtitles: [] };
+    }
+
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Multi-Provider speculative probe engine with non-canceling grace window.
  * Gathers streams from top 2-3 responsive providers within a 1500ms grace window after 1st hit.
@@ -490,7 +644,7 @@ async function multiProviderProbeEngine(
       gatheredResults.push(result);
 
       // If audio is hindi and we found Hindi streams, finish immediately!
-      if (audio === 'hindi' && provider === 'hindi-worker') {
+      if (audio === 'hindi' && (provider === 'hindi-worker' || provider === 'hindi-local')) {
         finishAndResolve();
         return;
       }
@@ -585,7 +739,7 @@ async function multiProviderProbeEngine(
       const HINDI_WORKER_URL = process.env.HINDI_STREAM_API_URL || "https://aniwavex-hindi-worker.rajverma159310.workers.dev";
       const japFallbackProviders = providerCircuitBreaker.sortProvidersByHealth(['reanime', 'justanime', 'anikoto', 'kaa']);
 
-      // t = 0ms: Speculatively invoke the standalone Hindi worker
+      // t = 0ms: Speculatively invoke the standalone Hindi worker & local Hindi scraper in parallel
       (async () => {
         const startTime = Date.now();
         try {
@@ -595,13 +749,30 @@ async function multiProviderProbeEngine(
             title,
             parsedEp,
             masterController.signal,
-            6000
+            4000
           );
           if (res && res.sources.length > 0) {
             onProviderSuccess('hindi-worker', res, Date.now() - startTime);
           }
         } catch {
           // Worker failure gracefully handled by fallback
+        }
+      })();
+
+      (async () => {
+        const startTime = Date.now();
+        try {
+          const res = await fetchLocalHindiStream(
+            title,
+            parsedEp,
+            masterController.signal,
+            4500
+          );
+          if (res && res.sources.length > 0) {
+            onProviderSuccess('hindi-local', res, Date.now() - startTime);
+          }
+        } catch {
+          // Handled by fallback
         }
       })();
 
