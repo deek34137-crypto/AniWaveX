@@ -214,25 +214,39 @@ export default function Hero({
   const bgImage = anime.backgroundImage || anime.posterImage;
 
   return (
-    <div className="relative w-full min-h-[460px] sm:min-h-[540px] md:min-h-[620px] flex items-end overflow-hidden pt-16 sm:pt-24 md:pt-32 pb-6 md:pb-16">
-      {/* Background Image */}
+    <div className="relative -mx-4 sm:mx-0 w-[calc(100%+2rem)] sm:w-full min-h-[380px] sm:min-h-[500px] md:min-h-[620px] flex items-end overflow-hidden pt-6 sm:pt-24 md:pt-32 pb-6 md:pb-16">
+      {/* Background Image Container with Ambient Glow for Mobile Fitting */}
       {bgImage ? (
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Ambient blurred backdrop on mobile to prevent empty black edges on odd-aspect banners */}
+          <div className="absolute inset-0 sm:hidden">
+            <AnimeImage
+              src={bgImage}
+              alt=""
+              fill
+              sizes="100vw"
+              className="object-cover blur-2xl opacity-40 scale-110"
+            />
+          </div>
+          {/* Main Sharp Hero Banner */}
           <AnimeImage
             src={bgImage}
             alt={anime.title}
             fill
             priority
             sizes="100vw"
-            className="object-cover object-top sm:object-center"
+            className="object-cover object-center"
           />
         </div>
       ) : null}
       
-      {/* Gradients */}
-      <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent" />
+      {/* Desktop side gradient (hidden on mobile to prevent blacking out 75% of mobile screen) */}
+      <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent" />
+      {/* Vertical gradient: transparent at top so banner artwork is visible, fading to dark behind details at bottom */}
+      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent sm:via-slate-950/50" />
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent h-1/2 bottom-0" />
+      {/* Top subtle shadow on mobile for navbar clarity */}
+      <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-slate-950/70 to-transparent pointer-events-none md:hidden" />
 
       {/* Content Container */}
       <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 z-10 flex flex-col md:flex-row gap-4 sm:gap-6 md:gap-10 items-end">
