@@ -150,6 +150,15 @@ export default function ProfileClient({
     { id: "settings",  label: "Settings",        shortLabel: "Settings", icon: Settings },
   ];
 
+  // When accessed with tab=watchlist, render ONLY the WatchlistGrid without profile extras
+  if (tabParam === "watchlist") {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-2 pb-6 animate-in fade-in duration-300">
+        <WatchlistGrid initialItems={bookmarks} />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-4">
       <AniListSyncModal

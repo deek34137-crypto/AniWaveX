@@ -33,7 +33,7 @@ export default function MobileNav() {
 
   const navLinks = [
     { label: "Home", href: "/", icon: Home },
-    { label: "Watchlist", href: "/profile?tab=watchlist", icon: Bookmark },
+    { label: "Watchlist", href: "/watchlist", icon: Bookmark },
     { label: "Catalog", href: "/catalog", icon: Compass },
     { label: "Schedule", href: "/airing", icon: Calendar },
     { label: "Tier List", href: "/tier-list", icon: Layers },

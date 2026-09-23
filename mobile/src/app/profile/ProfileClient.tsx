@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import WatchHistoryGrid from "@/components/profile/WatchHistoryGrid";
 import WatchlistGrid from "@/components/profile/WatchlistGrid";
 import AvatarPicker from "@/components/profile/AvatarPicker";
@@ -47,11 +47,18 @@ export default function ProfileClient({
 }) {
   const { user: authUser, supabase: authSupabase, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as Tab | null;
 
   // Prefer live client-side user — fixes "not logged in" bug on mobile bottom nav
   const user = authUser || ssrUser;
 
-  const [activeTab, setActiveTab] = useState<Tab>("history");
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (tabParam && ["history", "watchlist", "customize", "settings"].includes(tabParam)) {
+      return tabParam;
+    }
+    return "history";
+  });
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [history, setHistory] = useState<any[]>(ssrHistory || []);
   const [bookmarks, setBookmarks] = useState<any[]>(ssrBookmarks || []);
@@ -135,6 +142,15 @@ export default function ProfileClient({
     { id: "customize", label: "Public Profile",  shortLabel: "Profile",  icon: Sparkles },
     { id: "settings",  label: "Settings",        shortLabel: "Settings", icon: Settings },
   ];
+
+  // When accessed with tab=watchlist, render ONLY the WatchlistGrid without profile extras
+  if (tabParam === "watchlist") {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-2 pb-6 animate-in fade-in duration-300">
+        <WatchlistGrid initialItems={bookmarks} />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-4">

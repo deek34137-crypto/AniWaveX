@@ -128,7 +128,7 @@ export default function MobileNav() {
                 <span>Profile</span>
               </Link>
               <Link
-                href="/profile?tab=watchlist"
+                href="/watchlist"
                 onClick={() => setIsOpen(false)}
                 className="flex items-center justify-center gap-1 px-2 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/20 text-[11px] font-semibold transition-all text-center"
               >
