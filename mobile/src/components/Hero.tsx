@@ -227,7 +227,57 @@ export default function Hero({
       {/* Content Container */}
       <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 z-10 flex flex-col md:flex-row gap-4 sm:gap-6 md:gap-10 items-end">
         
-        {/* Poster (Hidden on mobile, visible on md+) */}
+        {/* Small Anime Poster Card (Mobile View Only) */}
+        {anime.posterImage ? (
+          <div className="flex md:hidden items-end gap-3.5 w-full mb-1">
+            <div className="w-24 aspect-[2/3] shrink-0 rounded-xl overflow-hidden shadow-2xl border border-white/20 relative group bg-slate-900 shadow-black/80">
+              <AnimeImage 
+                src={anime.posterImage} 
+                alt={anime.title} 
+                fill
+                priority
+                sizes="96px"
+                className="object-cover transform transition-transform duration-500 group-hover:scale-105"
+              />
+            </div>
+
+            {/* Mobile Title & Meta next to small anime card */}
+            <div className="flex-1 min-w-0 flex flex-col gap-1 pb-0.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {anime.status && (
+                  <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-500/30">
+                    {anime.status}
+                  </span>
+                )}
+                {anime.tags && anime.tags[0] && (
+                  <span className="px-2 py-0.5 bg-white/5 text-slate-300 text-[10px] font-medium rounded-md border border-white/5 truncate max-w-[120px]">
+                    {anime.tags[0]}
+                  </span>
+                )}
+              </div>
+              <h1 className="text-base sm:text-2xl font-black text-white tracking-tight drop-shadow-xl leading-snug line-clamp-2">
+                {anime.title}
+              </h1>
+              <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-300">
+                {anime.rating && anime.rating !== "N/A" && (
+                  <div className="flex items-center gap-1 text-yellow-400">
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                    <span>{anime.rating}</span>
+                  </div>
+                )}
+                {anime.year && (
+                  <div className="flex items-center gap-1 text-slate-400">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    <span>{anime.year}</span>
+                  </div>
+                )}
+                <span className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] border border-white/10 font-bold">HD</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Desktop Poster (Hidden on mobile, visible on md+) */}
         {anime.posterImage ? (
           <div className="hidden md:block w-64 aspect-[2/3] shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative group bg-slate-900">
             <AnimeImage 
@@ -242,8 +292,8 @@ export default function Hero({
 
         {/* Text Details */}
         <div className="flex-1 flex flex-col gap-2.5 sm:gap-4 w-full">
-          {/* Status & Genre Badges */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
+          {/* Status & Genre Badges (Shown on desktop, or on mobile only if no poster) */}
+          <div className={`flex flex-wrap items-center gap-1.5 sm:gap-2.5 ${anime.posterImage ? 'hidden md:flex' : 'flex'}`}>
             {anime.status && (
               <span className="px-2.5 py-0.5 bg-blue-600/20 text-blue-400 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-md border border-blue-500/30">
                 {anime.status}
@@ -258,11 +308,13 @@ export default function Hero({
             ) : null}
           </div>
 
-          <h1 className="text-2xl sm:text-4xl md:text-6xl font-black text-white tracking-tight drop-shadow-xl leading-tight line-clamp-2">
+          {/* Main Title (Shown on desktop, or on mobile only if no poster) */}
+          <h1 className={`text-2xl sm:text-4xl md:text-6xl font-black text-white tracking-tight drop-shadow-xl leading-tight line-clamp-2 ${anime.posterImage ? 'hidden md:block' : 'block'}`}>
             {anime.title}
           </h1>
 
-          <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs sm:text-sm font-medium text-slate-300">
+          {/* Meta Details Row (Shown on desktop, or on mobile only if no poster) */}
+          <div className={`items-center gap-3 sm:gap-6 text-xs sm:text-sm font-medium text-slate-300 ${anime.posterImage ? 'hidden md:flex' : 'flex flex-wrap'}`}>
             <div className="flex items-center gap-1 text-yellow-400">
               <Star className="w-4 h-4 fill-current" />
               <span className="text-sm sm:text-base font-bold">{anime.rating}</span>
