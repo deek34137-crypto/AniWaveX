@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Menu, X, Home, Compass, Calendar, Layers, Film, Sparkles } from "lucide-react";
+import { Menu, X, Home, Compass, Calendar, Layers, Film, Sparkles, Bookmark } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -33,6 +33,7 @@ export default function MobileNav() {
 
   const navLinks = [
     { label: "Home", href: "/", icon: Home },
+    { label: "Watchlist", href: "/profile?tab=watchlist", icon: Bookmark },
     { label: "Catalog", href: "/catalog", icon: Compass },
     { label: "Schedule", href: "/airing", icon: Calendar },
     { label: "Tier List", href: "/tier-list", icon: Layers },
@@ -92,7 +93,9 @@ export default function MobileNav() {
             <nav className="flex flex-col py-3 px-3 gap-1 overflow-y-auto">
               {navLinks.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const isActive = item.href.includes("?") 
+                  ? pathname === item.href.split("?")[0]
+                  : pathname === item.href;
                 return (
                   <Link 
                     key={item.label}

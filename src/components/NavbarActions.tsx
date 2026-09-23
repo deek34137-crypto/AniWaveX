@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, User, LogOut, Activity, Shield } from "lucide-react";
+import { Bell, User, LogOut, Activity, Shield, Bookmark } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import AuthModal from "./AuthModal";
 import UsernameModal from "./UsernameModal";
@@ -141,6 +141,13 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
               className="px-4 py-2 text-sm text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
             >
               <User className="w-4 h-4 text-blue-400" /> My Profile
+            </Link>
+            <Link 
+              href="/profile?tab=watchlist" 
+              onClick={() => setIsMenuOpen(false)}
+              className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
+            >
+              <Bookmark className="w-4 h-4 text-amber-400" /> Watchlist
             </Link>
             {isAdmin && (
               <Link 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { Menu, X, Home, Compass, Calendar, Layers, Film, Sparkles, User, LogIn } from "lucide-react";
+import { Menu, X, Home, Compass, Calendar, Layers, Film, Sparkles, User, LogIn, Bookmark } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
@@ -118,21 +118,30 @@ export default function MobileNav() {
             </Link>
 
             {/* Quick Profile Actions */}
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
               <Link
                 href="/profile"
                 onClick={() => setIsOpen(false)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/20 text-xs font-semibold transition-all"
+                className="flex items-center justify-center gap-1 px-2 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/20 text-[11px] font-semibold transition-all text-center"
               >
-                <User className="w-3.5 h-3.5" />
-                My Profile
+                <User className="w-3.5 h-3.5 shrink-0" />
+                <span>Profile</span>
+              </Link>
+              <Link
+                href="/profile?tab=watchlist"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center justify-center gap-1 px-2 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/20 text-[11px] font-semibold transition-all text-center"
+              >
+                <Bookmark className="w-3.5 h-3.5 shrink-0" />
+                <span>Watchlist</span>
               </Link>
               <Link
                 href="/profile?tab=settings"
                 onClick={() => setIsOpen(false)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/10 text-xs font-semibold transition-all"
+                className="flex items-center justify-center gap-1 px-2 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/10 text-[11px] font-semibold transition-all text-center"
               >
-                ⚙️ Settings
+                <span>⚙️</span>
+                <span>Settings</span>
               </Link>
             </div>
           </div>
