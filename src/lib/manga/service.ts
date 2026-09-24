@@ -6,24 +6,24 @@
  *
  * Flow:
  *  1. Catalog / Search / Details → AniList GraphQL (metadata, covers)
- *  2. Chapter list               → backend /api/search + /api/chapters (multi-provider)
- *  3. Chapter pages              → backend /api/pages
+ *  2. Chapter list               → backend /api/search + /api/chapters (multi-provider with relevance scoring)
+ *  3. Chapter pages              → backend /api/pages (with logo filtering & referer injection)
  */
 
 import { MangaItem, MangaChapter, MangaChapterPages } from './types';
 
 const BACKEND = 'https://mangahub-backend.deek34137.workers.dev';
 
-// Certified providers sorted by catalog completeness and chapter availability
+// Primary working providers with verified page extraction (MangaKatana excluded due to logo fallbacks)
 const CHAPTER_PROVIDERS = [
   'weebcentral',
-  'mangakatana',
   'mangadex',
+  'asurascan',
+  'flamecomics',
   'mangaread',
   'mgeko',
   'novelcool',
-  'flamecomics',
-  'asurascan',
+  'kaliscan',
 ];
 
 /* ───────────────────────────────────────────────
@@ -88,6 +88,17 @@ interface BackendSearchResult {
   coverImage?: string;
   provider: string;
   altTitles?: string[];
+  score?: number;
+}
+
+function titleScore(query: string, candidate: string): number {
+  const q = query.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const c = candidate.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!q || !c) return 0;
+  if (q === c) return 1.0;
+  if (c.includes(q)) return q.length / c.length;
+  if (q.includes(c)) return c.length / q.length;
+  return 0;
 }
 
 async function backendSearch(query: string): Promise<BackendSearchResult[]> {
@@ -133,28 +144,40 @@ export async function getMangaChapters(
   romajiTitle?: string
 ): Promise<MangaChapter[]> {
   // 1. Search with title
-  let searchResults = await backendSearch(title);
+  let rawResults = await backendSearch(title);
 
-  // 2. If no results or very few, try romaji title
+  // 2. If romajiTitle is different, also search romaji
   if (romajiTitle && romajiTitle !== title) {
     const romajiResults = await backendSearch(romajiTitle);
-    const seen = new Set(searchResults.map((r) => `${r.provider}:${r.id}`));
+    const seen = new Set(rawResults.map((r) => `${r.provider}:${r.id}`));
     for (const r of romajiResults) {
       const key = `${r.provider}:${r.id}`;
       if (!seen.has(key)) {
         seen.add(key);
-        searchResults.push(r);
+        rawResults.push(r);
       }
     }
   }
 
-  if (searchResults.length === 0) return [];
+  if (rawResults.length === 0) return [];
+
+  // 3. Relevance filtering: compute match score against title and romaji
+  const scoredResults = rawResults
+    .map((r) => {
+      const scorePrimary = titleScore(title, r.title);
+      const scoreRomaji = romajiTitle ? titleScore(romajiTitle, r.title) : 0;
+      return { ...r, score: Math.max(scorePrimary, scoreRomaji) };
+    })
+    .filter((r) => r.score >= 0.35)
+    .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  if (scoredResults.length === 0) return [];
 
   let bestChapters: MangaChapter[] = [];
 
-  // 3. Try each provider in priority order
+  // 4. Try providers in priority order
   for (const providerId of CHAPTER_PROVIDERS) {
-    const matches = searchResults.filter((r) => r.provider === providerId);
+    const matches = scoredResults.filter((r) => r.provider === providerId);
     for (const match of matches) {
       try {
         const res = await fetch(`${BACKEND}/api/chapters`, {
@@ -164,8 +187,6 @@ export async function getMangaChapters(
             provider: match.provider,
             id: match.id,
             url: match.url,
-            mangaId: match.id,
-            mangaUrl: match.url,
           }),
           next: { revalidate: 900 },
         });
@@ -188,12 +209,11 @@ export async function getMangaChapters(
           }))
           .sort((a, b) => a.chapterNumber - b.chapterNumber);
 
-        // If provider has significant chapters (>= 10), use it immediately
+        // If provider has significant chapters (>= 10), select immediately
         if (formatted.length >= 10) {
           return formatted;
         }
 
-        // Otherwise keep the candidate with the highest chapter count
         if (formatted.length > bestChapters.length) {
           bestChapters = formatted;
         }
@@ -203,7 +223,6 @@ export async function getMangaChapters(
     }
   }
 
-  // 4. Return the best chapters found
   return bestChapters;
 }
 
@@ -228,7 +247,6 @@ export async function getChapterPages(chapterId: string): Promise<MangaChapterPa
   try {
     envelope = JSON.parse(chapterId);
   } catch {
-    // Fallback: treat as raw MangaDex UUID
     envelope = {
       provider: 'mangadex',
       chapterId,
@@ -252,7 +270,15 @@ export async function getChapterPages(chapterId: string): Promise<MangaChapterPa
 
     if (!res.ok) return empty;
     const data = await res.json();
-    const pages: BackendPage[] = data?.pages || [];
+    const rawPages: BackendPage[] = data?.pages || [];
+
+    // Filter out dummy site logos and broken placeholder images
+    const pages = rawPages.filter((p) => {
+      const u = (p.url || '').toLowerCase();
+      return !u.includes('logo.png') && !u.includes('logo.jpg') && !u.includes('/static/img/logo');
+    });
+
+    if (pages.length === 0) return empty;
 
     return {
       chapterId,

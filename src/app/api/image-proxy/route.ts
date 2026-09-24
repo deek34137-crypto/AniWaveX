@@ -6,21 +6,26 @@ const ALLOWED_HOST_DOMAINS = [
   "uploads.mangadex.org",
   "mangadex.org",
   "mangadex.network",
-  // WeebCentral + lastation CDN
+  // WeebCentral + scanlation storage networks
   "temp.compsci88.com",
   "compsci88.com",
   "weebcentral.com",
   "lastation.us",
   "scans.lastation.us",
-  // MangaKatana
-  "mangakatana.com",
-  "i1.mangakatana.com",
-  "i2.mangakatana.com",
-  "i3.mangakatana.com",
+  "lowee.us",
+  "official.lowee.us",
+  "scans.lowee.us",
+  "planeptune.us",
+  "leanbox.us",
   // AsuraScans
   "asuracomic.net",
   "asuratoon.com",
   "gg.asuracomic.net",
+  // FlameComics & KaliScan
+  "flamecomics.xyz",
+  "flamecomics.me",
+  "kaliscan.io",
+  "kaliscan.com",
   // MangaRead / MGeko
   "mangaread.org",
   "mgeko.cc",
@@ -39,13 +44,12 @@ const ALLOWED_HOST_DOMAINS = [
   "static.mangafire.to",
   "img.mangafire.to",
   "cdn.mangafire.to",
-  // Bato & FlameComics & KaliScan
+  // Bato & Webtoons
   "bato.to",
   "batotoo.com",
-  "flamecomics.xyz",
-  "flamecomics.me",
-  "kaliscan.io",
   "webtoons.com",
+  // MangaKatana
+  "mangakatana.com",
   // AniList covers
   "anilist.co",
   "s4.anilist.co",
@@ -70,7 +74,7 @@ function isPrivateOrLocalHost(hostname: string): boolean {
   if (parts.length === 4 && parts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
     if (parts[0] === 10) return true; // 10.0.0.0/8
     if (parts[0] === 127) return true; // 127.0.0.0/8
-    if (parts[0] === 169 && parts[1] === 254) return true; // 169.254.0.0/16 (link-local/cloud metadata)
+    if (parts[0] === 169 && parts[1] === 254) return true; // 169.254.0.0/16
     if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
     if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16
   }
@@ -79,7 +83,6 @@ function isPrivateOrLocalHost(hostname: string): boolean {
 
 export async function GET(req: NextRequest) {
   const urlParam = req.nextUrl.searchParams.get("url");
-  // Optional referer forwarded from provider metadata
   const refererParam = req.nextUrl.searchParams.get("referer");
 
   if (!urlParam) {
@@ -107,7 +110,7 @@ export async function GET(req: NextRequest) {
     (allowed) => hostname === allowed || hostname.endsWith(`.${allowed}`)
   );
 
-  // If not explicitly in known list, still permit standard public image hosts with dot in hostname
+  // If not explicitly in known list, still permit standard public image hosts with a dot in hostname
   if (!isExplicitlyAllowed && !hostname.includes(".")) {
     return new NextResponse("Host not permitted in image proxy", { status: 403 });
   }
