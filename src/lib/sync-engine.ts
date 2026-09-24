@@ -30,7 +30,7 @@ export const MAL_CODE_VERIFIER_KEY = "aniwavex_mal_code_verifier";
 
 // AniList Client ID (Configurable via env)
 export const ANILIST_CLIENT_ID = process.env.NEXT_PUBLIC_ANILIST_CLIENT_ID || "51864";
-export const MAL_CLIENT_ID = process.env.NEXT_PUBLIC_MAL_CLIENT_ID || "6114d00ca681b7701d1e15004a44ba50";
+export const MAL_CLIENT_ID = process.env.NEXT_PUBLIC_MAL_CLIENT_ID || "073be04d9cfc6030e37926ae343e37f3";
 
 /**
  * Generate AniList OAuth Authorization URL (Implicit Grant for direct mobile/web token return)
@@ -45,7 +45,7 @@ export function getAniListAuthUrl(redirectUri?: string): string {
  */
 export function getMalAuthUrl(redirectUri?: string): string {
   if (typeof window === "undefined") return "";
-  const uri = redirectUri || `${window.location.origin}/profile?tab=sync&service=mal`;
+  const uri = redirectUri || `${window.location.origin}/profile`;
   
   // 128 char code verifier
   const array = new Uint8Array(64);

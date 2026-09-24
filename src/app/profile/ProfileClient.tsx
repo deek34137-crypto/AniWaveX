@@ -37,7 +37,7 @@ import {
   requestNotificationPermission,
   cancelPendingNotifications,
 } from "@/lib/notifications";
-import { ANILIST_TOKEN_KEY } from "@/lib/sync-engine";
+import { ANILIST_TOKEN_KEY, MAL_TOKEN_KEY, MAL_CODE_VERIFIER_KEY } from "@/lib/sync-engine";
 
 type Tab = "history" | "watchlist" | "customize" | "settings";
 
@@ -89,6 +89,36 @@ export default function ProfileClient({
           localStorage.setItem(ANILIST_TOKEN_KEY, match[1]);
           window.history.replaceState(null, "", window.location.pathname + window.location.search);
           setShowTwoWaySyncModal(true);
+        }
+      }
+
+      // Auto-capture MyAnimeList OAuth code (?code=...&state=aniwavex_mal_auth)
+      const urlParams = new URLSearchParams(window.location.search);
+      const malCode = urlParams.get("code");
+      const malState = urlParams.get("state");
+      if (malCode && malState === "aniwavex_mal_auth") {
+        const verifier = localStorage.getItem(MAL_CODE_VERIFIER_KEY) || "";
+        if (verifier) {
+          fetch("/api/sync/mal/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              code: malCode,
+              code_verifier: verifier,
+              redirect_uri: `${window.location.origin}/profile`,
+            }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.access_token) {
+                localStorage.setItem(MAL_TOKEN_KEY, data.access_token);
+                setShowTwoWaySyncModal(true);
+              }
+            })
+            .catch((err) => console.error("MAL token exchange failed:", err))
+            .finally(() => {
+              window.history.replaceState(null, "", window.location.pathname);
+            });
         }
       }
     }
