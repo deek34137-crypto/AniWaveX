@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 
 // Allowed manga CDN hostnames to prevent arbitrary SSRF
 const ALLOWED_HOST_DOMAINS = [
+  // MangaDex official CDN
+  "uploads.mangadex.org",
+  "mangadex.org",
+  "mangadex.network",          // dynamic CDN nodes: *.mangadex.network
+  // MangaFire
   "mangafire.to",
   "static.mangafire.to",
   "img.mangafire.to",
   "cdn.mangafire.to",
+  // Comick
   "comick.app",
   "meo.comick.pictures",
   "meo2.comick.pictures",
   "meo3.comick.pictures",
+  // Others
   "asuracomic.net",
   "allmanga.to",
   "animeblkom.net",

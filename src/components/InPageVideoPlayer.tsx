@@ -3,11 +3,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity } from "lucide-react";
 import NativePlayer from "./NativePlayer";
+import SyncHudToast from "./player/SyncHudToast";
 import { useAuth } from "@/providers/AuthProvider";
 import { benchmarkStreamSources, getFastestServerIndex, formatLatencyBadge } from "@/lib/latency-benchmarker";
 import { syncProgressToAniList } from "@/lib/sync/anilist-sync";
 import { handleSequelPlaybackStarted, handleAnimeCompleted } from "@/lib/franchise";
 import type { MediaPlayerInstance } from "@vidstack/react";
+import type { LiveSyncResult } from "@/types/sync";
 
 interface StreamSource {
   url: string;
@@ -103,6 +105,8 @@ export default function InPageVideoPlayer({
   const [isScrolledPast, setIsScrolledPast] = useState(false);
   const [isMiniPlayerDismissed, setIsMiniPlayerDismissed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [liveSyncResult, setLiveSyncResult] = useState<LiveSyncResult | null>(null);
+  const completionSyncedEpisodeRef = useRef<number | null>(null);
   
   const currentUserRef = useRef<any>(authUser || initialUser);
   const playerRef = useRef<HTMLDivElement>(null);
@@ -190,6 +194,8 @@ export default function InPageVideoPlayer({
     setFallbackToIframe(false);
     lastSavedTimeRef.current = 0;
     lastSupabaseSyncRef.current = 0;
+    completionSyncedEpisodeRef.current = null;
+    setLiveSyncResult(null);
 
     try {
       const storageKey = `watch_progress_${animeSlug}_ep_${episode.id}`;
@@ -225,6 +231,47 @@ export default function InPageVideoPlayer({
     }
   }, [episode]);
 
+  // Live progress sync to AniList & MAL in background
+  const triggerLiveProgressSync = useCallback(async (isCompleted = false, currentPos?: number, totalDur?: number) => {
+    if (!episode?.id || !animeSlug) return;
+    const pos = typeof currentPos === 'number' ? currentPos : (lastSavedTimeRef.current || 0);
+    const dur = typeof totalDur === 'number' ? totalDur : (lastKnownDurationRef.current || 0);
+
+    try {
+      const res = await fetch('/api/account/sync/playback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          animeSlug,
+          animeTitle,
+          animePosterImage,
+          kitsuId: animeId,
+          anilistId,
+          episodeNumber: episode.id,
+          episodeId: episode.id,
+          lastPosition: pos,
+          duration: dur,
+          completed: isCompleted,
+        }),
+      });
+
+      if (res.ok) {
+        const data: LiveSyncResult = await res.json();
+        if (data.completed) {
+          setLiveSyncResult(data);
+        }
+      }
+    } catch (err) {
+      console.error('[InPageVideoPlayer] Live progress sync error:', err);
+    }
+  }, [episode?.id, animeSlug, animeTitle, animePosterImage, animeId, anilistId]);
+
+  const handleRetrySync = useCallback(async () => {
+    if (episode?.id) {
+      await triggerLiveProgressSync(true, lastKnownDurationRef.current, lastKnownDurationRef.current);
+    }
+  }, [episode?.id, triggerLiveProgressSync]);
+
   // Throttled time update callback to save playback progress locally and remotely
   const handleTimeUpdate = useCallback((currentTime: number, duration: number) => {
     if (!episode) return;
@@ -235,6 +282,14 @@ export default function InPageVideoPlayer({
     // Always keep the latest known duration up-to-date
     if (floorDur > 0) {
       lastKnownDurationRef.current = floorDur;
+    }
+
+    // 88%+ Completion Threshold: Automatically sync episode completion to AniList & MAL
+    if (floorDur > 60 && floorTime / floorDur >= 0.88) {
+      if (completionSyncedEpisodeRef.current !== episode.id) {
+        completionSyncedEpisodeRef.current = episode.id;
+        triggerLiveProgressSync(true, floorTime, floorDur);
+      }
     }
 
     // Save to localStorage every 2 seconds
@@ -668,6 +723,12 @@ export default function InPageVideoPlayer({
   }, [hasPrev, onEpisodeChange, episodes, currentIndex, showToast]);
 
   const handleEnded = useCallback(() => {
+    // 1. Live automatic progress synchronization to AniList & MAL
+    if (completionSyncedEpisodeRef.current !== episode?.id && episode?.id) {
+      completionSyncedEpisodeRef.current = episode.id;
+      triggerLiveProgressSync(true, lastKnownDurationRef.current, lastKnownDurationRef.current);
+    }
+
     const anilistToken = typeof window !== 'undefined' ? localStorage.getItem("anilist_token") : null;
     if (anilistToken && anilistId && episode?.id && lastAniListSyncEpRef.current !== episode.id) {
       lastAniListSyncEpRef.current = episode.id;
@@ -707,7 +768,7 @@ export default function InPageVideoPlayer({
     if (autoplayNext && hasNext) {
       handleNext();
     }
-  }, [anilistId, episode, autoplayNext, hasNext, handleNext, showToast, currentUser, authUser, initialUser, animeSlug, animeTitle, animePosterImage, supabase, episodes, animeId]);
+  }, [anilistId, episode, autoplayNext, hasNext, handleNext, showToast, currentUser, authUser, initialUser, animeSlug, animeTitle, animePosterImage, supabase, episodes, animeId, triggerLiveProgressSync]);
 
   const toggleFullscreen = useCallback(() => {
     if (typeof document === "undefined") return;
@@ -1269,6 +1330,13 @@ export default function InPageVideoPlayer({
                 </div>
               </div>
             ) : null}
+
+            {/* Live Progress Sync HUD Toast Overlay */}
+            <SyncHudToast 
+              result={liveSyncResult} 
+              onDismiss={() => setLiveSyncResult(null)} 
+              onRetry={handleRetrySync} 
+            />
           </div>
         </div>
 

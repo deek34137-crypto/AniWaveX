@@ -274,7 +274,7 @@ export default function ContinueWatchingRow() {
             >
               {/* Media & Title Link */}
               <Link
-                href={`/anime/${item.animeSlug}`}
+                href={`/anime/${item.animeSlug}${item.episodeId ? `?ep=${item.episodeId}` : ""}`}
                 className="block relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer"
                 aria-label={`Continue watching ${item.animeTitle} Episode ${item.episodeId}`}
               >
@@ -286,26 +286,28 @@ export default function ContinueWatchingRow() {
                 />
 
                 {/* Dark Gradient Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent pointer-events-none" />
 
-                {/* Top Badge */}
-                <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
-                  <span className="px-2 py-0.5 bg-blue-600/90 text-white text-[10px] font-extrabold uppercase tracking-wider rounded-md backdrop-blur-md shadow-sm">
+                {/* Top Badge (Matches watchlist badge style) */}
+                <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border shadow-md backdrop-blur-md bg-blue-600/20 text-blue-400 border-blue-500/30">
                     EP {item.episodeId}
                   </span>
                 </div>
 
                 {/* Play Hover Button */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                  <div className="w-12 h-12 bg-blue-600/90 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                    <Play className="w-5 h-5 fill-current ml-0.5" />
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-600/90 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
                   </div>
                 </div>
 
                 {/* Bottom Title & Progress Info Overlay */}
-                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
+                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent pointer-events-none">
                   <h3
-                    className="text-white font-bold text-sm line-clamp-1 mb-1 group-hover:text-blue-400 transition-colors drop-shadow-md"
+                    className="text-white font-bold text-sm truncate mb-1 group-hover:text-blue-400 transition-colors drop-shadow-md"
                     title={item.animeTitle}
                   >
                     {item.animeTitle}

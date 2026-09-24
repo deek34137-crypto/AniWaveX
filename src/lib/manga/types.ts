@@ -25,6 +25,7 @@ export interface MangaChapter {
   chapterNumber: number;
   title: string;
   releaseDate?: string;
+  updatedAt?: string;
   scanlator?: string;
   source: string;
 }
@@ -36,5 +37,6 @@ export interface MangaChapterPages {
   pages: {
     pageNumber: number;
     imageUrl: string;
+    imageUrlSaver?: string;
   }[];
 }

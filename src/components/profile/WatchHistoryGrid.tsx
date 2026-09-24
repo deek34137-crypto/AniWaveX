@@ -163,54 +163,48 @@ export default function WatchHistoryGrid({
         <Star className="w-6 h-6 text-yellow-400" />
         Continue Watching
       </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
         {visibleItems.map((item) => {
           const resolvedDuration = localMeta[item.id]?.duration || item.duration_seconds || 1440;
           const resolvedProgress = localMeta[item.id]?.progress || item.progress_seconds || 0;
           const progressPercent = Math.min(100, Math.max(5, (resolvedProgress / resolvedDuration) * 100));
 
           return (
-            <Link 
-              href={`/anime/${item.anime_slug}${item.last_episode_watched ? `?ep=${item.last_episode_watched}` : ""}`} 
+            <div 
               key={item.id}
-              className="group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105"
+              className="group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 transition-transform duration-300 hover:scale-105 shadow-lg"
             >
-              <div className="aspect-[16/9] relative">
+              {/* Media & Title Link */}
+              <Link 
+                href={`/anime/${item.anime_slug}${item.last_episode_watched ? `?ep=${item.last_episode_watched}` : ""}`} 
+                className="block aspect-[2/3] relative cursor-pointer"
+                aria-label={`Continue watching ${item.anime_title} Episode ${item.last_episode_watched || 1}`}
+              >
                 <AnimeImage 
                   src={item.poster_image} 
                   alt={item.anime_title} 
-                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
                   className="object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent pointer-events-none" />
                 
                 {/* Play Overlay */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="w-12 h-12 bg-blue-600/90 rounded-full flex items-center justify-center backdrop-blur-sm">
-                    <svg className="w-5 h-5 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <div className="w-14 h-14 bg-blue-600/90 rounded-full flex items-center justify-center backdrop-blur-sm shadow-xl">
+                    <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M8 5v14l11-7z" />
                     </svg>
                   </div>
                 </div>
-
-                {/* Delete Button (only if owner) */}
-                {isOwner && (
-                  <button
-                    onClick={(e) => handleDelete(e, item.id)}
-                    className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-red-500/90 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all border border-white/10"
-                    title="Remove from history"
-                  >
-                    <Trash2 className="w-4 h-4 text-white" />
-                  </button>
-                )}
                 
-                <div className="absolute bottom-0 left-0 w-full p-4">
+                {/* Bottom Title & Progress Info Overlay */}
+                <div className="absolute bottom-0 left-0 w-full p-3 sm:p-4 pointer-events-none bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent">
                   <h3 className="text-white font-bold text-sm truncate" title={item.anime_title}>
                     {item.anime_title}
                   </h3>
                   <div className="flex items-center justify-between text-xs mt-1">
-                    <p className="text-blue-400 font-semibold">
-                      Episode {item.last_episode_watched}
+                    <p className="text-blue-400 font-semibold text-[11px]">
+                      Episode {item.last_episode_watched || 1}
                     </p>
                     {resolvedProgress > 0 ? (
                       <span className="text-slate-400 font-mono text-[11px]">
@@ -229,8 +223,28 @@ export default function WatchHistoryGrid({
                     />
                   </div>
                 ) : null}
+              </Link>
+
+              {/* Status / Episode Badge (matches Watchlist badge style) */}
+              <div className="absolute top-2 left-2 z-20 pointer-events-none">
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border shadow-md backdrop-blur-md bg-blue-600/20 text-blue-400 border-blue-500/30">
+                  Episode {item.last_episode_watched || 1}
+                </span>
               </div>
-            </Link>
+
+              {/* Delete Button (only if owner) */}
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={(e) => handleDelete(e, item.id)}
+                  className="absolute top-2 right-2 z-20 p-1.5 bg-black/60 hover:bg-red-500/90 text-white rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all border border-white/10"
+                  title="Remove from history"
+                  aria-label={`Remove ${item.anime_title} from history`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           );
         })}
       </div>

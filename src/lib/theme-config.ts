@@ -341,9 +341,9 @@ export const THEMES: ThemeDefinition[] = [
     description: 'Crisp snow white with modern sapphire accents',
     icon: '☀️',
     colors: {
-      background: '#f8fafc',
-      card: 'rgba(255, 255, 255, 0.85)',
-      cardBorder: 'rgba(15, 23, 42, 0.08)',
+      background: '#f1f5f9',
+      card: '#ffffff',
+      cardBorder: 'rgba(15, 23, 42, 0.12)',
       primary: '#2563eb',
       primaryHover: '#1d4ed8',
       muted: '#64748b',
@@ -358,8 +358,8 @@ export const THEMES: ThemeDefinition[] = [
     icon: '🌷',
     colors: {
       background: '#fdf2f8',
-      card: 'rgba(255, 255, 255, 0.85)',
-      cardBorder: 'rgba(244, 114, 182, 0.2)',
+      card: '#ffffff',
+      cardBorder: 'rgba(219, 39, 119, 0.25)',
       primary: '#db2777',
       primaryHover: '#be185d',
       muted: '#9d7b88',
@@ -373,13 +373,13 @@ export const THEMES: ThemeDefinition[] = [
     description: 'Creamy green tea garden with calming sage tones',
     icon: '🍵',
     colors: {
-      background: '#f2f7f4',
-      card: 'rgba(255, 255, 255, 0.85)',
-      cardBorder: 'rgba(34, 197, 94, 0.15)',
+      background: '#f0fdf4',
+      card: '#ffffff',
+      cardBorder: 'rgba(22, 163, 74, 0.22)',
       primary: '#16a34a',
       primaryHover: '#15803d',
       muted: '#5e7164',
-      foreground: '#143820',
+      foreground: '#14532d',
     },
   },
   {
@@ -390,12 +390,12 @@ export const THEMES: ThemeDefinition[] = [
     icon: '🌬️',
     colors: {
       background: '#f0f9ff',
-      card: 'rgba(255, 255, 255, 0.85)',
-      cardBorder: 'rgba(14, 165, 233, 0.15)',
+      card: '#ffffff',
+      cardBorder: 'rgba(2, 132, 199, 0.22)',
       primary: '#0284c7',
       primaryHover: '#0369a1',
       muted: '#5f7b8c',
-      foreground: '#082f49',
+      foreground: '#0c4a6e',
     },
   },
 
@@ -409,7 +409,7 @@ export const THEMES: ThemeDefinition[] = [
     colors: {
       background: '#e4e4e7',
       card: '#ffffff',
-      cardBorder: '#18181b',
+      cardBorder: '#27272a',
       primary: '#dc2626',
       primaryHover: '#b91c1c',
       muted: '#52525b',
@@ -474,9 +474,12 @@ export function applyThemeToDOM(themeId: string, isUltraLite = false, isReduceMo
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
   const theme = THEMES.find((t) => t.id === themeId) || THEMES[0];
+  const isLight = theme.category === 'light' || theme.id === 'brutalist-concrete';
 
-  // Set data-theme attribute
+  // Set data-theme and data-theme-mode attributes
   root.setAttribute('data-theme', theme.id);
+  root.setAttribute('data-theme-mode', isLight ? 'light' : 'dark');
+  root.style.colorScheme = isLight ? 'light' : 'dark';
 
   // Set CSS custom properties
   root.style.setProperty('--theme-background', theme.colors.background);

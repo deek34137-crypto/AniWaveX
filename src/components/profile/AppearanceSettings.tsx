@@ -146,14 +146,14 @@ function ThemeButton({
     <button
       type="button"
       onClick={onSelect}
-      className={`relative flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all ${
+      className={`theme-card-btn relative flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all ${
         isSelected
-          ? "border-cyan-400 bg-white/10 shadow-md shadow-cyan-500/10"
-          : "border-white/5 hover:border-white/20 bg-slate-950/60 hover:bg-slate-950/90"
+          ? "border-blue-500 bg-blue-500/15 shadow-md ring-1 ring-blue-500"
+          : "border-white/10 hover:border-white/20 bg-slate-950/60 hover:bg-slate-950/90"
       }`}
     >
       <div
-        className="w-7 h-7 rounded-lg shrink-0 border border-white/20 flex items-center justify-center text-xs"
+        className="w-7 h-7 rounded-lg shrink-0 border border-white/20 flex items-center justify-center text-xs shadow-sm"
         style={{ backgroundColor: theme.colors.background }}
       >
         <span>{theme.icon}</span>
@@ -161,14 +161,14 @@ function ThemeButton({
 
       <div className="flex-1 min-w-0">
         <p className="text-xs font-bold text-white truncate">{theme.name}</p>
-        <div className="flex items-center gap-1 mt-1">
-          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.colors.primary }} />
-          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.colors.card }} />
+        <div className="flex items-center gap-1.5 mt-1">
+          <div className="w-2.5 h-2.5 rounded-full border border-black/10" style={{ backgroundColor: theme.colors.primary }} />
+          <div className="w-2.5 h-2.5 rounded-full border border-black/10" style={{ backgroundColor: theme.colors.card }} />
         </div>
       </div>
 
       {isSelected && (
-        <div className="shrink-0 p-1 rounded-full bg-cyan-500 text-white">
+        <div className="shrink-0 p-1 rounded-full bg-blue-600 text-white shadow-sm">
           <Check className="w-3 h-3 stroke-[3]" />
         </div>
       )}

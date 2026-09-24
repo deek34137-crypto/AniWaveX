@@ -49,7 +49,7 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   DYNAMIC THEME PROPAGATION
+   DYNAMIC THEME PROPAGATION (Dark, Light, and Special Themes)
    Applies selected theme colors to background, cards, borders, and buttons
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -98,6 +98,117 @@ html[data-theme]:not([data-theme="default"]) .text-blue-400 {
 
 html[data-theme]:not([data-theme="default"]) .border-blue-500\/30 {
   border-color: var(--theme-primary) !important;
+}
+
+/* ── Light Mode Color Inversion & Contrast Guard ── */
+html[data-theme-mode="light"] {
+  color-scheme: light;
+}
+
+html[data-theme-mode="light"] main h1,
+html[data-theme-mode="light"] main h2,
+html[data-theme-mode="light"] main h3,
+html[data-theme-mode="light"] main h4,
+html[data-theme-mode="light"] main h5,
+html[data-theme-mode="light"] main h6 {
+  color: var(--theme-foreground) !important;
+}
+
+/* Transform light text inside main area to dark foreground, protecting colored buttons */
+html[data-theme-mode="light"] main .text-white:not([class*="bg-blue-"]):not([class*="bg-primary"]):not([class*="bg-red-"]):not([class*="bg-amber-"]):not([class*="bg-emerald-"]):not([class*="bg-purple-"]):not([class*="bg-cyan-"]):not(.keep-white) {
+  color: var(--theme-foreground) !important;
+}
+
+html[data-theme-mode="light"] main .text-slate-100,
+html[data-theme-mode="light"] main .text-slate-200,
+html[data-theme-mode="light"] main .text-slate-300 {
+  color: var(--theme-foreground) !important;
+}
+
+html[data-theme-mode="light"] main .text-slate-400,
+html[data-theme-mode="light"] main .text-slate-500 {
+  color: var(--theme-muted) !important;
+}
+
+/* Retain crisp white text on colored/accent buttons */
+html[data-theme-mode="light"] button.bg-blue-600,
+html[data-theme-mode="light"] button.bg-blue-600 *,
+html[data-theme-mode="light"] a.bg-blue-600,
+html[data-theme-mode="light"] a.bg-blue-600 *,
+html[data-theme-mode="light"] .bg-blue-600 *,
+html[data-theme-mode="light"] .bg-red-600 *,
+html[data-theme-mode="light"] .bg-red-500 *,
+html[data-theme-mode="light"] .bg-amber-500 * {
+  color: #ffffff !important;
+}
+
+/* Form inputs in light mode */
+html[data-theme-mode="light"] main input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme-mode="light"] main textarea,
+html[data-theme-mode="light"] main select {
+  background-color: #ffffff !important;
+  color: var(--theme-foreground) !important;
+  border-color: var(--theme-card-border) !important;
+}
+
+html[data-theme-mode="light"] main input::placeholder,
+html[data-theme-mode="light"] main textarea::placeholder {
+  color: var(--theme-muted) !important;
+}
+
+/* Cards elevation & shadow in light mode */
+html[data-theme-mode="light"] .bg-slate-900\/80,
+html[data-theme-mode="light"] .bg-slate-900\/70,
+html[data-theme-mode="light"] .bg-slate-900\/60,
+html[data-theme-mode="light"] .bg-slate-900\/50,
+html[data-theme-mode="light"] .bg-slate-900\/40,
+html[data-theme-mode="light"] .bg-slate-900 {
+  background-color: var(--theme-card) !important;
+  border-color: var(--theme-card-border) !important;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme-mode="light"] main .bg-slate-800 {
+  background-color: rgba(15, 23, 42, 0.05) !important;
+  color: var(--theme-foreground) !important;
+}
+
+html[data-theme-mode="light"] main .border-white\/10,
+html[data-theme-mode="light"] main .border-white\/5,
+html[data-theme-mode="light"] main .border-white\/20,
+html[data-theme-mode="light"] main .border-slate-800 {
+  border-color: var(--theme-card-border) !important;
+}
+
+/* Theme selector cards in light mode */
+html[data-theme-mode="light"] .theme-card-btn {
+  background-color: #ffffff !important;
+  border-color: var(--theme-card-border) !important;
+}
+
+html[data-theme-mode="light"] .theme-card-btn:hover {
+  background-color: rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme-mode="light"] .theme-card-btn p {
+  color: var(--theme-foreground) !important;
+}
+
+/* Brutalist Concrete Special Theme */
+html[data-theme="brutalist-concrete"] main .rounded-2xl,
+html[data-theme="brutalist-concrete"] main .rounded-3xl,
+html[data-theme="brutalist-concrete"] .theme-card-btn {
+  border-width: 2px !important;
+  border-color: #18181b !important;
+  box-shadow: 3px 3px 0px 0px #18181b !important;
+}
+
+html[data-theme="brutalist-concrete"] button.bg-blue-600,
+html[data-theme="brutalist-concrete"] .bg-blue-600 {
+  background-color: #dc2626 !important;
+  border: 2px solid #18181b !important;
+  box-shadow: 2px 2px 0px 0px #18181b !important;
+  color: #ffffff !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
