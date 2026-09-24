@@ -37,7 +37,7 @@ export const MAL_CLIENT_ID = process.env.NEXT_PUBLIC_MAL_CLIENT_ID || "073be04d9
  */
 export function getAniListAuthUrl(redirectUri?: string): string {
   const uri = redirectUri || (typeof window !== "undefined" ? `${window.location.origin}/profile` : "https://aniwavex.bond/profile");
-  return `https://anilist.co/api/v2/oauth/authorize?client_id=${ANILIST_CLIENT_ID}&redirect_uri=${encodeURIComponent(uri)}&response_type=token`;
+  return `https://anilist.co/api/v2/oauth/authorize?client_id=${ANILIST_CLIENT_ID}&redirect_uri=${encodeURIComponent(uri)}&response_type=code`;
 }
 
 /**

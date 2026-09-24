@@ -92,8 +92,34 @@ export default function ProfileClient({
         }
       }
 
-      // Auto-capture MyAnimeList OAuth code (?code=...&state=aniwavex_mal_auth)
       const urlParams = new URLSearchParams(window.location.search);
+
+      // Auto-capture AniList OAuth code (?code=...)
+      const anilistCode = urlParams.get("code");
+      const stateParam = urlParams.get("state");
+      if (anilistCode && stateParam !== "aniwavex_mal_auth") {
+        fetch("/api/sync/anilist/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: anilistCode,
+            redirect_uri: `${window.location.origin}/profile`,
+          }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.access_token) {
+              localStorage.setItem(ANILIST_TOKEN_KEY, data.access_token);
+              setShowTwoWaySyncModal(true);
+            }
+          })
+          .catch((err) => console.error("AniList token exchange failed:", err))
+          .finally(() => {
+            window.history.replaceState(null, "", window.location.pathname);
+          });
+      }
+
+      // Auto-capture MyAnimeList OAuth code (?code=...&state=aniwavex_mal_auth)
       const malCode = urlParams.get("code");
       const malState = urlParams.get("state");
       if (malCode && malState === "aniwavex_mal_auth") {
