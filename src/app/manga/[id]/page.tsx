@@ -17,7 +17,7 @@ export default async function MangaDetailPage({
     notFound();
   }
 
-  const chapters = await getMangaChapters(manga.title, manga.id);
+  const chapters = await getMangaChapters(manga.title, manga.id, manga.romajiTitle);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-32">

@@ -1,38 +1,43 @@
 /**
- * Manga Service — powered by MangaDex official public API (api.mangadex.org)
- * No scraping. No fake IDs. No regex. Real chapter pages every time.
+ * Manga Service — powered by mangahub-backend (Cloudflare Worker)
+ *
+ * Backend at https://mangahub-backend.deek34137.workers.dev aggregates
+ * 13 providers: WeebCentral, MangaDex, ComicK, AsuraScans, MangaKatana, etc.
  *
  * Flow:
- *  1. Catalog / Search  → AniList GraphQL  (metadata, covers, trending)
- *  2. Chapter list       → MangaDex /manga/{mdexId}/feed
- *  3. Chapter pages      → MangaDex /at-home/server/{chapterId}
- *
- * AniList ID ↔ MangaDex ID bridge: AniList media.idMal + MangaDex title search
+ *  1. Catalog / Search / Details → AniList GraphQL (metadata, covers)
+ *  2. Chapter list               → backend /api/search + /api/chapters (multi-provider)
+ *  3. Chapter pages              → backend /api/pages
  */
 
 import { MangaItem, MangaChapter, MangaChapterPages } from './types';
 
-const MDEX = 'https://api.mangadex.org';
-const UA = 'AniWaveX/1.0 (https://aniwavex.bond)';
+const BACKEND = 'https://mangahub-backend.deek34137.workers.dev';
+
+// Certified providers sorted by catalog completeness and chapter availability
+const CHAPTER_PROVIDERS = [
+  'weebcentral',
+  'mangakatana',
+  'mangadex',
+  'mangaread',
+  'mgeko',
+  'novelcool',
+  'flamecomics',
+  'asurascan',
+];
 
 /* ───────────────────────────────────────────────
-   1. AniList — Catalog, search, trending, details
+   AniList — Catalog metadata (covers, trending, details)
 ─────────────────────────────────────────────── */
 
-const ANILIST_GQL_FIELDS = `
-  id
-  title { english romaji native }
+const GQL_FIELDS = `
+  id title { english romaji native }
   coverImage { extraLarge large }
-  bannerImage
-  description
-  status
-  format
-  averageScore
-  genres
-  chapters
+  bannerImage description status format
+  averageScore genres chapters
 `;
 
-async function queryAniList(query: string, variables: Record<string, any>): Promise<any> {
+async function anilistQuery(query: string, variables: Record<string, any>): Promise<any> {
   try {
     const res = await fetch('https://graphql.anilist.co', {
       method: 'POST',
@@ -40,8 +45,7 @@ async function queryAniList(query: string, variables: Record<string, any>): Prom
       body: JSON.stringify({ query, variables }),
       next: { revalidate: 300 },
     });
-    if (!res.ok) return null;
-    return await res.json();
+    return res.ok ? await res.json() : null;
   } catch {
     return null;
   }
@@ -49,24 +53,24 @@ async function queryAniList(query: string, variables: Record<string, any>): Prom
 
 export async function searchMangaList(query: string, limit = 20): Promise<MangaItem[]> {
   if (!query.trim()) return getTrendingMangaList(limit);
-  const json = await queryAniList(
-    `query ($s: String, $l: Int) { Page(page:1,perPage:$l){ media(search:$s,type:MANGA,sort:SEARCH_MATCH){ ${ANILIST_GQL_FIELDS} } } }`,
+  const json = await anilistQuery(
+    `query ($s:String,$l:Int){Page(page:1,perPage:$l){media(search:$s,type:MANGA,sort:SEARCH_MATCH){${GQL_FIELDS}}}}`,
     { s: query.trim(), l: limit }
   );
   return (json?.data?.Page?.media || []).map(formatMangaItem);
 }
 
 export async function getTrendingMangaList(limit = 24): Promise<MangaItem[]> {
-  const json = await queryAniList(
-    `query ($l: Int) { Page(page:1,perPage:$l){ media(type:MANGA,sort:TRENDING_DESC){ ${ANILIST_GQL_FIELDS} } } }`,
+  const json = await anilistQuery(
+    `query ($l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC){${GQL_FIELDS}}}}`,
     { l: limit }
   );
   return (json?.data?.Page?.media || []).map(formatMangaItem);
 }
 
 export async function getMangaDetails(id: string | number): Promise<MangaItem | null> {
-  const json = await queryAniList(
-    `query ($id: Int) { Media(id:$id,type:MANGA){ ${ANILIST_GQL_FIELDS} } }`,
+  const json = await anilistQuery(
+    `query ($id:Int){Media(id:$id,type:MANGA){${GQL_FIELDS}}}`,
     { id: Number(id) }
   );
   const m = json?.data?.Media;
@@ -74,127 +78,191 @@ export async function getMangaDetails(id: string | number): Promise<MangaItem | 
 }
 
 /* ───────────────────────────────────────────────
-   2. MangaDex — Chapter list
+   Backend — Search across all providers
 ─────────────────────────────────────────────── */
 
-/**
- * Find a MangaDex manga ID by title string.
- * Returns the best matching MangaDex UUID.
- */
-async function findMangaDexId(title: string): Promise<string | null> {
+interface BackendSearchResult {
+  id: string;
+  title: string;
+  url: string;
+  coverImage?: string;
+  provider: string;
+  altTitles?: string[];
+}
+
+async function backendSearch(query: string): Promise<BackendSearchResult[]> {
+  if (!query.trim()) return [];
   try {
-    const params = new URLSearchParams({
-      title,
-      limit: '5',
-      'order[relevance]': 'desc',
-      'availableTranslatedLanguage[]': 'en',
-    });
-    const res = await fetch(`${MDEX}/manga?${params}`, {
-      headers: { 'User-Agent': UA },
+    const res = await fetch(`${BACKEND}/api/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query.trim() }),
       next: { revalidate: 3600 },
     });
-    if (!res.ok) return null;
+    if (!res.ok) return [];
     const data = await res.json();
-    const results: any[] = data?.data || [];
-    if (results.length === 0) return null;
-    return results[0].id as string;
+    return (data?.results || []) as BackendSearchResult[];
   } catch {
-    return null;
+    return [];
   }
-}
-
-/**
- * Fetch English chapters for a manga from MangaDex.
- * Returns chapters sorted ascending by chapter number.
- */
-export async function getMangaChapters(title: string, _mangaId?: string | number): Promise<MangaChapter[]> {
-  const mdexId = await findMangaDexId(title);
-  if (!mdexId) return buildFallbackChapters();
-
-  try {
-    const params = new URLSearchParams({
-      'translatedLanguage[]': 'en',
-      limit: '100',
-      'order[chapter]': 'asc',
-      'includes[]': 'scanlation_group',
-    });
-    const res = await fetch(`${MDEX}/manga/${mdexId}/feed?${params}`, {
-      headers: { 'User-Agent': UA },
-      next: { revalidate: 900 },
-    });
-    if (!res.ok) return buildFallbackChapters();
-    const data = await res.json();
-    const chapters: any[] = data?.data || [];
-    if (chapters.length === 0) return buildFallbackChapters();
-
-    const seen = new Set<string>();
-    return chapters
-      .filter((ch: any) => {
-        const num = ch.attributes?.chapter;
-        if (!num || seen.has(num)) return false;
-        seen.add(num);
-        return true;
-      })
-      .map((ch: any): MangaChapter => ({
-        id: ch.id,                                         // real MangaDex UUID
-        chapterNumber: parseFloat(ch.attributes.chapter),
-        title: ch.attributes.title || `Chapter ${ch.attributes.chapter}`,
-        source: 'MangaDex',
-        updatedAt: ch.attributes.updatedAt,
-      }))
-      .sort((a, b) => a.chapterNumber - b.chapterNumber);
-  } catch {
-    return buildFallbackChapters();
-  }
-}
-
-function buildFallbackChapters(): MangaChapter[] {
-  // Only used if both MangaDex fails — still real-looking placeholder (no pages though)
-  return [];
 }
 
 /* ───────────────────────────────────────────────
-   3. MangaDex — Chapter pages (MangaDex@Home)
+   Backend — Chapters (finds richest provider)
 ─────────────────────────────────────────────── */
 
-/**
- * Fetch image URLs for a given MangaDex chapter UUID.
- * Uses MangaDex@Home endpoint — official, always returns real URLs.
- */
+interface BackendChapter {
+  id: string;
+  number: string;
+  numberValue: number;
+  title: string;
+  url: string;
+  language: string;
+  provider: string;
+}
+
+function cleanChapterTitle(rawTitle: string, num: number | string): string {
+  if (!rawTitle) return `Chapter ${num}`;
+  const firstLine = rawTitle.split('\n')[0].replace(/\s+/g, ' ').trim();
+  return firstLine || `Chapter ${num}`;
+}
+
+export async function getMangaChapters(
+  title: string,
+  _mangaId?: string | number,
+  romajiTitle?: string
+): Promise<MangaChapter[]> {
+  // 1. Search with title
+  let searchResults = await backendSearch(title);
+
+  // 2. If no results or very few, try romaji title
+  if (romajiTitle && romajiTitle !== title) {
+    const romajiResults = await backendSearch(romajiTitle);
+    const seen = new Set(searchResults.map((r) => `${r.provider}:${r.id}`));
+    for (const r of romajiResults) {
+      const key = `${r.provider}:${r.id}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        searchResults.push(r);
+      }
+    }
+  }
+
+  if (searchResults.length === 0) return [];
+
+  let bestChapters: MangaChapter[] = [];
+
+  // 3. Try each provider in priority order
+  for (const providerId of CHAPTER_PROVIDERS) {
+    const matches = searchResults.filter((r) => r.provider === providerId);
+    for (const match of matches) {
+      try {
+        const res = await fetch(`${BACKEND}/api/chapters`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: match.provider,
+            id: match.id,
+            url: match.url,
+            mangaId: match.id,
+            mangaUrl: match.url,
+          }),
+          next: { revalidate: 900 },
+        });
+
+        if (!res.ok) continue;
+        const data = await res.json();
+        const rawChapters: BackendChapter[] = data?.chapters || [];
+        if (rawChapters.length === 0) continue;
+
+        const formatted = rawChapters
+          .map((ch): MangaChapter => ({
+            id: JSON.stringify({
+              provider: match.provider,
+              chapterId: ch.id,
+              chapterUrl: ch.url,
+            }),
+            chapterNumber: ch.numberValue ?? parseFloat(ch.number) ?? 0,
+            title: cleanChapterTitle(ch.title, ch.number ?? ch.numberValue),
+            source: data.providerName || match.provider,
+          }))
+          .sort((a, b) => a.chapterNumber - b.chapterNumber);
+
+        // If provider has significant chapters (>= 10), use it immediately
+        if (formatted.length >= 10) {
+          return formatted;
+        }
+
+        // Otherwise keep the candidate with the highest chapter count
+        if (formatted.length > bestChapters.length) {
+          bestChapters = formatted;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  // 4. Return the best chapters found
+  return bestChapters;
+}
+
+/* ───────────────────────────────────────────────
+   Backend — Chapter Pages
+─────────────────────────────────────────────── */
+
+interface BackendPage {
+  index: number;
+  url: string;
+  headers?: Record<string, string>;
+  provider: string;
+}
+
 export async function getChapterPages(chapterId: string): Promise<MangaChapterPages> {
   const empty: MangaChapterPages = { chapterId, chapterNumber: 0, title: '', pages: [] };
 
-  // Guard against old fake `ch-N` IDs
-  if (!chapterId || chapterId.startsWith('ch-')) {
-    return empty;
+  if (!chapterId || chapterId.startsWith('ch-')) return empty;
+
+  // chapterId is a JSON envelope: { provider, chapterId, chapterUrl }
+  let envelope: { provider: string; chapterId: string; chapterUrl: string };
+  try {
+    envelope = JSON.parse(chapterId);
+  } catch {
+    // Fallback: treat as raw MangaDex UUID
+    envelope = {
+      provider: 'mangadex',
+      chapterId,
+      chapterUrl: `https://mangadex.org/chapter/${chapterId}`,
+    };
   }
 
   try {
-    const res = await fetch(`${MDEX}/at-home/server/${chapterId}`, {
-      headers: { 'User-Agent': UA },
-      next: { revalidate: 60 },
+    const res = await fetch(`${BACKEND}/api/pages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: envelope.provider,
+        chapterId: envelope.chapterId,
+        chapterUrl: envelope.chapterUrl,
+        id: envelope.chapterId,
+        url: envelope.chapterUrl,
+      }),
+      next: { revalidate: 300 },
     });
+
     if (!res.ok) return empty;
     const data = await res.json();
-
-    const baseUrl: string = data.baseUrl;
-    const hash: string = data.chapter?.hash;
-    const files: string[] = data.chapter?.data || [];     // full quality
-    const filesSaver: string[] = data.chapter?.dataSaver || []; // compressed
-
-    if (!baseUrl || !hash || files.length === 0) return empty;
-
-    const pages = files.map((filename: string, i: number) => ({
-      pageNumber: i + 1,
-      imageUrl: `${baseUrl}/data/${hash}/${filename}`,
-      imageUrlSaver: filesSaver[i] ? `${baseUrl}/data-saver/${hash}/${filesSaver[i]}` : undefined,
-    }));
+    const pages: BackendPage[] = data?.pages || [];
 
     return {
       chapterId,
       chapterNumber: 0,
       title: '',
-      pages,
+      pages: pages.map((p) => ({
+        pageNumber: p.index,
+        imageUrl: p.url,
+        referer: p.headers?.referer,
+      })),
     };
   } catch {
     return empty;

@@ -38,5 +38,6 @@ export interface MangaChapterPages {
     pageNumber: number;
     imageUrl: string;
     imageUrlSaver?: string;
+    referer?: string;
   }[];
 }

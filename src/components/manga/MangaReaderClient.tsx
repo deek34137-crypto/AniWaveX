@@ -11,7 +11,7 @@ interface ReaderPageProps {
 }
 
 export default function MangaReaderClient({ mangaId, chapterId, chapterNumber }: ReaderPageProps) {
-  const [pages, setPages] = useState<{ pageNumber: number; imageUrl: string }[]>([]);
+  const [pages, setPages] = useState<{ pageNumber: number; imageUrl: string; referer?: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentVisiblePage, setCurrentVisiblePage] = useState(1);
@@ -105,7 +105,8 @@ export default function MangaReaderClient({ mangaId, chapterId, chapterNumber }:
 
         {!isLoading &&
           pages.map((p, index) => {
-            const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(p.imageUrl)}`;
+            const refererQuery = p.referer ? `&referer=${encodeURIComponent(p.referer)}` : "";
+            const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(p.imageUrl)}${refererQuery}`;
             return (
               <div
                 key={p.pageNumber}
