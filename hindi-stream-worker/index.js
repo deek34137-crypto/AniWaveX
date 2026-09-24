@@ -362,7 +362,7 @@ async function extractEpisodeStreams(seriesSlug, epIdentifier, requestUrl) {
         serverUrl = iframeSrc[1];
       }
 
-      if (serverUrl && serverUrl.startsWith("http")) {
+      if (serverUrl && serverUrl.startsWith("http") && !serverUrl.includes("short.ink")) {
         const isM3U8 = serverUrl.includes(".m3u8");
         streams.push({
           server: `${rawServerName || "ToonStream"} (Hindi Dub)`,
@@ -385,13 +385,15 @@ async function extractEpisodeStreams(seriesSlug, epIdentifier, requestUrl) {
   ];
   const uniqueServers = [...new Set(rawLinks)].filter(
     (l) =>
+      !/\.(jpe?g|png|webp|gif|svg|ico)$/i.test(l.split("?")[0]) &&
       !l.includes("youtube.com") &&
       !l.includes("sharethis.com") &&
       !l.includes("a-ads.com") &&
       !l.includes("chaty") &&
       !l.includes("facebook.com") &&
       !l.includes("twitter.com") &&
-      !l.includes("google.com")
+      !l.includes("google.com") &&
+      !l.includes("short.ink")
   );
 
   for (const serverUrl of uniqueServers) {

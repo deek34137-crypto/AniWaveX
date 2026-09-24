@@ -146,7 +146,7 @@ function extractWorkerSources(
             }
           }
         }
-      } else if (s.type === 'embed' && !s.url.includes('animeapps.top')) {
+      } else if (s.type === 'embed' && !s.url.includes('animeapps.top') && !s.url.includes('short.ink')) {
         const serverName = s.server ? `${providerLabel} (${s.server})` : `${providerLabel} Embed`;
         sources.push({
           url: s.url,
@@ -219,6 +219,7 @@ function isPlayableStream(result: any): boolean {
 }
 
 function isMegaOrVidstream(s: any): boolean {
+  if (!s || s.isHindi) return false;
   const q = (s?.quality || '').toLowerCase();
   const u = (s?.url || '').toLowerCase();
   const srv = (s?.server || '').toLowerCase();
@@ -371,7 +372,7 @@ async function fetchHindiWorkerStream(
 
         const sources: any[] = [];
         for (const s of streamList) {
-          if (!s.url) continue;
+          if (!s.url || (typeof s.url === 'string' && s.url.includes('short.ink'))) continue;
           const rawUrl = s.url;
           const isM3U8 = s.isM3U8 === true || (typeof rawUrl === 'string' && rawUrl.includes('.m3u8'));
           const resolvedUrl = (isM3U8 && typeof rawUrl === 'string' && rawUrl.includes('workers.dev'))
@@ -386,7 +387,7 @@ async function fetchHindiWorkerStream(
           });
         }
 
-        if (sources.length === 0 && data.stream_url) {
+        if (sources.length === 0 && data.stream_url && !data.stream_url.includes('short.ink')) {
           const rawUrl = data.stream_url;
           const isM3U8 = typeof rawUrl === 'string' && rawUrl.includes('.m3u8');
           const resolvedUrl = (isM3U8 && typeof rawUrl === 'string' && rawUrl.includes('workers.dev'))
@@ -530,7 +531,7 @@ async function fetchLocalHindiStream(
           serverUrl = iframeSrc[1];
         }
 
-        if (serverUrl && serverUrl.startsWith("http")) {
+        if (serverUrl && serverUrl.startsWith("http") && !serverUrl.includes("short.ink")) {
           const isM3U8 = serverUrl.includes(".m3u8");
           sources.push({
             server: `${serverName || "ToonStream"} (Hindi Dub)`,
@@ -546,7 +547,15 @@ async function fetchLocalHindiStream(
     // Also look for standard iframes on the watch page
     const iframes = [...epHtml.matchAll(/<iframe[^>]+src=["'](https?:\/\/[^"']+)["']/gi)].map(m => m[1]);
     for (const ifr of iframes) {
-      if (ifr.includes("a-ads") || ifr.includes("chaty") || ifr.includes("google") || ifr.includes("facebook") || ifr.includes("twitter")) continue;
+      if (
+        /\.(jpe?g|png|webp|gif|svg|ico)$/i.test(ifr.split("?")[0]) ||
+        ifr.includes("a-ads") ||
+        ifr.includes("chaty") ||
+        ifr.includes("google") ||
+        ifr.includes("facebook") ||
+        ifr.includes("twitter") ||
+        ifr.includes("short.ink")
+      ) continue;
       if (!sources.some(s => s.url === ifr)) {
         const label = ifr.includes("ruby") ? "Ruby" : ifr.includes("wish") ? "Streamwish" : "External Embed";
         sources.push({

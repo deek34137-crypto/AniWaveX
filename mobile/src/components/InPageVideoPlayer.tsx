@@ -17,7 +17,12 @@ interface StreamSource {
 
 function isValidEmbedUrl(url: string | null | undefined): boolean {
   if (!url || typeof url !== "string") return false;
-  if (url.startsWith("/api/proxy") || url.includes(".m3u8") || url.includes("animeapps.top")) {
+  if (
+    url.startsWith("/api/proxy") || 
+    url.includes(".m3u8") || 
+    url.includes("animeapps.top") ||
+    url.includes("short.ink")
+  ) {
     return false;
   }
   return url.startsWith("http://") || url.startsWith("https://");
@@ -344,7 +349,7 @@ export default function InPageVideoPlayer({
     if (!streams) return undefined;
 
     if (activeTab === "hindi") {
-      const rawHindi = streams.hindi || [];
+      const rawHindi = (streams.hindi || []).filter((s: any) => !s.url?.includes("short.ink"));
       const strictlyHindi = rawHindi.filter((s: any) => 
         s.isHindi === true || 
         /hindi|toonstream|as-cdn/i.test(s.quality || '') ||
@@ -372,7 +377,7 @@ export default function InPageVideoPlayer({
       );
     }
 
-    return streams.sources;
+    return (streams.sources || []).filter((s: any) => !s.url?.includes("short.ink"));
   }, [streams, activeTab]);
 
   // Ensure selectedServerIndex is within bounds
@@ -397,7 +402,12 @@ export default function InPageVideoPlayer({
 
       // Only auto-switch if user has not explicitly locked a server and playback has not already commenced
       if (!userExplicitlySelectedServerRef.current) {
-        const liveTime = mediaPlayerRef.current?.currentTime || 0;
+        let liveTime = 0;
+        try {
+          liveTime = mediaPlayerRef.current?.currentTime || 0;
+        } catch {
+          liveTime = 0;
+        }
         if (liveTime < 1) {
           const fastestIdx = getFastestServerIndex(activeSources, latencies);
           if (fastestIdx !== validServerIndex && latencies[activeSources[fastestIdx]?.url] < 300) {
@@ -418,9 +428,15 @@ export default function InPageVideoPlayer({
     if (!activeSources || activeSources.length === 0) return;
     const targetIdx = Math.max(0, Math.min(newIdx, activeSources.length - 1));
     const targetSource = activeSources[targetIdx];
+    if (!targetSource) return;
 
     // Grab current playback time
-    const liveTime = mediaPlayerRef.current?.currentTime;
+    let liveTime: number | undefined;
+    try {
+      liveTime = mediaPlayerRef.current?.currentTime;
+    } catch {
+      liveTime = undefined;
+    }
     const currentProgress = (typeof liveTime === 'number' && liveTime > 0) ? liveTime : (lastSavedTimeRef.current || initialTime || 0);
 
     if (currentProgress > 0) {
@@ -813,8 +829,13 @@ export default function InPageVideoPlayer({
               <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-lg border border-white/10 max-w-full min-w-0">
                 {activeSources.length > 1 && (
                   <button
-                    onClick={handlePrevSource}
-                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handlePrevSource();
+                    }}
+                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
                     title="Previous Source (Shift + S)"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -826,11 +847,16 @@ export default function InPageVideoPlayer({
                     const latBadge = formatLatencyBadge(serverLatencies[source.url]);
                     return (
                       <button
-                        key={idx}
-                        onClick={() => handleSelectServer(idx)}
-                        className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                        key={`${source.url}-${idx}`}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleSelectServer(idx);
+                        }}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer select-none ${
                           validServerIndex === idx 
-                            ? 'bg-indigo-600 text-white shadow-sm' 
+                            ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400' 
                             : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-white'
                         }`}
                       >
@@ -848,8 +874,13 @@ export default function InPageVideoPlayer({
 
                 {activeSources.length > 1 && (
                   <button
-                    onClick={handleNextSource}
-                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleNextSource();
+                    }}
+                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
                     title="Next Source (S)"
                   >
                     <ChevronRight className="w-4 h-4" />
