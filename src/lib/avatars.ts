@@ -13,14 +13,44 @@ export const AVATARS: Record<string, string> = {
   "avatar_12": "https://api.dicebear.com/7.x/adventurer/svg?seed=Sammy&backgroundColor=d1d4f9",
 };
 
-export function getAvatarUrl(avatarId?: string | null): string | null {
-  if (!avatarId) return null;
-  if (AVATARS[avatarId]) return AVATARS[avatarId];
+/**
+ * Resolves avatar URL from either a preset ID (e.g. 'avatar_01') or a custom image URL.
+ */
+export function getAvatarUrl(avatarIdOrUrl?: string | null): string | null {
+  if (!avatarIdOrUrl) return null;
+  
+  const trimmed = avatarIdOrUrl.trim();
+  if (!trimmed) return null;
+
+  // Direct uploaded / external image URL
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("data:")
+  ) {
+    return trimmed;
+  }
+
+  // Exact preset match
+  if (AVATARS[trimmed]) return AVATARS[trimmed];
+
   // Normalize formats like 'avatar-1', 'avatar-01', or 'avatar_1' to 'avatar_01'
-  const match = avatarId.match(/avatar[-_](\d+)/i);
+  const match = trimmed.match(/avatar[-_](\d+)/i);
   if (match) {
     const normalizedKey = `avatar_${match[1].padStart(2, "0")}`;
     return AVATARS[normalizedKey] || null;
   }
+
   return null;
+}
+
+/**
+ * Returns SVG/initial fallback background colors
+ */
+export function getFallbackInitials(name?: string | null): string {
+  if (!name) return "U";
+  const clean = name.trim();
+  if (!clean) return "U";
+  return clean.charAt(0).toUpperCase();
 }

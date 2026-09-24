@@ -49,6 +49,58 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   DYNAMIC THEME PROPAGATION
+   Applies selected theme colors to background, cards, borders, and buttons
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+html[data-theme]:not([data-theme="default"]) {
+  background-color: var(--theme-background) !important;
+}
+
+html[data-theme]:not([data-theme="default"]) body {
+  background-color: var(--theme-background) !important;
+  color: var(--theme-foreground) !important;
+}
+
+html[data-theme]:not([data-theme="default"]) .bg-slate-950,
+html[data-theme]:not([data-theme="default"]) main.bg-slate-950,
+html[data-theme]:not([data-theme="default"]) div.bg-slate-950 {
+  background-color: var(--theme-background) !important;
+}
+
+html[data-theme]:not([data-theme="default"]) .bg-slate-900\/80,
+html[data-theme]:not([data-theme="default"]) .bg-slate-900\/70,
+html[data-theme]:not([data-theme="default"]) .bg-slate-900\/60,
+html[data-theme]:not([data-theme="default"]) .bg-slate-900\/50,
+html[data-theme]:not([data-theme="default"]) .bg-slate-900\/40,
+html[data-theme]:not([data-theme="default"]) .bg-slate-900\/30,
+html[data-theme]:not([data-theme="default"]) .bg-slate-900 {
+  background-color: var(--theme-card) !important;
+}
+
+html[data-theme]:not([data-theme="default"]) .border-white\/10,
+html[data-theme]:not([data-theme="default"]) .border-slate-800 {
+  border-color: var(--theme-card-border) !important;
+}
+
+html[data-theme]:not([data-theme="default"]) .bg-blue-600 {
+  background-color: var(--theme-primary) !important;
+}
+
+html[data-theme]:not([data-theme="default"]) .hover\:bg-blue-500:hover,
+html[data-theme]:not([data-theme="default"]) .hover\:bg-blue-600:hover {
+  background-color: var(--theme-primary-hover) !important;
+}
+
+html[data-theme]:not([data-theme="default"]) .text-blue-400 {
+  color: var(--theme-primary) !important;
+}
+
+html[data-theme]:not([data-theme="default"]) .border-blue-500\/30 {
+  border-color: var(--theme-primary) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    ULTRA LITE & REDUCE MOTION SYSTEM (Ported from Tatakai for Android Speed)
    ═══════════════════════════════════════════════════════════════════════════ */
 

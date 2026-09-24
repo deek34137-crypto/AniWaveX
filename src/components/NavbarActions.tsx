@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, User, LogOut, Activity, Shield, Bookmark } from "lucide-react";
+import { Bell, User, LogOut, Activity, Shield, Bookmark, Link2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import AuthModal from "./AuthModal";
 import UsernameModal from "./UsernameModal";
@@ -63,7 +63,7 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
     router.push('/');
   };
 
-  const avatarUrl = getAvatarUrl(currentUser?.user_metadata?.avatar_id);
+  const avatarUrl = getAvatarUrl(currentUser?.user_metadata?.custom_avatar_url || currentUser?.user_metadata?.avatar_id);
   const displayUsername = currentUser?.user_metadata?.username || currentUser?.email?.split('@')[0];
 
   return (
@@ -129,19 +129,28 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
           </button>
 
           <div 
-            className={`absolute right-0 top-full mt-2 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-2 flex flex-col z-[100] transition-all duration-200 origin-top-right ${isMenuOpen ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}
+            className={`absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-2 flex flex-col z-[100] transition-all duration-200 origin-top-right ${isMenuOpen ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}
           >
             <div className="px-4 py-2 border-b border-slate-800 mb-2">
               <p className="text-sm font-bold text-white truncate">{displayUsername}</p>
               <p className="text-xs text-slate-400 truncate">{currentUser.email}</p>
             </div>
             <Link 
-              href={displayUsername ? `/user/${encodeURIComponent(displayUsername)}` : "/profile"} 
+              href="/profile" 
               onClick={() => setIsMenuOpen(false)}
               className="px-4 py-2 text-sm text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
             >
-              <User className="w-4 h-4 text-blue-400" /> My Profile
+              <User className="w-4 h-4 text-blue-400" /> Account Center
             </Link>
+            {displayUsername && (
+              <Link 
+                href={`/user/${encodeURIComponent(displayUsername)}`}
+                onClick={() => setIsMenuOpen(false)}
+                className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
+              >
+                <User className="w-4 h-4 text-slate-400" /> Public Profile
+              </Link>
+            )}
             <Link 
               href="/watchlist" 
               onClick={() => setIsMenuOpen(false)}
@@ -158,13 +167,29 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
                 <Activity className="w-4 h-4" /> Live Traffic Stats
               </Link>
             )}
-            <Link 
-              href="/profile?tab=settings" 
-              onClick={() => setIsMenuOpen(false)}
-              className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
-            >
-              <span className="text-xs">⚙️</span> Edit Profile &amp; Settings
-            </Link>
+            <div className="border-t border-white/5 mt-1 pt-1">
+              <Link 
+                href="/profile?tab=edit" 
+                onClick={() => setIsMenuOpen(false)}
+                className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
+              >
+                <span className="text-xs">⚙️</span> Edit Profile
+              </Link>
+              <Link 
+                href="/profile?tab=connected" 
+                onClick={() => setIsMenuOpen(false)}
+                className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
+              >
+                <Link2 className="w-4 h-4 text-violet-400" /> Connected Accounts
+              </Link>
+              <Link 
+                href="/profile?tab=security" 
+                onClick={() => setIsMenuOpen(false)}
+                className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
+              >
+                <Shield className="w-4 h-4 text-green-400" /> Security
+              </Link>
+            </div>
             <button 
               onClick={handleSignOut}
               className="px-4 py-2 text-sm text-red-400 hover:bg-slate-800 flex items-center gap-2 text-left w-full transition-colors border-t border-white/5 mt-1 pt-2"
