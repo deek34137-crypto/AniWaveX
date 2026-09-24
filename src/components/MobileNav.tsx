@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { Menu, X, Home, Compass, Calendar, Layers, Film, Sparkles, User, LogIn, Bookmark } from "lucide-react";
+import { Menu, X, Home, Compass, Calendar, Layers, Film, Sparkles, User, LogIn, Bookmark, BookOpen, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
@@ -47,6 +47,7 @@ export default function MobileNav() {
   const navLinks = [
     { label: "Home", href: "/", icon: Home },
     { label: "Catalog", href: "/catalog", icon: Compass },
+    { label: "Manga", href: "/manga", icon: BookOpen },
     { label: "Schedule", href: "/airing", icon: Calendar },
     { label: "Tier List", href: "/tier-list", icon: Layers },
     { label: "Movies", href: "/catalog?format=movie", icon: Film },
@@ -146,7 +147,7 @@ export default function MobileNav() {
             </div>
           </div>
         ) : (
-          <div className="px-4 py-3 border-b border-white/10 shrink-0" style={{ backgroundColor: "#0b0f19" }}>
+          <div className="px-4 py-3 border-b border-white/10 shrink-0 space-y-2" style={{ backgroundColor: "#0b0f19" }}>
             <Link
               href="/profile"
               onClick={() => setIsOpen(false)}
@@ -154,6 +155,14 @@ export default function MobileNav() {
             >
               <LogIn className="w-4 h-4" />
               Sign In / Sign Up
+            </Link>
+            <Link
+              href="/profile?tab=settings"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 text-xs font-semibold transition-all text-center"
+            >
+              <Settings className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Appearance &amp; Themes</span>
             </Link>
           </div>
         )}

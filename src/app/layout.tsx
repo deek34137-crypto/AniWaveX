@@ -44,6 +44,7 @@ export const metadata: Metadata = {
 };
 
 import NotificationManager from "@/components/NotificationManager";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 
 export default function RootLayout({
   children,
@@ -53,13 +54,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col pb-20 md:pb-0">
-        <AuthProvider>
-          <HeartbeatProvider />
-          <NotificationManager />
-          {children}
-          <CommandPalette />
-          <MobileBottomNav />
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <HeartbeatProvider />
+            <NotificationManager />
+            {children}
+            <CommandPalette />
+            <MobileBottomNav />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

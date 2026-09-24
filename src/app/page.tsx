@@ -2,6 +2,7 @@ import Navbar from "@/components/Navbar";
 import HeroSlider from "@/components/HeroSlider";
 import AnimeRow from "@/components/AnimeRow";
 import ContinueWatchingRow from "@/components/ContinueWatchingRow";
+import PersonalizedRecommendationsRow from "@/components/PersonalizedRecommendationsRow";
 import ApkHomeSections from "@/components/ApkHomeSections";
 import { getTrendingAnime, getTopRatedAnime, getGenreAnime } from "@/lib/api";
 
@@ -28,6 +29,9 @@ export default async function Home() {
         <HeroSlider animeList={heroAnimeList} />
         
         <ContinueWatchingRow />
+
+        {/* Dynamic Client-Side Personalized Recommendations */}
+        <PersonalizedRecommendationsRow candidatePool={[...trending, ...topRated, ...romance, ...comedy, ...isekai]} />
 
         <AnimeRow title="Trending Now" items={trendingRow} viewAllHref="/catalog?sort=trending" />
         <AnimeRow title="Highest Rated" items={topRated} viewAllHref="/catalog?sort=rated" />

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import NavbarActions from "./NavbarActions";
 import MobileNav from "./MobileNav";
+import ImageSearchTrigger from "./ImageSearchTrigger";
 import { Search } from "lucide-react";
 
 export default async function Navbar() {
@@ -24,6 +25,7 @@ export default async function Navbar() {
           <div className="hidden md:flex items-center gap-6 ml-6">
             <Link href="/" className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Home</Link>
             <Link href="/catalog" className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Catalog</Link>
+            <Link href="/manga" className="text-sm font-semibold text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1 font-bold">Manga</Link>
             <Link href="/airing" className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Schedule</Link>
             <Link href="/tier-list" className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Tier List</Link>
             <Link href="/catalog?format=movie" className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Movies</Link>
@@ -37,6 +39,9 @@ export default async function Navbar() {
           <div className="hidden sm:block flex-1 max-w-sm">
             <SearchBar />
           </div>
+
+          {/* Screenshot Search Button (Trace.moe) */}
+          <ImageSearchTrigger />
 
           {/* Mobile Search Icon */}
           <Link 

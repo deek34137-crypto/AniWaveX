@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #0b0f19; /* Deep dark blue background */
-  --color-foreground: #f1f5f9; /* Slate 100 for text */
-  --color-primary: #3b82f6; /* Vibrant blue for active states/buttons */
-  --color-primary-hover: #2563eb;
-  --color-card: rgba(30, 41, 59, 0.7); /* Frosted glass card background */
-  --color-card-border: rgba(255, 255, 255, 0.1);
-  --color-muted: #94a3b8; /* Slate 400 for secondary text */
+  --color-background: var(--theme-background, #0b0f19);
+  --color-foreground: var(--theme-foreground, #f1f5f9);
+  --color-primary: var(--theme-primary, #3b82f6);
+  --color-primary-hover: var(--theme-primary-hover, #2563eb);
+  --color-card: var(--theme-card, rgba(30, 41, 59, 0.7));
+  --color-card-border: var(--theme-card-border, rgba(255, 255, 255, 0.1));
+  --color-muted: var(--theme-muted, #94a3b8);
   
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
@@ -26,7 +26,7 @@
   }
 }
 
-/* Use this on the spacer div right below <Navbar> on every page */
+/* Spacer div right below <Navbar> on every page */
 .page-top-spacer {
   height: var(--navbar-total);
   flex-shrink: 0;
@@ -48,6 +48,36 @@ body {
   border: 1px solid var(--color-card-border);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ULTRA LITE & REDUCE MOTION SYSTEM (Ported from Tatakai for Android Speed)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Ultra Lite Mode: Disables expensive GPU effects on low-end hardware */
+html.ultra-lite *,
+html.ultra-lite *::before,
+html.ultra-lite *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+html.ultra-lite .glass {
+  background: var(--theme-background, #0b0f19) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Reduce Motion Mode: Instant zero-latency transitions */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
 /* Hide scrollbars across all carousels */
 .hide-scrollbar {
   -ms-overflow-style: none; /* IE and Edge */
@@ -65,7 +95,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0b0f19;
+  background: var(--color-background);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -77,7 +107,7 @@ body {
   background: #334155;
 }
 
-/* Mobile Safe Area Insets for notches, status bar, and navigation gesture bar */
+/* Mobile Safe Area Insets for notches, status bar, and gesture navigation bar */
 .mobile-safe-top {
   padding-top: env(safe-area-inset-top, 0px);
 }

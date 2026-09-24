@@ -10,7 +10,9 @@ import AvatarPicker from "@/components/profile/AvatarPicker";
 import PasswordForm from "@/components/profile/PasswordForm";
 import UsernameForm from "@/components/profile/UsernameForm";
 import ProfileCustomizer from "@/components/profile/ProfileCustomizer";
+import AppearanceSettings from "@/components/profile/AppearanceSettings";
 import AniListSyncModal from "@/components/sync/AniListSyncModal";
+import TwoWaySyncModal from "@/components/sync/TwoWaySyncModal";
 import ProfileAuthClient from "./ProfileAuthClient";
 import { getAvatarUrl } from "@/lib/avatars";
 import { useAuth } from "@/providers/AuthProvider";
@@ -28,12 +30,14 @@ import {
   ChevronRight,
   Shield,
   Bell,
+  Download,
 } from "lucide-react";
 import {
   STORAGE_KEYS,
   requestNotificationPermission,
   cancelPendingNotifications,
 } from "@/lib/notifications";
+import { ANILIST_TOKEN_KEY } from "@/lib/sync-engine";
 
 type Tab = "history" | "watchlist" | "customize" | "settings";
 
@@ -67,6 +71,7 @@ export default function ProfileClient({
     }
   }, [tabParam]);
   const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showTwoWaySyncModal, setShowTwoWaySyncModal] = useState(false);
   const [history, setHistory] = useState<any[]>(ssrHistory || []);
   const [bookmarks, setBookmarks] = useState<any[]>(ssrBookmarks || []);
   const [loadingData, setLoadingData] = useState(false);
@@ -75,6 +80,17 @@ export default function ProfileClient({
   useEffect(() => {
     if (typeof window !== "undefined") {
       setNotifsEnabled(localStorage.getItem(STORAGE_KEYS.ENABLED) !== "false");
+
+      // Auto-capture AniList OAuth implicit token redirect (#access_token=...)
+      const hash = window.location.hash;
+      if (hash && hash.includes("access_token=")) {
+        const match = hash.match(/access_token=([^&]+)/);
+        if (match && match[1]) {
+          localStorage.setItem(ANILIST_TOKEN_KEY, match[1]);
+          window.history.replaceState(null, "", window.location.pathname + window.location.search);
+          setShowTwoWaySyncModal(true);
+        }
+      }
     }
   }, []);
 
@@ -167,6 +183,12 @@ export default function ProfileClient({
         onImportComplete={() => window.location.reload()}
       />
 
+      <TwoWaySyncModal
+        isOpen={showTwoWaySyncModal}
+        onClose={() => setShowTwoWaySyncModal(false)}
+        localWatchlist={bookmarks}
+      />
+
       {/* ── Profile Header Card ── */}
       <div className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-5 mb-5 flex items-center gap-4 shadow-lg">
         {/* Avatar */}
@@ -213,11 +235,19 @@ export default function ProfileClient({
       {/* ── Quick Actions 2×2 Grid ── */}
       <div className="grid grid-cols-2 gap-2.5 mb-5">
         <button
-          onClick={() => setShowSyncModal(true)}
+          onClick={() => setShowTwoWaySyncModal(true)}
           className="flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md active:scale-95"
         >
           <RefreshCw className="w-4 h-4 shrink-0" />
-          <span className="truncate">Sync AniList</span>
+          <span className="truncate">2-Way Sync (AniList/MAL)</span>
+        </button>
+
+        <button
+          onClick={() => setShowSyncModal(true)}
+          className="flex items-center gap-2.5 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold text-sm transition-all border border-white/10 shadow-md active:scale-95"
+        >
+          <Download className="w-4 h-4 shrink-0 text-cyan-400" />
+          <span className="truncate">1-Click AniList Import</span>
         </button>
 
         <Link
@@ -298,6 +328,9 @@ export default function ProfileClient({
 
           {activeTab === "settings" && (
             <div className="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-400">
+              {/* Appearance & Themes (Ultra Lite Mode & 25 Themes) */}
+              <AppearanceSettings />
+
               {/* Change Username Form */}
               <UsernameForm currentUsername={username} />
 
