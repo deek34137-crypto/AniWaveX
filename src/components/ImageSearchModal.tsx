@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import { Camera, Upload, X, Loader2, Sparkles, AlertCircle, Play } from "lucide-react";
 import { searchAnimeByImage, TraceMoeAnimeMatch } from "@/lib/trace-moe";
+
+const subscribe = () => () => {};
 
 interface ImageSearchModalProps {
   isOpen: boolean;
@@ -12,6 +15,7 @@ interface ImageSearchModalProps {
 }
 
 export default function ImageSearchModal({ isOpen, onClose }: ImageSearchModalProps) {
+  const isMounted = useSyncExternalStore(subscribe, () => true, () => false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -19,7 +23,7 @@ export default function ImageSearchModal({ isOpen, onClose }: ImageSearchModalPr
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!isOpen) return null;
+  if (!isOpen || !isMounted) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,9 +71,15 @@ export default function ImageSearchModal({ isOpen, onClose }: ImageSearchModalPr
     setError(null);
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl max-h-[90vh] bg-slate-900 border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+  const modalContent = (
+    <div 
+      onClick={onClose}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-2xl max-h-[90vh] bg-slate-900 border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-2">
@@ -224,4 +234,6 @@ export default function ImageSearchModal({ isOpen, onClose }: ImageSearchModalPr
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
