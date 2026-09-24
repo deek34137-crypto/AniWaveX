@@ -166,18 +166,77 @@ function titleScore(query: string, candidate: string): number {
   return 0;
 }
 
-async function backendSearch(query: string): Promise<BackendSearchResult[]> {
-  if (!query.trim()) return [];
+async function searchWeebCentralDirect(query: string): Promise<BackendSearchResult[]> {
   try {
-    const res = await fetch(`${BACKEND}/api/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: query.trim() }),
+    const url = `https://weebcentral.com/search/data?author=&text=${encodeURIComponent(
+      query
+    )}&sort=Best+Match&order=Ascending&official=Any&anime=Any&adult=Any&display_mode=Full+Display`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
       next: { revalidate: 3600 },
     });
     if (!res.ok) return [];
-    const data = await res.json();
-    return (data?.results || []) as BackendSearchResult[];
+    const html = await res.text();
+    const regex = /\/series\/([0-9A-Z]+)\/([^\"]+)/g;
+    let match: RegExpExecArray | null;
+    const results: BackendSearchResult[] = [];
+    const seen = new Set<string>();
+    while ((match = regex.exec(html)) !== null) {
+      const id = match[1];
+      const slug = match[2];
+      if (!seen.has(id)) {
+        seen.add(id);
+        const title = slug.replace(/-/g, ' ');
+        results.push({
+          id,
+          title,
+          url: `https://weebcentral.com/series/${id}/${slug}`,
+          provider: 'weebcentral',
+        });
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+async function backendSearch(query: string): Promise<BackendSearchResult[]> {
+  if (!query.trim()) return [];
+  try {
+    const [directWc, workerResults] = await Promise.all([
+      searchWeebCentralDirect(query),
+      (async () => {
+        try {
+          const res = await fetch(`${BACKEND}/api/search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query.trim() }),
+            next: { revalidate: 3600 },
+          });
+          if (!res.ok) return [];
+          const data = await res.json();
+          return (data?.results || []) as BackendSearchResult[];
+        } catch {
+          return [];
+        }
+      })(),
+    ]);
+
+    const combined = [...directWc, ...workerResults];
+    const seen = new Set<string>();
+    const deduplicated: BackendSearchResult[] = [];
+    for (const r of combined) {
+      const key = `${r.provider}:${r.id}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduplicated.push(r);
+      }
+    }
+    return deduplicated;
   } catch {
     return [];
   }
@@ -260,6 +319,31 @@ export async function getMangaChapters(
         const data = await res.json();
         const rawChapters: BackendChapter[] = data?.chapters || [];
         if (rawChapters.length === 0) continue;
+
+        // If provider is mangadex, verify that it actually has hosted image pages (not external 0-page links)
+        if (match.provider === 'mangadex') {
+          const sample = rawChapters[0];
+          try {
+            const testRes = await fetch(`${BACKEND}/api/pages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                provider: 'mangadex',
+                chapterId: sample.id,
+                chapterUrl: sample.url,
+                id: sample.id,
+                url: sample.url,
+              }),
+            });
+            const testData = await testRes.json();
+            if (!testData?.pages || testData.pages.length === 0) {
+              // MangaDex has no pages (licensed external link like Kodansha/Viz), skip to next provider
+              continue;
+            }
+          } catch {
+            continue;
+          }
+        }
 
         const formatted = rawChapters
           .map((ch): MangaChapter => ({
