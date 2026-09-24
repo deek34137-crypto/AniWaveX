@@ -53,10 +53,11 @@ export default async function AnimePage({
     notFound();
   }
 
-  const recommendations = await getRecommendedAnime(data.slug, data.tags, data.title);
-
-  // Check bookmark and watch history status if user is logged in
-  const supabase = await createClient();
+  // Parallelize recommendations and auth retrieval to eliminate waterfall
+  const [recommendations, supabase] = await Promise.all([
+    getRecommendedAnime(data.slug, data.tags, data.title),
+    createClient(),
+  ]);
   const { data: { user } } = await supabase.auth.getUser();
   let initialBookmarked = false;
   let initialBookmarkStatus = null;

@@ -35,6 +35,7 @@ export default function Pagination({ currentPage, totalPages, searchParams }: Pa
       {hasPrev ? (
         <Link 
           href={createPageUrl(currentPage - 1)}
+          prefetch={true}
           className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl border border-white/10 transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -54,6 +55,7 @@ export default function Pagination({ currentPage, totalPages, searchParams }: Pa
       {hasNext ? (
         <Link 
           href={createPageUrl(currentPage + 1)}
+          prefetch={true}
           className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl border border-white/10 transition-colors"
         >
           Next

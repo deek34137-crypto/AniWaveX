@@ -264,6 +264,7 @@ export default function ContinueWatchingRow() {
               {/* Media & Title Link */}
               <Link
                 href={`/anime/${item.animeSlug}${item.episodeId ? `?ep=${item.episodeId}` : ""}`}
+                prefetch={true}
                 className="block relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer"
                 aria-label={`Continue watching ${item.animeTitle} Episode ${item.episodeId}`}
               >

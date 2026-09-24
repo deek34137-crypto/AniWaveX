@@ -77,6 +77,7 @@ export default function AnimeCard({
       >
         <Link 
           href={`/anime/${anime.slug}`} 
+          prefetch={true}
           className="block w-full h-full relative cursor-pointer"
           aria-label={`View ${anime.title}`}
         >

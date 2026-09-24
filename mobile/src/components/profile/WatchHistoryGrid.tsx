@@ -134,6 +134,7 @@ export default function WatchHistoryGrid({ initialItems }: { initialItems: Watch
               {/* Media & Title Link */}
               <Link 
                 href={`/anime/${item.anime_slug}${item.last_episode_watched ? `?ep=${item.last_episode_watched}` : ""}`} 
+                prefetch={true}
                 className="block aspect-[2/3] relative cursor-pointer"
                 aria-label={`Continue watching ${item.anime_title} Episode ${item.last_episode_watched || 1}`}
               >

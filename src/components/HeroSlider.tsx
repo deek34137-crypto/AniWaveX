@@ -115,6 +115,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
               <div className={`flex flex-row items-center gap-2.5 sm:gap-4 transition-all duration-700 delay-700 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 <Link 
                   href={`/anime/${anime.slug}`}
+                  prefetch={true}
                   className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-105 active:scale-95"
                 >
                   <Play className="w-4 h-4 fill-current" />
@@ -123,6 +124,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
                 
                 <Link 
                   href={`/anime/${anime.slug}`}
+                  prefetch={true}
                   className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-slate-500/40 hover:bg-slate-500/60 text-white text-xs sm:text-base font-semibold rounded-xl backdrop-blur-md transition-all hover:scale-105 active:scale-95"
                 >
                   <Info className="w-4 h-4" />

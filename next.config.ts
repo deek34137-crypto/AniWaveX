@@ -1,6 +1,21 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  compress: true,
+  poweredByHeader: false,
+  experimental: {
+    staleTimes: {
+      dynamic: 300, // 5 min client router cache for dynamic routes (instant back/forward!)
+      static: 1800, // 30 min cache for static segments
+    },
+    scrollRestoration: true,
+    optimizePackageImports: [
+      "lucide-react",
+      "@vidstack/react",
+      "@supabase/ssr",
+      "@supabase/supabase-js",
+    ],
+  },
   images: {
     unoptimized: true,
     qualities: [75, 85],
