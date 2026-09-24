@@ -68,6 +68,71 @@ export async function getTrendingMangaList(limit = 24): Promise<MangaItem[]> {
   return (json?.data?.Page?.media || []).map(formatMangaItem);
 }
 
+export interface MangaFilterOptions {
+  category?: string;
+  search?: string;
+  limit?: number;
+}
+
+export async function filterMangaList(options: MangaFilterOptions): Promise<MangaItem[]> {
+  const { category = 'all', search, limit = 24 } = options;
+
+  if (search && search.trim()) {
+    return searchMangaList(search.trim(), limit);
+  }
+
+  const cat = category.toLowerCase().trim();
+
+  if (cat === 'manhwa') {
+    const json = await anilistQuery(
+      `query ($l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC,countryOfOrigin:"KR"){${GQL_FIELDS}}}}`,
+      { l: limit }
+    );
+    return (json?.data?.Page?.media || []).map(formatMangaItem);
+  }
+
+  if (cat === 'manhua') {
+    const json = await anilistQuery(
+      `query ($l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC,countryOfOrigin:"CN"){${GQL_FIELDS}}}}`,
+      { l: limit }
+    );
+    return (json?.data?.Page?.media || []).map(formatMangaItem);
+  }
+
+  if (cat === 'isekai') {
+    const json = await anilistQuery(
+      `query ($l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC,tag:"Isekai"){${GQL_FIELDS}}}}`,
+      { l: limit }
+    );
+    return (json?.data?.Page?.media || []).map(formatMangaItem);
+  }
+
+  const GENRES: Record<string, string> = {
+    action: 'Action',
+    romance: 'Romance',
+    fantasy: 'Fantasy',
+    adventure: 'Adventure',
+    drama: 'Drama',
+    comedy: 'Comedy',
+    supernatural: 'Supernatural',
+    mystery: 'Mystery',
+    horror: 'Horror',
+    scifi: 'Sci-Fi',
+    sliceoflife: 'Slice of Life',
+  };
+
+  const genre = GENRES[cat];
+  if (genre) {
+    const json = await anilistQuery(
+      `query ($g:String,$l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC,genre:$g){${GQL_FIELDS}}}}`,
+      { g: genre, l: limit }
+    );
+    return (json?.data?.Page?.media || []).map(formatMangaItem);
+  }
+
+  return getTrendingMangaList(limit);
+}
+
 export async function getMangaDetails(id: string | number): Promise<MangaItem | null> {
   const json = await anilistQuery(
     `query ($id:Int){Media(id:$id,type:MANGA){${GQL_FIELDS}}}`,
