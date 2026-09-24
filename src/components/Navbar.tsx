@@ -11,7 +11,7 @@ export default async function Navbar() {
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-50 bg-[#0a0a0c]/95 backdrop-blur-xl border-b border-white/10 pt-[env(safe-area-inset-top,0px)] transition-all">
+    <nav id="main-navbar" className="fixed top-0 left-0 w-full z-50 bg-[#0a0a0c]/95 backdrop-blur-xl border-b border-white/10 pt-[env(safe-area-inset-top,0px)] transition-all">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
         {/* Left Section: Logo & Menu */}
         <div className="flex items-center gap-2 sm:gap-4">

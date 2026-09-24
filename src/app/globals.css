@@ -114,19 +114,19 @@ html[data-theme-mode="light"] main h6 {
   color: var(--theme-foreground) !important;
 }
 
-/* Transform light text inside main area to dark foreground, protecting colored buttons */
-html[data-theme-mode="light"] main .text-white:not([class*="bg-blue-"]):not([class*="bg-primary"]):not([class*="bg-red-"]):not([class*="bg-amber-"]):not([class*="bg-emerald-"]):not([class*="bg-purple-"]):not([class*="bg-cyan-"]):not(.keep-white) {
+/* Transform light text inside main area to dark foreground, protecting nav and colored buttons */
+html[data-theme-mode="light"] main .text-white:not(nav *):not([class*="bg-blue-"]):not([class*="bg-primary"]):not([class*="bg-red-"]):not([class*="bg-amber-"]):not([class*="bg-emerald-"]):not([class*="bg-purple-"]):not([class*="bg-cyan-"]):not(.keep-white) {
   color: var(--theme-foreground) !important;
 }
 
-html[data-theme-mode="light"] main .text-slate-100,
-html[data-theme-mode="light"] main .text-slate-200,
-html[data-theme-mode="light"] main .text-slate-300 {
+html[data-theme-mode="light"] main .text-slate-100:not(nav *),
+html[data-theme-mode="light"] main .text-slate-200:not(nav *),
+html[data-theme-mode="light"] main .text-slate-300:not(nav *) {
   color: var(--theme-foreground) !important;
 }
 
-html[data-theme-mode="light"] main .text-slate-400,
-html[data-theme-mode="light"] main .text-slate-500 {
+html[data-theme-mode="light"] main .text-slate-400:not(nav *),
+html[data-theme-mode="light"] main .text-slate-500:not(nav *) {
   color: var(--theme-muted) !important;
 }
 
@@ -142,17 +142,135 @@ html[data-theme-mode="light"] .bg-amber-500 * {
   color: #ffffff !important;
 }
 
-/* Form inputs in light mode */
-html[data-theme-mode="light"] main input:not([type="checkbox"]):not([type="radio"]),
-html[data-theme-mode="light"] main textarea,
-html[data-theme-mode="light"] main select {
+/* Form inputs in light mode (excluding nav search bar) */
+html[data-theme-mode="light"] main input:not(nav *):not([type="checkbox"]):not([type="radio"]),
+html[data-theme-mode="light"] main textarea:not(nav *),
+html[data-theme-mode="light"] main select:not(nav *) {
   background-color: #ffffff !important;
   color: var(--theme-foreground) !important;
   border-color: var(--theme-card-border) !important;
 }
 
-html[data-theme-mode="light"] main input::placeholder,
-html[data-theme-mode="light"] main textarea::placeholder {
+html[data-theme-mode="light"] main input:not(nav *)::placeholder,
+html[data-theme-mode="light"] main textarea:not(nav *)::placeholder {
+  color: var(--theme-muted) !important;
+}
+
+/* ── Top Panel / Navbar in Light Mode ── */
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-bottom: 1px solid var(--theme-card-border) !important;
+  box-shadow: 0 1px 4px 0 rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Nav links in light mode */
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) a,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) a.text-slate-300,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) .text-slate-300 {
+  color: var(--theme-foreground) !important;
+  font-weight: 600 !important;
+}
+
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) a:hover,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) a.text-slate-300:hover,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) .text-slate-300:hover {
+  color: var(--theme-primary) !important;
+}
+
+/* Manga nav link in light mode */
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) a.text-cyan-400,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) a[href="/manga"] {
+  color: var(--theme-primary) !important;
+}
+
+/* Nav action buttons & icons (Camera, search, mobile menu, bell) */
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) button,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) button svg,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) svg.text-white,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) svg.text-slate-300,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) svg.text-slate-400,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) a.p-2 svg {
+  color: var(--theme-foreground) !important;
+}
+
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) button:hover,
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) a.p-2:hover {
+  background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+/* Nav search input in light mode */
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) input[type="text"],
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) input {
+  background-color: rgba(15, 23, 42, 0.05) !important;
+  color: var(--theme-foreground) !important;
+  border: 1px solid var(--theme-card-border) !important;
+}
+
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) input::placeholder {
+  color: var(--theme-muted) !important;
+}
+
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) input:focus {
+  background-color: #ffffff !important;
+  border-color: var(--theme-primary) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+}
+
+/* Nav search shortcut badge ⌘K */
+html[data-theme-mode="light"] nav:not([aria-label="Mobile Navigation"]) .font-mono {
+  background-color: rgba(15, 23, 42, 0.08) !important;
+  color: var(--theme-foreground) !important;
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+}
+
+/* Search dropdown & Recent searches */
+html[data-theme-mode="light"] nav .bg-slate-900,
+html[data-theme-mode="light"] nav .bg-slate-900\/80 {
+  background-color: #ffffff !important;
+  border-color: var(--theme-card-border) !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15) !important;
+}
+
+html[data-theme-mode="light"] nav .bg-slate-900 .text-slate-400,
+html[data-theme-mode="light"] nav .bg-slate-900 .text-slate-300,
+html[data-theme-mode="light"] nav .bg-slate-900 .text-white {
+  color: var(--theme-foreground) !important;
+}
+
+html[data-theme-mode="light"] nav .border-slate-800,
+html[data-theme-mode="light"] nav .border-slate-700\/50 {
+  border-color: var(--theme-card-border) !important;
+}
+
+/* Notification flyout & user menu in light mode */
+html[data-theme-mode="light"] nav .bg-slate-950,
+html[data-theme-mode="light"] nav .bg-slate-950\/95 {
+  background-color: #ffffff !important;
+  border-color: var(--theme-card-border) !important;
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.15) !important;
+}
+
+html[data-theme-mode="light"] nav .bg-slate-950 .text-white,
+html[data-theme-mode="light"] nav .bg-slate-950 .text-slate-200,
+html[data-theme-mode="light"] nav .bg-slate-950 .text-slate-300 {
+  color: var(--theme-foreground) !important;
+}
+
+html[data-theme-mode="light"] nav .bg-slate-950 .text-slate-400,
+html[data-theme-mode="light"] nav .bg-slate-950 .text-slate-500 {
+  color: var(--theme-muted) !important;
+}
+
+/* Mobile bottom nav in light mode */
+html[data-theme-mode="light"] nav[aria-label="Mobile Navigation"] {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-top-color: var(--theme-card-border) !important;
+  box-shadow: 0 -4px 20px -2px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme-mode="light"] nav[aria-label="Mobile Navigation"] .text-slate-400 {
   color: var(--theme-muted) !important;
 }
 
@@ -195,6 +313,24 @@ html[data-theme-mode="light"] .theme-card-btn p {
 }
 
 /* Brutalist Concrete Special Theme */
+html[data-theme="brutalist-concrete"] nav:not([aria-label="Mobile Navigation"]) {
+  background-color: #ffffff !important;
+  border-bottom: 2px solid #18181b !important;
+  box-shadow: 0 3px 0px 0px #18181b !important;
+}
+
+html[data-theme="brutalist-concrete"] nav:not([aria-label="Mobile Navigation"]) a,
+html[data-theme="brutalist-concrete"] nav:not([aria-label="Mobile Navigation"]) .text-slate-300 {
+  color: #09090b !important;
+  font-weight: 800 !important;
+}
+
+html[data-theme="brutalist-concrete"] nav:not([aria-label="Mobile Navigation"]) input[type="text"] {
+  background-color: #f4f4f5 !important;
+  border: 2px solid #18181b !important;
+  color: #09090b !important;
+}
+
 html[data-theme="brutalist-concrete"] main .rounded-2xl,
 html[data-theme="brutalist-concrete"] main .rounded-3xl,
 html[data-theme="brutalist-concrete"] .theme-card-btn {
