@@ -103,6 +103,17 @@ function getRefererForStream(url: string, streamObj?: any, data?: any): string {
   return resolveRefererForStream(url);
 }
 
+function isDeadOrBlockedDomain(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return true;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes('short.ink') ||
+    lower.includes('vidstreaming.xyz') ||
+    lower.includes('ww19.') ||
+    lower.includes('animeapps.top')
+  );
+}
+
 function extractWorkerSources(
   data: any,
   provider: string,
@@ -127,7 +138,7 @@ function extractWorkerSources(
   // 1. Process all streams from data.streams array
   if (Array.isArray(data.streams)) {
     for (const s of data.streams) {
-      if (!s.url) continue;
+      if (!s.url || isDeadOrBlockedDomain(s.url)) continue;
 
       if (s.type === 'hls' || s.url.includes('.m3u8')) {
         const ref = getRefererForStream(s.url, s, data);
@@ -146,7 +157,7 @@ function extractWorkerSources(
             }
           }
         }
-      } else if (s.type === 'embed' && !s.url.includes('animeapps.top') && !s.url.includes('short.ink')) {
+      } else if (s.type === 'embed') {
         const serverName = s.server ? `${providerLabel} (${s.server})` : `${providerLabel} Embed`;
         sources.push({
           url: s.url,
@@ -211,6 +222,7 @@ function isPlayableStream(result: any): boolean {
   }
   return result.sources.some((s: any) => {
     if (!s || !s.url || typeof s.url !== 'string') return false;
+    if (isDeadOrBlockedDomain(s.url)) return false;
     if (s.isM3U8) {
       return s.url.includes('/api/proxy') || s.url.includes('.m3u8');
     }
@@ -234,7 +246,8 @@ function isMegaOrVidstream(s: any): boolean {
 }
 
 function formatStreamResponse(sources: any[], subtitles: any[], audio: 'sub' | 'dub' | 'hindi') {
-  const sortedSources = [...sources].sort((a, b) => {
+  const validSources = sources.filter(s => s && s.url && !isDeadOrBlockedDomain(s.url));
+  const sortedSources = [...validSources].sort((a, b) => {
     // 1. M3U8 always comes before embeds
     if (a.isM3U8 && !b.isM3U8) return -1;
     if (!a.isM3U8 && b.isM3U8) return 1;
@@ -372,7 +385,7 @@ async function fetchHindiWorkerStream(
 
         const sources: any[] = [];
         for (const s of streamList) {
-          if (!s.url || (typeof s.url === 'string' && s.url.includes('short.ink'))) continue;
+          if (!s.url || isDeadOrBlockedDomain(s.url)) continue;
           const rawUrl = s.url;
           const isM3U8 = s.isM3U8 === true || (typeof rawUrl === 'string' && rawUrl.includes('.m3u8'));
           const resolvedUrl = (isM3U8 && typeof rawUrl === 'string' && rawUrl.includes('workers.dev'))
@@ -387,7 +400,7 @@ async function fetchHindiWorkerStream(
           });
         }
 
-        if (sources.length === 0 && data.stream_url && !data.stream_url.includes('short.ink')) {
+        if (sources.length === 0 && data.stream_url && !isDeadOrBlockedDomain(data.stream_url)) {
           const rawUrl = data.stream_url;
           const isM3U8 = typeof rawUrl === 'string' && rawUrl.includes('.m3u8');
           const resolvedUrl = (isM3U8 && typeof rawUrl === 'string' && rawUrl.includes('workers.dev'))
@@ -531,7 +544,7 @@ async function fetchLocalHindiStream(
           serverUrl = iframeSrc[1];
         }
 
-        if (serverUrl && serverUrl.startsWith("http") && !serverUrl.includes("short.ink")) {
+        if (serverUrl && serverUrl.startsWith("http") && !isDeadOrBlockedDomain(serverUrl)) {
           const isM3U8 = serverUrl.includes(".m3u8");
           sources.push({
             server: `${serverName || "ToonStream"} (Hindi Dub)`,
@@ -549,12 +562,12 @@ async function fetchLocalHindiStream(
     for (const ifr of iframes) {
       if (
         /\.(jpe?g|png|webp|gif|svg|ico)$/i.test(ifr.split("?")[0]) ||
+        isDeadOrBlockedDomain(ifr) ||
         ifr.includes("a-ads") ||
         ifr.includes("chaty") ||
         ifr.includes("google") ||
         ifr.includes("facebook") ||
-        ifr.includes("twitter") ||
-        ifr.includes("short.ink")
+        ifr.includes("twitter")
       ) continue;
       if (!sources.some(s => s.url === ifr)) {
         const label = ifr.includes("ruby") ? "Ruby" : ifr.includes("wish") ? "Streamwish" : "External Embed";

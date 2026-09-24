@@ -47,6 +47,17 @@ async function getToonstreamBase() {
   return cachedToonstreamBase;
 }
 
+function isDeadOrBlockedDomain(url) {
+  if (!url || typeof url !== "string") return true;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("short.ink") ||
+    lower.includes("vidstreaming.xyz") ||
+    lower.includes("ww19.") ||
+    lower.includes("animeapps.top")
+  );
+}
+
 function getHeaders(base) {
   return {
     "User-Agent": UA,
@@ -362,7 +373,7 @@ async function extractEpisodeStreams(seriesSlug, epIdentifier, requestUrl) {
         serverUrl = iframeSrc[1];
       }
 
-      if (serverUrl && serverUrl.startsWith("http") && !serverUrl.includes("short.ink")) {
+      if (serverUrl && serverUrl.startsWith("http") && !isDeadOrBlockedDomain(serverUrl)) {
         const isM3U8 = serverUrl.includes(".m3u8");
         streams.push({
           server: `${rawServerName || "ToonStream"} (Hindi Dub)`,
@@ -386,14 +397,14 @@ async function extractEpisodeStreams(seriesSlug, epIdentifier, requestUrl) {
   const uniqueServers = [...new Set(rawLinks)].filter(
     (l) =>
       !/\.(jpe?g|png|webp|gif|svg|ico)$/i.test(l.split("?")[0]) &&
+      !isDeadOrBlockedDomain(l) &&
       !l.includes("youtube.com") &&
       !l.includes("sharethis.com") &&
       !l.includes("a-ads.com") &&
       !l.includes("chaty") &&
       !l.includes("facebook.com") &&
       !l.includes("twitter.com") &&
-      !l.includes("google.com") &&
-      !l.includes("short.ink")
+      !l.includes("google.com")
   );
 
   for (const serverUrl of uniqueServers) {

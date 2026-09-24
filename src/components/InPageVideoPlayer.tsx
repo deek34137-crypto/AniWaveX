@@ -21,7 +21,9 @@ function isValidEmbedUrl(url: string | null | undefined): boolean {
     url.startsWith("/api/proxy") || 
     url.includes(".m3u8") || 
     url.includes("animeapps.top") ||
-    url.includes("short.ink")
+    url.includes("short.ink") ||
+    url.includes("vidstreaming.xyz") ||
+    url.includes("ww19.")
   ) {
     return false;
   }
@@ -381,7 +383,11 @@ export default function InPageVideoPlayer({
     let selected: StreamSource[] = [];
 
     if (activeTab === "hindi") {
-      const rawHindi = (streams.hindi || []).filter((s: any) => !s.url?.includes("short.ink"));
+      const rawHindi = (streams.hindi || []).filter((s: any) => 
+        !s.url?.includes("short.ink") &&
+        !s.url?.includes("vidstreaming.xyz") &&
+        !s.url?.includes("ww19.")
+      );
       const strictlyHindi = rawHindi.filter((s: any) => 
         s.isHindi === true || 
         /hindi|toonstream|as-cdn/i.test(s.quality || '') ||
@@ -403,7 +409,11 @@ export default function InPageVideoPlayer({
         (/eng dub|\[dub\]|\(dub\)/i.test(s.quality || '') || !/\[sub\]|\(sub\)/i.test(s.quality || ''))
       );
     } else {
-      selected = (streams.sources || []).filter((s: any) => !s.url?.includes("short.ink"));
+      selected = (streams.sources || []).filter((s: any) => 
+        !s.url?.includes("short.ink") &&
+        !s.url?.includes("vidstreaming.xyz") &&
+        !s.url?.includes("ww19.")
+      );
     }
 
     return sortSourcesWithMegaLast(selected);
