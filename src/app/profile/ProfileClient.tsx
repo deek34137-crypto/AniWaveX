@@ -302,8 +302,8 @@ export default function ProfileClient({
           onClick={() => setShowSyncModal(true)}
           className="flex items-center gap-2.5 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold text-sm transition-all border border-white/10 shadow-md active:scale-95"
         >
-          <Download className="w-4 h-4 shrink-0 text-cyan-400" />
-          <span className="truncate">1-Click AniList Import</span>
+          <RefreshCw className="w-4 h-4 shrink-0 text-cyan-400" />
+          <span className="truncate">Sync Watchlist (AniList &amp; MAL)</span>
         </button>
 
         <Link

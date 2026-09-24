@@ -27,6 +27,7 @@ export default function AniListSyncModal({
   onClose,
   onImportComplete,
 }: AniListSyncModalProps) {
+  const [service, setService] = useState<"anilist" | "mal">("anilist");
   const [activeTab, setActiveTab] = useState<"import" | "token">("import");
   const [username, setUsername] = useState("");
   const [token, setToken] = useState(() => {
@@ -45,18 +46,30 @@ export default function AniListSyncModal({
 
   const handleImportWatchlist = async () => {
     if (!username.trim()) {
-      setErrorMsg("Please enter your AniList username.");
+      setErrorMsg(`Please enter your ${service === "anilist" ? "AniList" : "MyAnimeList"} username.`);
       return;
     }
 
     setIsLoading(true);
     setErrorMsg(null);
-    setImportStatus("Connecting to AniList GraphQL...");
+    setImportStatus(`Connecting to ${service === "anilist" ? "AniList GraphQL" : "MyAnimeList"}...`);
 
     try {
-      const items = await fetchUserAniListWatchlist(username.trim());
+      let items: any[] = [];
+
+      if (service === "anilist") {
+        items = await fetchUserAniListWatchlist(username.trim());
+      } else {
+        const res = await fetch(`/api/sync/mal/user?username=${encodeURIComponent(username.trim())}`);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to load MyAnimeList watchlist.");
+        }
+        items = data.items || [];
+      }
+
       if (!items || items.length === 0) {
-        setErrorMsg("No public anime entries found for this AniList username.");
+        setErrorMsg(`No public anime entries found for this ${service === "anilist" ? "AniList" : "MyAnimeList"} username.`);
         setIsLoading(false);
         setImportStatus(null);
         return;
@@ -149,17 +162,17 @@ export default function AniListSyncModal({
             </div>
             <div>
               <h3 id="anilist-sync-modal-title" className="text-lg font-bold text-white flex items-center gap-2">
-                AniList Watchlist Sync
+                Watchlist Sync &amp; Import
               </h3>
               <p className="text-xs text-slate-400">
-                1-Click import &amp; automatic episode tracking
+                1-Click instant import from AniList or MyAnimeList
               </p>
             </div>
           </div>
 
           <button
             type="button"
-            aria-label="Close AniList sync modal"
+            aria-label="Close sync modal"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
           >
@@ -167,8 +180,41 @@ export default function AniListSyncModal({
           </button>
         </div>
 
+        {/* Service Switcher */}
+        <div className="flex bg-slate-950/70 p-1.5 gap-2 mx-6 mt-4 rounded-xl border border-white/5">
+          <button
+            onClick={() => {
+              setService("anilist");
+              setErrorMsg(null);
+            }}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              service === "anilist"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            AniList
+          </button>
+
+          <button
+            onClick={() => {
+              setService("mal");
+              setErrorMsg(null);
+            }}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              service === "mal"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            MyAnimeList
+          </button>
+        </div>
+
         {/* Tab Switcher */}
-        <div className="flex border-b border-white/10 bg-slate-950/50 p-1.5 gap-1.5 mx-6 mt-4 rounded-xl">
+        <div className="flex border-b border-white/10 bg-slate-950/50 p-1.5 gap-1.5 mx-6 mt-3 rounded-xl">
           <button
             onClick={() => {
               setActiveTab("import");
@@ -176,12 +222,12 @@ export default function AniListSyncModal({
             }}
             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
               activeTab === "import"
-                ? "bg-blue-600 text-white shadow-md"
+                ? "bg-slate-800 text-white shadow-md border border-white/10"
                 : "text-slate-400 hover:text-white"
             }`}
           >
             <Download className="w-3.5 h-3.5" />
-            1-Click Import
+            1-Click Username Import
           </button>
 
           <button
@@ -191,12 +237,12 @@ export default function AniListSyncModal({
             }}
             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
               activeTab === "token"
-                ? "bg-blue-600 text-white shadow-md"
+                ? "bg-slate-800 text-white shadow-md border border-white/10"
                 : "text-slate-400 hover:text-white"
             }`}
           >
             <Key className="w-3.5 h-3.5" />
-            Live Auto-Sync
+            Live OAuth Sync
           </button>
         </div>
 
@@ -205,17 +251,17 @@ export default function AniListSyncModal({
           {activeTab === "import" ? (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-blue-950/30 border border-blue-500/20 text-xs text-slate-300 leading-relaxed">
-                Enter your public AniList username to import your entire Watching, Completed, and Plan to Watch anime library directly into AniWaveX.
+                Enter your public {service === "anilist" ? "AniList" : "MyAnimeList"} username to import your entire Watching, Completed, and Plan to Watch anime library into AniWaveX. <strong className="text-white">Zero passwords or logins required!</strong>
               </div>
 
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-slate-300 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-blue-400" />
-                  AniList Username
+                  {service === "anilist" ? "AniList" : "MyAnimeList"} Username
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. your_anilist_username"
+                  placeholder={service === "anilist" ? "e.g. your_anilist_username" : "e.g. your_mal_username"}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full bg-slate-950 border border-white/15 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 transition-all"
