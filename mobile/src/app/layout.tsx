@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import CommandPalette from "@/components/CommandPalette";
-import HeartbeatProvider from "@/components/HeartbeatProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
 import MobileAppShell from "@/components/MobileAppShell";
 
@@ -38,7 +37,6 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col pb-20 md:pb-0 bg-[#0a0a0c]">
         <MobileAppShell>
           <AuthProvider>
-            <HeartbeatProvider />
             <NotificationManager />
             {children}
             <CommandPalette />

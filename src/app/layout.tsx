@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import CommandPalette from "@/components/CommandPalette";
-import HeartbeatProvider from "@/components/HeartbeatProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
 
 const inter = Inter({
@@ -58,7 +57,6 @@ export default function RootLayout({
         <NavigationProgress />
         <ThemeProvider>
           <AuthProvider>
-            <HeartbeatProvider />
             <NotificationManager />
             {children}
             <CommandPalette />

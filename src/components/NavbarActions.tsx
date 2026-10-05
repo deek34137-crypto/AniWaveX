@@ -4,7 +4,6 @@ import { Bell, User, LogOut, Activity, Shield, Bookmark, Link2 } from "lucide-re
 import { useState, useEffect, useRef } from "react";
 import AuthModal from "./AuthModal";
 import UsernameModal from "./UsernameModal";
-import LivePulseBadge from "./LivePulseBadge";
 import Link from "next/link";
 import { getAvatarUrl } from "@/lib/avatars";
 import { useAuth } from "@/providers/AuthProvider";
@@ -68,9 +67,6 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
 
   return (
     <>
-      {/* Real-time Live Concurrency Pulse Badge (Only visible to Admin) */}
-      <LivePulseBadge />
-
       <div ref={notificationsRef} className="relative hidden sm:block">
         <button 
           onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
