@@ -18,12 +18,12 @@ const BACKEND = 'https://mangahub-backend.deek34137.workers.dev';
 const CHAPTER_PROVIDERS = [
   'weebcentral',
   'mangadex',
+  'mangaread',
   'asurascan',
   'flamecomics',
-  'mangaread',
-  'mgeko',
   'novelcool',
   'kaliscan',
+  'mgeko',
 ];
 
 /* ───────────────────────────────────────────────
@@ -438,13 +438,24 @@ export async function getMangaChapters(
           }
         }
 
-        // If provider has significant chapters (>= 10), select immediately
-        if (uniqueChapters.length >= 10) {
+        const startsNearBeginning = uniqueChapters.length > 0 && uniqueChapters[0].chapterNumber <= 1;
+
+        // If provider has a comprehensive collection (>= 15 chapters) AND starts at the beginning (Chapter 1 or 0), select immediately
+        if (uniqueChapters.length >= 15 && startsNearBeginning) {
           return uniqueChapters;
         }
 
-        if (uniqueChapters.length > bestChapters.length) {
+        // Compare against best candidate so far:
+        if (bestChapters.length === 0) {
           bestChapters = uniqueChapters;
+        } else {
+          const bestStartsNearBeginning = bestChapters[0]?.chapterNumber <= 1;
+          // A provider starting at Chapter 1 always takes precedence over one starting mid-way (e.g. at 196)
+          if (startsNearBeginning && !bestStartsNearBeginning) {
+            bestChapters = uniqueChapters;
+          } else if (startsNearBeginning === bestStartsNearBeginning && uniqueChapters.length > bestChapters.length) {
+            bestChapters = uniqueChapters;
+          }
         }
       } catch {
         continue;
