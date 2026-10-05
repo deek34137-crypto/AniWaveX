@@ -12,24 +12,24 @@ export default async function Navbar() {
 
   return (
     <nav id="main-navbar" className="fixed top-0 left-0 w-full z-50 bg-[#0a0a0c]/95 backdrop-blur-xl border-b border-white/10 pt-[env(safe-area-inset-top,0px)] transition-all">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
+      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-10 2xl:px-12 h-14 sm:h-16 flex items-center justify-between">
         {/* Left Section: Logo & Menu */}
         <div className="flex items-center gap-2 sm:gap-4">
           <MobileNav />
-          <Link href="/" className="flex items-center gap-1.5 sm:gap-2">
+          <Link href="/" className="flex items-center gap-1.5 sm:gap-2 focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-1">
             <span className="text-lg sm:text-2xl font-black tracking-tighter bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent select-none">
               AniWaveX
             </span>
           </Link>
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-6 ml-6">
-            <Link href="/" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Home</Link>
-            <Link href="/catalog" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Catalog</Link>
-            <Link href="/manga" prefetch={true} className="text-sm font-semibold text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1 font-bold">Manga</Link>
-            <Link href="/airing" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Schedule</Link>
-            <Link href="/tier-list" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Tier List</Link>
-            <Link href="/catalog?format=movie" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">Movies</Link>
-            <Link href="/catalog?sort=newest" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">New Release</Link>
+          <div className="hidden md:flex items-center gap-4 lg:gap-6 ml-6">
+            <Link href="/" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2 py-1">Home</Link>
+            <Link href="/catalog" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2 py-1">Catalog</Link>
+            <Link href="/manga" prefetch={true} className="text-sm font-semibold text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1 font-bold focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2 py-1">Manga</Link>
+            <Link href="/airing" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2 py-1">Schedule</Link>
+            <Link href="/tier-list" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2 py-1">Tier List</Link>
+            <Link href="/catalog?format=movie" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2 py-1">Movies</Link>
+            <Link href="/catalog?sort=newest" prefetch={true} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2 py-1">New Release</Link>
           </div>
         </div>
 

@@ -34,7 +34,6 @@ import {
 } from "lucide-react";
 import {
   STORAGE_KEYS,
-  requestNotificationPermission,
   cancelPendingNotifications,
 } from "@/lib/notifications";
 import { ANILIST_TOKEN_KEY, MAL_TOKEN_KEY, MAL_CODE_VERIFIER_KEY } from "@/lib/sync-engine";
@@ -150,14 +149,12 @@ export default function ProfileClient({
     }
   }, []);
 
-  const toggleNotifications = async () => {
-    if (!notifsEnabled) {
-      const granted = await requestNotificationPermission();
-      setNotifsEnabled(granted);
-    } else {
-      localStorage.setItem(STORAGE_KEYS.ENABLED, "false");
+  const toggleNotifications = () => {
+    const next = !notifsEnabled;
+    setNotifsEnabled(next);
+    localStorage.setItem(STORAGE_KEYS.ENABLED, next ? "true" : "false");
+    if (!next) {
       cancelPendingNotifications();
-      setNotifsEnabled(false);
     }
   };
 

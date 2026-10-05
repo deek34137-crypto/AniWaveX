@@ -42,7 +42,7 @@ export default async function SearchPage({
       <Navbar />
       <div className="page-top-spacer"></div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 space-y-6">
+      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12 pt-4 space-y-6">
         {/* In-page interactive search input */}
         <SearchInput initialQuery={query} />
 
@@ -129,12 +129,12 @@ export default async function SearchPage({
                 <Film className="w-4 h-4" /> Anime Series ({animeResults.length})
               </h2>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 sm:gap-6">
               {animeResults.map((anime: any) => (
                 <AnimeCard
                   key={`anime-${anime.id}`}
                   anime={anime}
-                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, (max-width: 1536px) 16vw, 12.5vw"
                 />
               ))}
             </div>
@@ -149,7 +149,7 @@ export default async function SearchPage({
                 <BookOpen className="w-4 h-4" /> Manga &amp; Comics ({mangaResults.length})
               </h2>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 sm:gap-6">
               {mangaResults.map((manga) => (
                 <MangaCard key={`manga-${manga.id}`} manga={manga} />
               ))}

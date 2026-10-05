@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AniWaveX Behavior-Based Notification Engine
  * 
  * Rules:
@@ -188,22 +188,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
     }
   }
 
-  if (typeof window !== "undefined" && "Notification" in window) {
-    try {
-      const res = await Notification.requestPermission();
-      const granted = res === "granted";
-      if (granted) {
-        localStorage.setItem(STORAGE_KEYS.ENABLED, "true");
-        scheduleBehaviorNotification();
-      } else {
-        localStorage.setItem(STORAGE_KEYS.ENABLED, "false");
-      }
-      return granted;
-    } catch {
-      return false;
-    }
-  }
-
+  // Browser notification request permission prompt has been permanently removed
   return false;
 }
 

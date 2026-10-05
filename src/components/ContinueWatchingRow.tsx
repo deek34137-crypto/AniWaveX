@@ -59,13 +59,30 @@ export default function ContinueWatchingRow() {
             const dbDuration = r.total_seconds > 0 ? r.total_seconds : 0;
             const bestDuration = dbDuration > 0 ? dbDuration : (localDuration > 0 ? Math.floor(localDuration) : 1440);
 
+            // If the episode was completed (>= 90%), advance to the next episode
+            let displayEpId = epId;
+            let displayProgress = bestProgress;
+            let displayDuration = bestDuration;
+            if (bestDuration > 0 && bestProgress >= bestDuration * 0.90) {
+              displayEpId = epId + 1;
+              displayProgress = 0;
+              try {
+                const nextRaw = localStorage.getItem(`watch_progress_${slug}_ep_${displayEpId}`);
+                if (nextRaw) {
+                  const np = JSON.parse(nextRaw);
+                  displayProgress = np.currentTime || 0;
+                  displayDuration = np.duration || bestDuration;
+                }
+              } catch {}
+            }
+
             return {
               animeSlug: slug,
               animeTitle: r.anime_title,
               posterImage: r.poster_image,
-              episodeId: epId,
-              progressSeconds: bestProgress,
-              totalSeconds: bestDuration,
+              episodeId: displayEpId,
+              progressSeconds: displayProgress,
+              totalSeconds: displayDuration,
               updatedAt: new Date(r.updated_at).getTime(),
             };
           });
@@ -79,7 +96,29 @@ export default function ContinueWatchingRow() {
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            localItems = parsed;
+            localItems = parsed.map((item: any) => {
+              let epId = Number(item.episodeId) || 1;
+              let prog = Number(item.progressSeconds) || 0;
+              let dur = Number(item.totalSeconds) || 1440;
+              if (dur > 0 && prog >= dur * 0.90) {
+                epId = epId + 1;
+                prog = 0;
+                try {
+                  const nextRaw = localStorage.getItem(`watch_progress_${item.animeSlug}_ep_${epId}`);
+                  if (nextRaw) {
+                    const np = JSON.parse(nextRaw);
+                    prog = np.currentTime || 0;
+                    dur = np.duration || dur;
+                  }
+                } catch {}
+              }
+              return {
+                ...item,
+                episodeId: epId,
+                progressSeconds: prog,
+                totalSeconds: dur,
+              };
+            });
           }
         }
       } catch {}
@@ -270,19 +309,19 @@ export default function ContinueWatchingRow() {
           return (
             <div
               key={item.animeSlug}
-              className="snap-start shrink-0 w-[155px] sm:w-[185px] md:w-[205px] group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] hover:scale-[1.02]"
+              className="snap-start shrink-0 w-[155px] sm:w-[185px] md:w-[210px] lg:w-[230px] xl:w-[250px] 2xl:w-[270px] group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 group-focus-within:border-blue-500/80 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] hover:scale-[1.02] group-focus-within:scale-[1.02]"
             >
               {/* Media & Title Link */}
               <Link
                 href={`/anime/${item.animeSlug}${item.episodeId ? `?ep=${item.episodeId}` : ""}`}
                 prefetch={true}
-                className="block relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer"
+                className="block relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:rounded-2xl"
                 aria-label={`Continue watching ${item.animeTitle} Episode ${item.episodeId}`}
               >
                 <AnimeImage
                   src={item.posterImage}
                   alt={item.animeTitle}
-                  sizes="(max-width: 640px) 155px, (max-width: 1024px) 185px, 205px"
+                  sizes="(max-width: 640px) 155px, (max-width: 1024px) 185px, (max-width: 1280px) 230px, 270px"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
 

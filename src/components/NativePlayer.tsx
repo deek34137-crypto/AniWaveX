@@ -54,10 +54,33 @@ export default function NativePlayer({
     return sub.default || subLabel.includes('english') || subLang === 'en';
   });
 
-  // Explicitly reset playback position to 0 when starting a fresh episode without unmounting
+  const hasAppliedInitialTimeRef = useRef(false);
+
   useEffect(() => {
-    if (player.current && initialTime === 0) {
-      player.current.currentTime = 0;
+    hasAppliedInitialTimeRef.current = false;
+  }, [url]);
+
+  const applyInitialSeek = () => {
+    if (initialTime > 0 && player.current) {
+      const cur = player.current.currentTime || 0;
+      if (Math.abs(cur - initialTime) > 2) {
+        try {
+          player.current.currentTime = initialTime;
+        } catch {}
+      }
+      hasAppliedInitialTimeRef.current = true;
+    }
+  };
+
+  useEffect(() => {
+    if (player.current && initialTime > 0 && !hasAppliedInitialTimeRef.current) {
+      const cur = player.current.currentTime || 0;
+      if (Math.abs(cur - initialTime) > 2) {
+        try {
+          player.current.currentTime = initialTime;
+          hasAppliedInitialTimeRef.current = true;
+        } catch {}
+      }
     }
   }, [url, initialTime, player]);
 
@@ -74,14 +97,9 @@ export default function NativePlayer({
       playsInline
       currentTime={initialTime}
       autoPlay={autoPlay}
-      onCanPlay={() => {
-        if (initialTime > 0 && player.current) {
-          const cur = player.current.currentTime || 0;
-          if (Math.abs(cur - initialTime) > 2) {
-            player.current.currentTime = initialTime;
-          }
-        }
-      }}
+      onLoadedMetadata={applyInitialSeek}
+      onCanPlay={applyInitialSeek}
+      onStarted={applyInitialSeek}
       onTimeUpdate={(detail) => {
         if (onTimeUpdate && typeof detail.currentTime === 'number') {
           const dur = player.current?.duration;

@@ -417,3 +417,53 @@ html.reduce-motion *::after {
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESKTOP & 10-FOOT TV FOCUS NAVIGATION & 4K SCALING SYSTEM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Universal accessible focus outline for remote controls & keyboards */
+:focus-visible {
+  outline: none;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+/* TV & Remote Focused Card Scale & Elevation */
+.tv-card-focus:focus-visible,
+.group:focus-within {
+  transition-property: transform, box-shadow, border-color;
+  transition-duration: 250ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* TV Large Screen / 4K Scaling & Overscan protection */
+@media (min-width: 1920px) {
+  :root {
+    --navbar-h: 4.5rem;
+  }
+}
+
+@media (min-width: 2560px) {
+  html {
+    font-size: 18px;
+  }
+  :root {
+    --navbar-h: 5rem;
+  }
+}
+
+@media (min-width: 3840px) {
+  html {
+    font-size: 22px;
+  }
+  :root {
+    --navbar-h: 6rem;
+  }
+}
+

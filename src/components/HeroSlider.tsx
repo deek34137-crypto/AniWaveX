@@ -68,7 +68,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="relative w-full h-[52vh] sm:h-[65vh] md:h-[70vh] min-h-[380px] sm:min-h-[500px] overflow-hidden rounded-2xl md:rounded-3xl mt-2 sm:mt-6 group shadow-2xl"
+      className="relative w-full h-[52vh] sm:h-[65vh] md:h-[72vh] 2xl:h-[76vh] min-h-[380px] sm:min-h-[500px] 2xl:min-h-[620px] overflow-hidden rounded-2xl md:rounded-3xl mt-2 sm:mt-6 group shadow-2xl"
     >
       {animeList.map((anime, index) => {
         const isActive = index === currentIndex;
@@ -99,16 +99,16 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
             ) : null}
             
             {/* Gradients for readability */}
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/60 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
 
             {/* Content — extra bottom padding on mobile to clear bottom nav */}
-            <div className="absolute bottom-0 left-0 w-full max-w-4xl p-4 pb-14 sm:p-8 sm:pb-8 md:p-16 flex flex-col justify-end h-full">
-              <h1 className={`text-2xl sm:text-4xl md:text-6xl font-black text-white tracking-tight mb-2 sm:mb-4 drop-shadow-2xl transition-all duration-700 delay-300 transform line-clamp-2 ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+            <div className="absolute bottom-0 left-0 w-full max-w-5xl p-4 pb-14 sm:p-8 sm:pb-8 md:p-14 lg:p-16 flex flex-col justify-end h-full">
+              <h1 className={`text-2xl sm:text-4xl md:text-5xl lg:text-6xl 2xl:text-7xl font-black text-white tracking-tight mb-2 sm:mb-4 drop-shadow-2xl transition-all duration-700 delay-300 transform line-clamp-2 ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 {anime.title}
               </h1>
               
-              <p className={`text-slate-300 text-xs sm:text-base md:text-xl line-clamp-2 sm:line-clamp-3 mb-4 sm:mb-8 max-w-2xl drop-shadow-md transition-all duration-700 delay-500 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+              <p className={`text-slate-300 text-xs sm:text-base md:text-lg lg:text-xl line-clamp-2 sm:line-clamp-3 mb-4 sm:mb-8 max-w-3xl drop-shadow-md transition-all duration-700 delay-500 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 {anime.description}
               </p>
 
@@ -116,7 +116,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
                 <Link 
                   href={`/anime/${anime.slug}`}
                   prefetch={true}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-105 active:scale-95"
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-105 active:scale-95 focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:outline-none"
                 >
                   <Play className="w-4 h-4 fill-current" />
                   Watch Now
@@ -125,7 +125,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
                 <Link 
                   href={`/anime/${anime.slug}`}
                   prefetch={true}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-slate-500/40 hover:bg-slate-500/60 text-white text-xs sm:text-base font-semibold rounded-xl backdrop-blur-md transition-all hover:scale-105 active:scale-95"
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-slate-500/40 hover:bg-slate-500/60 text-white text-xs sm:text-base font-semibold rounded-xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:outline-none"
                 >
                   <Info className="w-4 h-4" />
                   More Info
@@ -139,7 +139,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
       {/* Navigation Arrows — subtle on mobile (80% opacity), hover-only on desktop */}
       <button 
         onClick={prevSlide}
-        className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 p-2 md:p-3 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 transform hover:scale-110 shadow-lg"
+        className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 p-2 md:p-3 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 transform hover:scale-110 shadow-lg focus-visible:opacity-100 focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:outline-none"
         aria-label="Previous slide"
       >
         <ChevronLeft className="w-5 h-5 md:w-8 md:h-8" />
@@ -147,7 +147,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
 
       <button 
         onClick={nextSlide}
-        className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 p-2 md:p-3 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 transform hover:scale-110 shadow-lg"
+        className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 p-2 md:p-3 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 transform hover:scale-110 shadow-lg focus-visible:opacity-100 focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:outline-none"
         aria-label="Next slide"
       >
         <ChevronRight className="w-5 h-5 md:w-8 md:h-8" />
@@ -160,7 +160,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
             key={idx}
             onClick={() => setCurrentIndex(idx)}
             aria-label={`Go to slide ${idx + 1}`}
-            className={`transition-all duration-300 rounded-full ${
+            className={`transition-all duration-300 rounded-full focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none ${
               idx === currentIndex 
                 ? 'w-6 sm:w-8 h-1.5 sm:h-2 bg-blue-500' 
                 : 'w-1.5 sm:w-2 h-1.5 sm:h-2 bg-white/40 hover:bg-white/70'

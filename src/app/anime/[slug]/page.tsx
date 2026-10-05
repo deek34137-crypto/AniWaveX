@@ -62,11 +62,13 @@ export default async function AnimePage({
   let initialBookmarked = false;
   let initialBookmarkStatus = null;
   let lastWatchedEpisode = null;
+  let serverProgressSeconds = null;
+  let serverTotalSeconds = null;
 
   if (user) {
     const [bookmarkRes, historyRes] = await Promise.all([
       supabase.from('bookmarks').select('id, status').eq('user_id', user.id).eq('anime_slug', data.slug).maybeSingle(),
-      supabase.from('watch_history').select('last_episode_watched, progress_seconds').eq('user_id', user.id).eq('anime_slug', data.slug).maybeSingle()
+      supabase.from('watch_history').select('last_episode_watched, progress_seconds, total_seconds').eq('user_id', user.id).eq('anime_slug', data.slug).maybeSingle()
     ]);
 
     if (bookmarkRes.data) {
@@ -76,6 +78,8 @@ export default async function AnimePage({
     
     if (historyRes.data) {
       lastWatchedEpisode = historyRes.data.last_episode_watched;
+      serverProgressSeconds = historyRes.data.progress_seconds;
+      serverTotalSeconds = historyRes.data.total_seconds;
     }
   }
 
@@ -90,6 +94,8 @@ export default async function AnimePage({
           initialBookmarkStatus={initialBookmarkStatus}
           user={user} 
           lastWatchedEpisode={lastWatchedEpisode} 
+          serverProgressSeconds={serverProgressSeconds}
+          serverTotalSeconds={serverTotalSeconds}
         />
       </Suspense>
     </>

@@ -256,10 +256,77 @@ interface BackendChapter {
   provider: string;
 }
 
+function isDateOrTimeAgo(str: string): boolean {
+  if (!str) return false;
+  const s = str.trim().toLowerCase();
+  // Relative patterns like "1 year", "1 year, 1 month", "2 months ago", "3 days", "yesterday", "today"
+  const relativeDatePattern =
+    /^(?:yesterday|today|just now|(?:an?|\d+)\s*(?:sec|second|min|minute|hour|hr|day|week|month|yr|year)s?(?:\s*,\s*(?:an?|\d+)\s*(?:sec|second|min|minute|hour|hr|day|week|month|yr|year)s?)*(?:\s*ago)?)$/i;
+  // Standard date formats like "2024-05-12", "05/12/2024", "Jan 12, 2024", "12 Jan 2024"
+  const standardDatePattern =
+    /^(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?,?\s*\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*,?\s*\d{4})$/i;
+  return relativeDatePattern.test(s) || standardDatePattern.test(s);
+}
+
+function extractChapterNumber(rawNum: any, rawTitle: string, rawUrl: string): number {
+  // 1. Try URL extraction if URL contains explicit chapter slug e.g. chapter-211 or ch-211
+  if (rawUrl) {
+    const urlMatch = rawUrl.match(/(?:chapter|ch)[-_/](\d+(?:\.\d+)?)/i);
+    if (urlMatch) {
+      const parsed = parseFloat(urlMatch[1]);
+      if (!isNaN(parsed) && parsed >= 0) {
+        return parsed;
+      }
+    }
+  }
+
+  // 2. Try title extraction if title explicitly specifies a chapter number e.g. "Chapter 211" or "Ch. 5"
+  if (rawTitle && !isDateOrTimeAgo(rawTitle)) {
+    const titleMatch = rawTitle.match(/(?:chapter|ch\.?|episode|ep\.?)\s*(\d+(?:\.\d+)?)/i);
+    if (titleMatch) {
+      const parsed = parseFloat(titleMatch[1]);
+      if (!isNaN(parsed) && parsed >= 0) {
+        return parsed;
+      }
+    }
+  }
+
+  // 3. Fall back to rawNum / parseFloat(rawNum)
+  if (typeof rawNum === 'number' && !isNaN(rawNum) && rawNum >= 0) {
+    return rawNum;
+  }
+  if (typeof rawNum === 'string') {
+    const parsed = parseFloat(rawNum);
+    if (!isNaN(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+
+  return 0;
+}
+
 function cleanChapterTitle(rawTitle: string, num: number | string): string {
   if (!rawTitle) return `Chapter ${num}`;
   const firstLine = rawTitle.split('\n')[0].replace(/\s+/g, ' ').trim();
-  return firstLine || `Chapter ${num}`;
+  if (!firstLine || isDateOrTimeAgo(firstLine)) {
+    return `Chapter ${num}`;
+  }
+
+  // If title is just a raw number (e.g. "211" or "211.5"), format as "Chapter 211"
+  if (/^\d+(?:\.\d+)?$/.test(firstLine)) {
+    return `Chapter ${firstLine}`;
+  }
+
+  // If title doesn't mention chapter number and isn't a special chapter (Prologue, Extra, etc.),
+  // format with chapter number: e.g. "Chapter 211: Who the Heck?"
+  if (
+    !/^(?:chapter|ch\.?|ep\.?|episode)\s*\d+/i.test(firstLine) &&
+    !/^(?:prologue|epilogue|extra|oneshot|special)/i.test(firstLine)
+  ) {
+    return `Chapter ${num}: ${firstLine}`;
+  }
+
+  return firstLine;
 }
 
 export async function getMangaChapters(
@@ -346,25 +413,38 @@ export async function getMangaChapters(
         }
 
         const formatted = rawChapters
-          .map((ch): MangaChapter => ({
-            id: JSON.stringify({
-              provider: match.provider,
-              chapterId: ch.id,
-              chapterUrl: ch.url,
-            }),
-            chapterNumber: ch.numberValue ?? parseFloat(ch.number) ?? 0,
-            title: cleanChapterTitle(ch.title, ch.number ?? ch.numberValue),
-            source: data.providerName || match.provider,
-          }))
+          .map((ch): MangaChapter => {
+            const num = extractChapterNumber(ch.numberValue ?? ch.number, ch.title, ch.url);
+            return {
+              id: JSON.stringify({
+                provider: match.provider,
+                chapterId: ch.id,
+                chapterUrl: ch.url,
+              }),
+              chapterNumber: num,
+              title: cleanChapterTitle(ch.title, num || ch.number || ch.numberValue),
+              source: data.providerName || match.provider,
+            };
+          })
           .sort((a, b) => a.chapterNumber - b.chapterNumber);
 
-        // If provider has significant chapters (>= 10), select immediately
-        if (formatted.length >= 10) {
-          return formatted;
+        // Deduplicate chapters by chapterNumber
+        const seenNums = new Set<number>();
+        const uniqueChapters: MangaChapter[] = [];
+        for (const ch of formatted) {
+          if (!seenNums.has(ch.chapterNumber)) {
+            seenNums.add(ch.chapterNumber);
+            uniqueChapters.push(ch);
+          }
         }
 
-        if (formatted.length > bestChapters.length) {
-          bestChapters = formatted;
+        // If provider has significant chapters (>= 10), select immediately
+        if (uniqueChapters.length >= 10) {
+          return uniqueChapters;
+        }
+
+        if (uniqueChapters.length > bestChapters.length) {
+          bestChapters = uniqueChapters;
         }
       } catch {
         continue;

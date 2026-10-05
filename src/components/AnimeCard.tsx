@@ -71,14 +71,14 @@ export default function AnimeCard({
     <div className={`relative group rounded-2xl ${className}`}>
       {/* Base Vertical Rectangle Card */}
       <div
-        className={`relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 transition-all duration-300 group-hover:border-blue-500/60 group-hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] group-hover:scale-[1.03] ${
+        className={`relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 transition-all duration-300 group-hover:border-blue-500/60 group-hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] group-hover:scale-[1.03] group-focus-within:border-blue-500/80 group-focus-within:shadow-[0_0_25px_rgba(37,99,235,0.35)] group-focus-within:scale-[1.03] ${
           aspectRatio === "poster" ? "aspect-[2/3]" : "aspect-video"
         }`}
       >
         <Link 
           href={`/anime/${anime.slug}`} 
           prefetch={true}
-          className="block w-full h-full relative cursor-pointer"
+          className="block w-full h-full relative cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:rounded-2xl"
           aria-label={`View ${anime.title}`}
         >
           {/* Cover Poster Image */}
@@ -86,8 +86,8 @@ export default function AnimeCard({
             src={bgImg}
             alt={anime.title}
             priority={priority}
-            sizes={sizes || "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"}
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes={sizes || "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1536px) 20vw, 14vw"}
+            className="object-cover transition-transform duration-500 group-hover:scale-105 group-focus-visible:scale-105"
           />
 
           {/* Dark Bottom/Top Gradients */}
@@ -111,9 +111,9 @@ export default function AnimeCard({
             )}
           </div>
 
-          {/* Center Play Overlay Icon (Fade in on hover) */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-            <div className="w-12 h-12 bg-blue-600/90 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+          {/* Center Play Overlay Icon (Fade in on hover or remote focus) */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300 pointer-events-none">
+            <div className="w-12 h-12 bg-blue-600/90 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover:scale-100 group-focus-within:scale-100 transition-transform duration-300">
               <Play className="w-5 h-5 fill-current ml-0.5" />
             </div>
           </div>
@@ -122,7 +122,7 @@ export default function AnimeCard({
           <div className="absolute bottom-0 left-0 right-0 p-3.5 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
             <div className="flex items-start justify-between gap-1.5 mb-1 pr-7">
               <h3
-                className="text-white font-bold text-sm line-clamp-1 leading-snug drop-shadow-md group-hover:text-blue-400 transition-colors"
+                className="text-white font-bold text-sm line-clamp-1 leading-snug drop-shadow-md group-hover:text-blue-400 group-focus-visible:text-blue-400 transition-colors"
                 title={anime.title}
               >
                 {anime.title}
@@ -146,7 +146,7 @@ export default function AnimeCard({
           onClick={handleQuickBookmark}
           disabled={isBookmarking}
           aria-label={isBookmarked ? `Remove ${anime.title} from watchlist` : `Add ${anime.title} to watchlist`}
-          className={`absolute bottom-[32px] right-2.5 sm:bottom-[34px] sm:right-3.5 z-20 shrink-0 w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg sm:rounded-md transition-all active:scale-90 touch-manipulation sm:opacity-0 sm:group-hover:opacity-100 backdrop-blur-sm ${
+          className={`absolute bottom-[32px] right-2.5 sm:bottom-[34px] sm:right-3.5 z-20 shrink-0 w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg sm:rounded-md transition-all active:scale-90 touch-manipulation sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none backdrop-blur-sm ${
             isBookmarked
               ? "bg-blue-600 text-white shadow-sm"
               : "bg-black/60 hover:bg-blue-600 text-slate-300 hover:text-white border border-white/10"

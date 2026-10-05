@@ -71,6 +71,54 @@ interface InPageVideoPlayerProps {
   user?: any;
   anilistId?: number | null;
   animeId?: string | number;
+  initialProgressSeconds?: number | null;
+}
+
+export function getStoredEpisodeProgress(
+  animeSlug: string, 
+  episodeId: number | string | undefined,
+  serverProgress?: number | null
+): number {
+  if (typeof window === "undefined" || !animeSlug || !episodeId) {
+    return (serverProgress && serverProgress > 5) ? Math.floor(serverProgress) : 0;
+  }
+
+  // 1. Check episode-specific key in localStorage
+  try {
+    const storageKey = `watch_progress_${animeSlug}_ep_${episodeId}`;
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.currentTime && parsed.currentTime > 5) {
+        if (!parsed.duration || parsed.currentTime < parsed.duration * 0.92) {
+          return Math.floor(parsed.currentTime);
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Check unified recent watches list as fallback
+  try {
+    const rawRecent = localStorage.getItem("aniwavex_recent_watches");
+    if (rawRecent) {
+      const list = JSON.parse(rawRecent);
+      if (Array.isArray(list)) {
+        const entry = list.find((it: any) => it.animeSlug === animeSlug && Number(it.episodeId) === Number(episodeId));
+        if (entry && entry.progressSeconds && entry.progressSeconds > 5) {
+          if (!entry.totalSeconds || entry.progressSeconds < entry.totalSeconds * 0.92) {
+            return Math.floor(entry.progressSeconds);
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 3. Fall back to server progress if provided (for logged-in users on new devices)
+  if (serverProgress && serverProgress > 5) {
+    return Math.floor(serverProgress);
+  }
+
+  return 0;
 }
 
 export default function InPageVideoPlayer({ 
@@ -78,13 +126,14 @@ export default function InPageVideoPlayer({
   episodes, 
   animeSlug, 
   animeTitle, 
-  animeType,
+  animeType, 
   animePosterImage, 
-  onEpisodeChange,
-  onClose,
-  user: initialUser,
-  anilistId,
-  animeId
+  onEpisodeChange, 
+  onClose, 
+  user: initialUser, 
+  anilistId, 
+  animeId,
+  initialProgressSeconds
 }: InPageVideoPlayerProps) {
   const { user: authUser, supabase } = useAuth();
   const [activeTab, setActiveTab] = useState<"sub" | "dub" | "hindi">("sub");
@@ -95,7 +144,9 @@ export default function InPageVideoPlayer({
   const [ambientMode, setAmbientMode] = useState(true);
   const [selectedServerIndex, setSelectedServerIndex] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [initialTime, setInitialTime] = useState(0);
+  const [initialTime, setInitialTime] = useState<number>(() => {
+    return getStoredEpisodeProgress(animeSlug, episode?.id, initialProgressSeconds);
+  });
   const [currentUser, setCurrentUser] = useState<any>(authUser || initialUser);
   const [resumedBanner, setResumedBanner] = useState<string | null>(null);
   const [serverToast, setServerToast] = useState<string | null>(null);
@@ -107,6 +158,7 @@ export default function InPageVideoPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [liveSyncResult, setLiveSyncResult] = useState<LiveSyncResult | null>(null);
   const completionSyncedEpisodeRef = useRef<number | null>(null);
+  const hasInitialSeekSettledRef = useRef<boolean>(true);
   
   const currentUserRef = useRef<any>(authUser || initialUser);
   const playerRef = useRef<HTMLDivElement>(null);
@@ -188,7 +240,7 @@ export default function InPageVideoPlayer({
     }
   }, [episode?.id, animeSlug, animeTitle, animePosterImage, supabase]);
 
-  // Load initial resume progress from localStorage on episode change
+  // Load initial resume progress from storage on episode change
   useEffect(() => {
     if (!episode) return;
     setFallbackToIframe(false);
@@ -197,32 +249,23 @@ export default function InPageVideoPlayer({
     completionSyncedEpisodeRef.current = null;
     setLiveSyncResult(null);
 
-    try {
-      const storageKey = `watch_progress_${animeSlug}_ep_${episode.id}`;
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.currentTime && parsed.currentTime > 5) {
-          // If video was not completed (e.g. less than 95% of duration)
-          if (!parsed.duration || parsed.currentTime < parsed.duration * 0.95) {
-            const startSec = Math.floor(parsed.currentTime);
-            setInitialTime(startSec);
-            lastSavedTimeRef.current = startSec;
-            lastSupabaseSyncRef.current = startSec;
-            const mins = Math.floor(parsed.currentTime / 60);
-            const secs = Math.floor(parsed.currentTime % 60).toString().padStart(2, '0');
-            setResumedBanner(`Resumed from ${mins}:${secs}`);
-            setTimeout(() => setResumedBanner(null), 4000);
-            return;
-          }
-        }
-      }
-    } catch {
-      // Ignore storage read errors
+    const foundResumeTime = getStoredEpisodeProgress(animeSlug, episode.id, initialProgressSeconds);
+
+    if (foundResumeTime > 0) {
+      setInitialTime(foundResumeTime);
+      lastSavedTimeRef.current = foundResumeTime;
+      lastSupabaseSyncRef.current = foundResumeTime;
+      hasInitialSeekSettledRef.current = false;
+      const mins = Math.floor(foundResumeTime / 60);
+      const secs = Math.floor(foundResumeTime % 60).toString().padStart(2, '0');
+      setResumedBanner(`Resumed from ${mins}:${secs}`);
+      setTimeout(() => setResumedBanner(null), 4000);
+    } else {
+      setInitialTime(0);
+      hasInitialSeekSettledRef.current = true;
+      setResumedBanner(null);
     }
-    setInitialTime(0);
-    setResumedBanner(null);
-  }, [episode, animeSlug]);
+  }, [episode?.id, animeSlug, initialProgressSeconds]);
 
   // Scroll to player when episode changes (only when not in fullscreen)
   useEffect(() => {
@@ -278,6 +321,15 @@ export default function InPageVideoPlayer({
 
     const floorTime = Math.floor(currentTime);
     const floorDur = Math.floor(duration);
+
+    // If initialTime > 5, protect stored progress from being overwritten by 0-5s updates before seek settles
+    if (!hasInitialSeekSettledRef.current && initialTime > 5) {
+      if (floorTime < initialTime - 5) {
+        // Player is still warming up from 0 before seek settles — do NOT overwrite saved position
+        return;
+      }
+      hasInitialSeekSettledRef.current = true;
+    }
 
     // Always keep the latest known duration up-to-date
     if (floorDur > 0) {
@@ -633,8 +685,6 @@ export default function InPageVideoPlayer({
       setSelectedServerIndex(0); // Reset server index
       setFallbackToIframe(false);
       setPlayerError(false);
-      setInitialTime(0);
-      lastSavedTimeRef.current = 0;
       try {
         const typeParam = animeType ? `&type=${encodeURIComponent(animeType)}` : '';
         const audioParam = `&audio=${activeTab}`;

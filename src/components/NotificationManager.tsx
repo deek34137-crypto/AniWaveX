@@ -1,7 +1,6 @@
-﻿"use client";
+"use client";
 
 import { useEffect } from "react";
-import NotificationPermissionPrompt from "./NotificationPermissionPrompt";
 import {
   recordUserActivity,
   scheduleBehaviorNotification,
@@ -74,5 +73,6 @@ export default function NotificationManager() {
     };
   }, []);
 
-  return <NotificationPermissionPrompt />;
+  // No notification permission prompt rendered
+  return null;
 }

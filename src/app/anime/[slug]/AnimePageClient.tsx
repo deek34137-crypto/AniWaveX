@@ -14,14 +14,18 @@ export default function AnimePageClient({
   initialBookmarked, 
   initialBookmarkStatus,
   user: initialUser, 
-  lastWatchedEpisode: serverLastWatched
+  lastWatchedEpisode: serverLastWatched,
+  serverProgressSeconds,
+  serverTotalSeconds
 }: { 
   data: any, 
   recommendations: any[],
   initialBookmarked?: boolean, 
   initialBookmarkStatus?: any,
   user?: any, 
-  lastWatchedEpisode?: number | null 
+  lastWatchedEpisode?: number | null,
+  serverProgressSeconds?: number | null,
+  serverTotalSeconds?: number | null
 }) {
   const [activeEpisode, setActiveEpisode] = useState<any | null>(null);
   const [lastWatchedEpisode, setLastWatchedEpisode] = useState<number | null>(serverLastWatched ?? null);
@@ -29,7 +33,7 @@ export default function AnimePageClient({
   const currentUser = authUser || initialUser;
   const searchParams = useSearchParams();
 
-  // On mount: handle ?ep= param (from Continue Watching) or read localStorage for guests
+  // On mount: handle ?ep= param (from Continue Watching) or resolve best episode (local + server)
   useEffect(() => {
     if (!data) return;
 
@@ -46,32 +50,55 @@ export default function AnimePageClient({
       }
     }
 
-    // Server already gave us the episode (logged-in user via SSR)
-    if (serverLastWatched) {
-      setLastWatchedEpisode(serverLastWatched);
-      return;
-    }
+    // Helper to advance to next episode if the previous episode was completed (>= 90%)
+    const getNextEpisodeIfCompleted = (epId: number, progress: number, total: number): number => {
+      const isCompleted = (total > 0 && progress >= total * 0.90) || (total > 60 && total - progress < 60);
+      if (!isCompleted || !data.episodes || data.episodes.length === 0) return epId;
+      const curIdx = data.episodes.findIndex((e: any) => Number(e.id) === Number(epId));
+      if (curIdx !== -1 && curIdx < data.episodes.length - 1) {
+        return data.episodes[curIdx + 1].id;
+      }
+      return epId;
+    };
 
-    // Fallback: read from localStorage (works for guests AND logged-in users
-    // when the SSR Supabase cookie auth doesn't fire correctly)
+    // 1. Check unified recent watches list (often freshest on the active device)
     try {
-      // 1. Check the unified recent watches list
       const raw = localStorage.getItem("aniwavex_recent_watches");
       if (raw) {
         const list = JSON.parse(raw);
         if (Array.isArray(list)) {
           const entry = list.find((it: any) => it.animeSlug === data.slug);
           if (entry?.episodeId) {
-            setLastWatchedEpisode(entry.episodeId);
+            const resolvedEp = getNextEpisodeIfCompleted(
+              Number(entry.episodeId),
+              Number(entry.progressSeconds || 0),
+              Number(entry.totalSeconds || 0)
+            );
+            setLastWatchedEpisode(resolvedEp);
             return;
           }
         }
       }
+    } catch {}
 
-      // 2. Scan per-episode keys as a last resort
+    // 2. Check server-provided last watched (from Supabase watch_history)
+    if (serverLastWatched) {
+      const resolvedEp = getNextEpisodeIfCompleted(
+        Number(serverLastWatched),
+        Number(serverProgressSeconds || 0),
+        Number(serverTotalSeconds || 0)
+      );
+      setLastWatchedEpisode(resolvedEp);
+      return;
+    }
+
+    // 3. Scan per-episode localStorage keys as a fallback
+    try {
       const epIds = (data.episodes || []).map((e: any) => e.id).filter(Boolean);
       let bestEpId: number | null = null;
       let bestTime = 0;
+      let bestProgress = 0;
+      let bestDuration = 0;
       for (const epId of epIds) {
         const epRaw = localStorage.getItem(`watch_progress_${data.slug}_ep_${epId}`);
         if (epRaw) {
@@ -79,12 +106,17 @@ export default function AnimePageClient({
           if ((parsed.updatedAt || 0) > bestTime) {
             bestTime = parsed.updatedAt || 0;
             bestEpId = epId;
+            bestProgress = parsed.currentTime || 0;
+            bestDuration = parsed.duration || 0;
           }
         }
       }
-      if (bestEpId) setLastWatchedEpisode(bestEpId);
+      if (bestEpId) {
+        const resolvedEp = getNextEpisodeIfCompleted(bestEpId, bestProgress, bestDuration);
+        setLastWatchedEpisode(resolvedEp);
+      }
     } catch {}
-  }, [data, searchParams, serverLastWatched]);
+  }, [data, searchParams, serverLastWatched, serverProgressSeconds, serverTotalSeconds]);
 
   // Listen for live episode updates from player or background sync
   useEffect(() => {
@@ -103,12 +135,13 @@ export default function AnimePageClient({
 
   return (
     <main className="min-h-screen bg-slate-950 pb-32" style={{ paddingTop: "var(--navbar-total, 3.5rem)" }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12">
         
         {activeEpisode ? (
           <InPageVideoPlayer 
             episode={activeEpisode} 
             episodes={data.episodes}
+            initialProgressSeconds={activeEpisode?.id === serverLastWatched ? serverProgressSeconds : null}
             onEpisodeChange={(ep) => {
               setActiveEpisode(ep);
               if (ep?.id) setLastWatchedEpisode(ep.id);

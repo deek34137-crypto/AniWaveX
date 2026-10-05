@@ -40,6 +40,17 @@ export default function EpisodesGrid({
     if (!animeSlug || !episodes || episodes.length === 0) return;
     try {
       const map: Record<number, number> = {};
+      let recentItem: any = null;
+      try {
+        const rawRecent = localStorage.getItem("aniwavex_recent_watches");
+        if (rawRecent) {
+          const list = JSON.parse(rawRecent);
+          if (Array.isArray(list)) {
+            recentItem = list.find((it: any) => it.animeSlug === animeSlug);
+          }
+        }
+      } catch {}
+
       for (const ep of episodes) {
         const storageKey = `watch_progress_${animeSlug}_ep_${ep.id}`;
         const raw = localStorage.getItem(storageKey);
@@ -48,7 +59,12 @@ export default function EpisodesGrid({
           if (parsed.currentTime && parsed.duration) {
             const pct = Math.min(100, Math.round((parsed.currentTime / parsed.duration) * 100));
             map[ep.id] = pct;
+            continue;
           }
+        }
+        if (recentItem && Number(recentItem.episodeId) === Number(ep.id) && recentItem.progressSeconds && recentItem.totalSeconds) {
+          const pct = Math.min(100, Math.round((recentItem.progressSeconds / recentItem.totalSeconds) * 100));
+          map[ep.id] = pct;
         }
       }
       setEpisodeProgressMap(map);
@@ -263,7 +279,7 @@ export default function EpisodesGrid({
           )}
         </div>
       ) : (
-        <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-3"}>
+        <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4" : "flex flex-col gap-3"}>
           {displayedEpisodes.map((episode) => {
             const isActive = episode.id === activeEpisodeId;
             const progressPct = episodeProgressMap[episode.id] || 0;
@@ -275,7 +291,7 @@ export default function EpisodesGrid({
                 key={episode.id}
                 onClick={() => onPlay?.(episode)}
                 aria-label={`Play Episode ${episode.id}: ${episode.title}`}
-                className={`group relative flex items-start text-left w-full p-5 glass transition-all duration-300 rounded-2xl cursor-pointer overflow-hidden border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`group relative flex items-start text-left w-full p-4 sm:p-5 glass transition-all duration-300 rounded-2xl cursor-pointer overflow-hidden border focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:border-cyan-400 focus-visible:scale-[1.02] focus-visible:z-20 ${
                   isActive 
                     ? 'border-blue-500/80 bg-blue-600/10 shadow-[0_0_25px_rgba(37,99,235,0.25)] ring-1 ring-blue-500/50' 
                     : isCompleted

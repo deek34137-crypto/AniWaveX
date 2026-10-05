@@ -1,0 +1,212 @@
+"use client";
+
+import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
+import {
+  ChevronRight,
+  Search,
+  ArrowUpDown,
+  BookOpen,
+  Sparkles,
+  CheckCircle2,
+  Bookmark,
+} from "lucide-react";
+import { MangaChapter } from "@/lib/manga/types";
+
+interface MangaDetailChaptersClientProps {
+  mangaId: string;
+  chapters: MangaChapter[];
+}
+
+interface MangaReadingProgress {
+  mangaId: string;
+  chapterId: string;
+  chapterNumber: number;
+  pageNumber: number;
+  updatedAt: number;
+}
+
+export default function MangaDetailChaptersClient({
+  mangaId,
+  chapters,
+}: MangaDetailChaptersClientProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [progress, setProgress] = useState<MangaReadingProgress | null>(null);
+
+  // Restore saved reading progress from localStorage (Phase 8)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`aniwavex_manga_progress_${mangaId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.chapterId) {
+          setProgress(parsed);
+        }
+      }
+    } catch {}
+  }, [mangaId]);
+
+  // Filter and sort chapters
+  const filteredChapters = useMemo(() => {
+    let result = [...chapters];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (ch) =>
+          ch.title.toLowerCase().includes(q) ||
+          ch.chapterNumber.toString().includes(q)
+      );
+    }
+
+    if (sortOrder === "desc") {
+      result.sort((a, b) => b.chapterNumber - a.chapterNumber);
+    } else {
+      result.sort((a, b) => a.chapterNumber - b.chapterNumber);
+    }
+
+    return result;
+  }, [chapters, searchQuery, sortOrder]);
+
+  const toggleSort = () => {
+    setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+  };
+
+  const resumeChapter = useMemo(() => {
+    if (!progress) return null;
+    return (
+      chapters.find((c) => c.id === progress.chapterId) ||
+      chapters.find((c) => c.chapterNumber === progress.chapterNumber) ||
+      null
+    );
+  }, [chapters, progress]);
+
+  return (
+    <div className="space-y-4">
+      {/* Top Action Bar: Start / Resume Reading + Search & Sort */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900/60 border border-white/10 rounded-2xl">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-cyan-400" />
+            Chapters ({chapters.length})
+          </h2>
+        </div>
+
+        {/* Action Buttons: Resume / Start Reading */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {resumeChapter && (
+            <Link
+              href={`/manga/${mangaId}/read?chapterId=${encodeURIComponent(resumeChapter.id)}&ch=${resumeChapter.chapterNumber}`}
+              onClick={() => {
+                try {
+                  sessionStorage.setItem(`aniwavex_from_overview_${mangaId}`, "1");
+                } catch {}
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+            >
+              <Bookmark className="w-4 h-4 fill-current" />
+              Resume Ch. {resumeChapter.chapterNumber}
+              {progress?.pageNumber ? ` (p. ${progress.pageNumber})` : ""}
+            </Link>
+          )}
+
+          {chapters.length > 0 && (
+            <Link
+              href={`/manga/${mangaId}/read?chapterId=${encodeURIComponent(chapters[0].id)}&ch=${chapters[0].chapterNumber}`}
+              onClick={() => {
+                try {
+                  sessionStorage.setItem(`aniwavex_from_overview_${mangaId}`, "1");
+                } catch {}
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+            >
+              <Sparkles className="w-4 h-4" />
+              Start Ch. {chapters[0].chapterNumber}
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* Filter and Sort Toolbar */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search chapters (e.g. 10, Prologue)..."
+            className="w-full pl-9 pr-4 py-2 bg-slate-900/80 border border-white/10 rounded-xl text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={toggleSort}
+          className="px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none shrink-0"
+          title={`Order: ${sortOrder === "asc" ? "Oldest First" : "Newest First"}`}
+        >
+          <ArrowUpDown className="w-3.5 h-3.5 text-cyan-400" />
+          <span>{sortOrder === "asc" ? "1 → N" : "N → 1"}</span>
+        </button>
+      </div>
+
+      {/* Chapters Grid (Desktop-first expansive columns & TV focus) */}
+      {filteredChapters.length === 0 ? (
+        <div className="p-12 text-center bg-slate-900/30 border border-white/5 rounded-2xl text-slate-400">
+          <p className="text-sm font-semibold">No chapters found matching "{searchQuery}"</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2.5">
+          {filteredChapters.map((ch) => {
+            const isLastRead = progress && (ch.id === progress.chapterId || ch.chapterNumber === progress.chapterNumber);
+
+            return (
+              <Link
+                key={ch.id}
+                href={`/manga/${mangaId}/read?chapterId=${encodeURIComponent(ch.id)}&ch=${ch.chapterNumber}`}
+                onClick={() => {
+                  try {
+                    sessionStorage.setItem(`aniwavex_from_overview_${mangaId}`, "1");
+                  } catch {}
+                }}
+                className={`flex items-center justify-between p-3.5 rounded-xl transition-all group border focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none focus-visible:scale-[1.02] ${
+                  isLastRead
+                    ? "bg-cyan-950/30 border-cyan-500/50 shadow-md shadow-cyan-500/10"
+                    : "bg-slate-900/70 hover:bg-slate-800 border-white/10 hover:border-cyan-500/40"
+                }`}
+              >
+                <div className="min-w-0 pr-2 flex items-center gap-2">
+                  <span
+                    className={`font-semibold text-sm block truncate transition-colors ${
+                      isLastRead
+                        ? "text-cyan-300 font-bold"
+                        : "text-white group-hover:text-cyan-400"
+                    }`}
+                  >
+                    {ch.title}
+                  </span>
+                  {isLastRead && (
+                    <span className="shrink-0 px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 text-[10px] font-bold flex items-center gap-0.5 border border-cyan-500/30">
+                      <CheckCircle2 className="w-3 h-3" /> Read
+                    </span>
+                  )}
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

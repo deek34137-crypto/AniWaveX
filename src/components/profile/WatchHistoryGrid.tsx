@@ -168,6 +168,8 @@ export default function WatchHistoryGrid({
           const resolvedDuration = localMeta[item.id]?.duration || item.duration_seconds || 1440;
           const resolvedProgress = localMeta[item.id]?.progress || item.progress_seconds || 0;
           const progressPercent = Math.min(100, Math.max(5, (resolvedProgress / resolvedDuration) * 100));
+          const isCompleted = resolvedDuration > 0 && resolvedProgress >= resolvedDuration * 0.90;
+          const targetEpisode = isCompleted ? (item.last_episode_watched || 1) + 1 : (item.last_episode_watched || 1);
 
           return (
             <div 
@@ -176,10 +178,10 @@ export default function WatchHistoryGrid({
             >
               {/* Media & Title Link */}
               <Link 
-                href={`/anime/${item.anime_slug}${item.last_episode_watched ? `?ep=${item.last_episode_watched}` : ""}`} 
+                href={`/anime/${item.anime_slug}?ep=${targetEpisode}`} 
                 prefetch={true}
                 className="block aspect-[2/3] relative cursor-pointer"
-                aria-label={`Continue watching ${item.anime_title} Episode ${item.last_episode_watched || 1}`}
+                aria-label={`Continue watching ${item.anime_title} Episode ${targetEpisode}`}
               >
                 <AnimeImage 
                   src={item.poster_image} 
@@ -205,9 +207,9 @@ export default function WatchHistoryGrid({
                   </h3>
                   <div className="flex items-center justify-between text-xs mt-1">
                     <p className="text-blue-400 font-semibold text-[11px]">
-                      Episode {item.last_episode_watched || 1}
+                      {isCompleted ? `Next: Ep ${targetEpisode}` : `Episode ${targetEpisode}`}
                     </p>
-                    {resolvedProgress > 0 ? (
+                    {resolvedProgress > 0 && !isCompleted ? (
                       <span className="text-slate-400 font-mono text-[11px]">
                         {formatTime(resolvedProgress)}
                       </span>

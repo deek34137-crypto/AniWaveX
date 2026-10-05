@@ -1,4 +1,6 @@
 import MangaReaderClient from "@/components/manga/MangaReaderClient";
+import { getMangaDetails, getMangaChapters } from "@/lib/manga/service";
+import { notFound } from "next/navigation";
 
 export default async function MangaReaderPage({
   params,
@@ -9,14 +11,42 @@ export default async function MangaReaderPage({
 }) {
   const { id } = await params;
   const sParams = await searchParams;
-  const chapterId = sParams.chapterId || sParams.ch || "1";
-  const chapterNum = parseFloat(sParams.ch || "1") || 1;
+
+  // Retrieve manga details and chapter list server-side
+  const manga = await getMangaDetails(id);
+  if (!manga) {
+    notFound();
+  }
+
+  const chapters = await getMangaChapters(manga.title, manga.id, manga.romajiTitle);
+
+  // Match requested chapter
+  let chapterId = sParams.chapterId;
+  let chapterNum = sParams.ch ? parseFloat(sParams.ch) : undefined;
+
+  if (!chapterId && chapterNum !== undefined && chapters.length > 0) {
+    const matched = chapters.find((c) => c.chapterNumber === chapterNum);
+    if (matched) {
+      chapterId = matched.id;
+    }
+  }
+
+  // Fallback to first chapter if none specified or matched
+  if (!chapterId && chapters.length > 0) {
+    chapterId = chapters[0].id;
+    chapterNum = chapters[0].chapterNumber;
+  }
+
+  chapterId = chapterId || sParams.ch || "1";
+  chapterNum = chapterNum ?? (parseFloat(sParams.ch || "1") || 1);
 
   return (
     <MangaReaderClient
       mangaId={id}
+      mangaTitle={manga?.title || "Manga"}
       chapterId={chapterId}
       chapterNumber={chapterNum}
+      chapters={chapters}
     />
   );
 }
