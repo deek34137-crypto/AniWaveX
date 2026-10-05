@@ -3,7 +3,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import NavbarActions from "./NavbarActions";
 import MobileNav from "./MobileNav";
-import ImageSearchTrigger from "./ImageSearchTrigger";
 import { Search } from "lucide-react";
 
 export default async function Navbar() {
@@ -39,9 +38,6 @@ export default async function Navbar() {
           <div className="hidden sm:block flex-1 max-w-sm">
             <SearchBar />
           </div>
-
-          {/* Screenshot Search Button (Trace.moe) */}
-          <ImageSearchTrigger />
 
           {/* Mobile Search Icon */}
           <Link 
