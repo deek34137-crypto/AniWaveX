@@ -24,9 +24,11 @@ import { MangaChapter } from "@/lib/manga/types";
 interface ReaderPageProps {
   mangaId: string;
   mangaTitle?: string;
+  posterImage?: string;
   chapterId: string;
   chapterNumber?: number;
   chapters?: MangaChapter[];
+  initialPage?: number;
 }
 
 type ReaderWidth = "standard" | "fit-screen" | "wide" | "full";
@@ -41,9 +43,11 @@ const WIDTH_LABELS: Record<ReaderWidth, string> = {
 export default function MangaReaderClient({
   mangaId,
   mangaTitle = "Manga",
+  posterImage,
   chapterId,
   chapterNumber,
   chapters = [],
+  initialPage,
 }: ReaderPageProps) {
   const router = useRouter();
 
@@ -54,7 +58,7 @@ export default function MangaReaderClient({
   const [pages, setPages] = useState<{ pageNumber: number; imageUrl: string; referer?: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentVisiblePage, setCurrentVisiblePage] = useState(1);
+  const [currentVisiblePage, setCurrentVisiblePage] = useState(initialPage || 1);
   const [readerWidth, setReaderWidth] = useState<ReaderWidth>("standard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isChapterListOpen, setIsChapterListOpen] = useState(false);
@@ -153,20 +157,105 @@ export default function MangaReaderClient({
     return () => observer.disconnect();
   }, [pages]);
 
+  // Restore scroll to target page (Page Y) when opening chapter
+  const hasRestoredPageRef = useRef(false);
+
+  useEffect(() => {
+    if (pages.length === 0 || isLoading) return;
+
+    let targetPage = initialPage;
+    if (!targetPage && typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlP = urlParams.get("page") || urlParams.get("p");
+      if (urlP) targetPage = parseInt(urlP, 10);
+    }
+
+    if (!targetPage && typeof window !== "undefined") {
+      try {
+        const savedRaw = localStorage.getItem(`aniwavex_manga_progress_${mangaId}`);
+        if (savedRaw) {
+          const saved = JSON.parse(savedRaw);
+          if (
+            (saved.chapterId === activeChapterId || saved.chapterNumber === activeChapterNum) &&
+            saved.pageNumber > 1
+          ) {
+            targetPage = saved.pageNumber;
+          }
+        }
+      } catch {}
+    }
+
+    if (targetPage && targetPage > 1 && !hasRestoredPageRef.current) {
+      hasRestoredPageRef.current = true;
+      setCurrentVisiblePage(targetPage);
+
+      const performScroll = () => {
+        const pageEl = document.querySelector(`[data-page="${targetPage}"]`);
+        if (pageEl) {
+          pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      };
+
+      const t1 = setTimeout(performScroll, 100);
+      const t2 = setTimeout(performScroll, 350);
+      const t3 = setTimeout(performScroll, 700);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+  }, [pages, isLoading, initialPage, activeChapterId, activeChapterNum, mangaId]);
+
   // Save reading progress to localStorage
   useEffect(() => {
+    if (isLoading || pages.length === 0) return;
+    // Prevent premature overwrite before scroll restoration finishes
+    if (initialPage && initialPage > 1 && !hasRestoredPageRef.current) return;
+
     try {
       const progressRecord = {
         mangaId,
         mangaTitle,
+        posterImage: posterImage || undefined,
         chapterId: activeChapterId,
         chapterNumber: activeChapterNum || currentChapterObj?.chapterNumber || 1,
         pageNumber: currentVisiblePage,
         updatedAt: Date.now(),
       };
       localStorage.setItem(`aniwavex_manga_progress_${mangaId}`, JSON.stringify(progressRecord));
+
+      // Also maintain recent manga list for Continue Reading row
+      try {
+        const listRaw = localStorage.getItem("aniwavex_recent_manga");
+        let list = listRaw ? JSON.parse(listRaw) : [];
+        if (!Array.isArray(list)) list = [];
+        list = list.filter((it: any) => it.mangaId !== mangaId);
+        list.unshift(progressRecord);
+        localStorage.setItem("aniwavex_recent_manga", JSON.stringify(list.slice(0, 20)));
+      } catch {}
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("aniwavex_manga_progress_updated", {
+            detail: progressRecord,
+          })
+        );
+      }
     } catch {}
-  }, [mangaId, mangaTitle, activeChapterId, activeChapterNum, currentChapterObj, currentVisiblePage]);
+  }, [
+    mangaId,
+    mangaTitle,
+    posterImage,
+    activeChapterId,
+    activeChapterNum,
+    currentChapterObj,
+    currentVisiblePage,
+    isLoading,
+    pages.length,
+    initialPage,
+  ]);
 
   // Back to Manga Overview: cleanly pops the reader entry when navigated from overview
   const handleBackToOverview = useCallback(() => {
@@ -187,6 +276,7 @@ export default function MangaReaderClient({
   const navigateToChapter = useCallback(
     (targetChapter: MangaChapter) => {
       setIsChapterListOpen(false);
+      hasRestoredPageRef.current = false;
       // Immediately transition client state to eliminate stale page flash
       setActiveChapterId(targetChapter.id);
       setActiveChapterNum(targetChapter.chapterNumber);

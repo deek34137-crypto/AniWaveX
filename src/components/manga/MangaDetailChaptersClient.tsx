@@ -16,6 +16,8 @@ import { MangaChapter } from "@/lib/manga/types";
 interface MangaDetailChaptersClientProps {
   mangaId: string;
   chapters: MangaChapter[];
+  mangaTitle?: string;
+  posterImage?: string;
 }
 
 interface MangaReadingProgress {
@@ -24,11 +26,15 @@ interface MangaReadingProgress {
   chapterNumber: number;
   pageNumber: number;
   updatedAt: number;
+  mangaTitle?: string;
+  posterImage?: string;
 }
 
 export default function MangaDetailChaptersClient({
   mangaId,
   chapters,
+  mangaTitle,
+  posterImage,
 }: MangaDetailChaptersClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -42,10 +48,35 @@ export default function MangaDetailChaptersClient({
         const parsed = JSON.parse(raw);
         if (parsed && parsed.chapterId) {
           setProgress(parsed);
+
+          // Backfill recent list with poster & title if missing
+          const enriched = {
+            ...parsed,
+            mangaTitle: parsed.mangaTitle || mangaTitle || "Manga",
+            posterImage: parsed.posterImage || posterImage,
+          };
+          localStorage.setItem(`aniwavex_manga_progress_${mangaId}`, JSON.stringify(enriched));
+
+          try {
+            const listRaw = localStorage.getItem("aniwavex_recent_manga");
+            let list = listRaw ? JSON.parse(listRaw) : [];
+            if (!Array.isArray(list)) list = [];
+            list = list.filter((it: any) => it.mangaId !== mangaId);
+            list.unshift(enriched);
+            localStorage.setItem("aniwavex_recent_manga", JSON.stringify(list.slice(0, 20)));
+          } catch {}
+
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("aniwavex_manga_progress_updated", {
+                detail: enriched,
+              })
+            );
+          }
         }
       }
     } catch {}
-  }, [mangaId]);
+  }, [mangaId, mangaTitle, posterImage]);
 
   // Filter and sort chapters
   const filteredChapters = useMemo(() => {
@@ -97,7 +128,7 @@ export default function MangaDetailChaptersClient({
         <div className="flex flex-wrap items-center gap-2.5">
           {resumeChapter && (
             <Link
-              href={`/manga/${mangaId}/read?chapterId=${encodeURIComponent(resumeChapter.id)}&ch=${resumeChapter.chapterNumber}`}
+              href={`/manga/${mangaId}/read?chapterId=${encodeURIComponent(resumeChapter.id)}&ch=${resumeChapter.chapterNumber}${progress?.pageNumber ? `&page=${progress.pageNumber}` : ""}`}
               onClick={() => {
                 try {
                   sessionStorage.setItem(`aniwavex_from_overview_${mangaId}`, "1");

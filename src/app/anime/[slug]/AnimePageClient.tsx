@@ -38,15 +38,19 @@ export default function AnimePageClient({
     if (!data) return;
 
     const epParam = searchParams.get("ep");
+    const playParam = searchParams.get("play");
 
     if (epParam) {
-      // ?ep=N passed from Continue Watching row → auto-play that episode
       const epId = parseInt(epParam, 10);
-      const ep = data.episodes?.find((e: any) => e.id === epId);
-      if (ep) {
-        setActiveEpisode(ep);
-        setLastWatchedEpisode(epId);
-        return;
+      setLastWatchedEpisode(epId);
+
+      // Only direct auto-play if ?play=1 is present (e.g. user clicked direct Play icon on card)
+      if (playParam === "1") {
+        const ep = data.episodes?.find((e: any) => e.id === epId);
+        if (ep) {
+          setActiveEpisode(ep);
+          return;
+        }
       }
     }
 

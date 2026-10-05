@@ -7,7 +7,7 @@ export default async function MangaReaderPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ chapterId?: string; ch?: string }>;
+  searchParams: Promise<{ chapterId?: string; ch?: string; page?: string }>;
 }) {
   const { id } = await params;
   const sParams = await searchParams;
@@ -23,6 +23,7 @@ export default async function MangaReaderPage({
   // Match requested chapter
   let chapterId = sParams.chapterId;
   let chapterNum = sParams.ch ? parseFloat(sParams.ch) : undefined;
+  const initialPage = sParams.page ? parseInt(sParams.page, 10) : undefined;
 
   if (!chapterId && chapterNum !== undefined && chapters.length > 0) {
     const matched = chapters.find((c) => c.chapterNumber === chapterNum);
@@ -44,9 +45,11 @@ export default async function MangaReaderPage({
     <MangaReaderClient
       mangaId={id}
       mangaTitle={manga?.title || "Manga"}
+      posterImage={manga?.posterImage}
       chapterId={chapterId}
       chapterNumber={chapterNum}
       chapters={chapters}
+      initialPage={initialPage}
     />
   );
 }

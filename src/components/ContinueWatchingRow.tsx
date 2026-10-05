@@ -335,15 +335,6 @@ export default function ContinueWatchingRow() {
                   </span>
                 </div>
 
-                {/* Play Hover Button */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-600/90 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                    <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </div>
-                </div>
-
                 {/* Bottom Title & Progress Info Overlay */}
                 <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent pointer-events-none">
                   <h3
@@ -368,6 +359,18 @@ export default function ContinueWatchingRow() {
                   )}
                 </div>
               </Link>
+
+              {/* Direct Play Hover Button (Sibling above base link) */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
+                <Link
+                  href={`/anime/${item.animeSlug}?ep=${item.episodeId}&play=1`}
+                  className="pointer-events-auto w-12 h-12 sm:w-14 sm:h-14 bg-blue-600/95 hover:bg-blue-500 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover:scale-100 transition-all duration-300 hover:scale-110 cursor-pointer focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+                  title={`Play Episode ${item.episodeId} directly`}
+                  aria-label={`Play Episode ${item.episodeId} directly`}
+                >
+                  <Play className="w-5 h-5 sm:w-6 sm:h-6 text-white ml-0.5 fill-current" />
+                </Link>
+              </div>
 
               {/* Action Buttons: Add to List + Remove from Continue Watching (Always visible on touch/mobile, hover on desktop) */}
               <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">

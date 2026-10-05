@@ -124,7 +124,12 @@ export default async function MangaDetailPage({
 
         {/* Right Column: Chapters Index Client */}
         <div className="lg:col-span-2 xl:col-span-3">
-          <MangaDetailChaptersClient mangaId={manga.id} chapters={chapters} />
+          <MangaDetailChaptersClient
+            mangaId={manga.id}
+            chapters={chapters}
+            mangaTitle={manga.title}
+            posterImage={manga.posterImage}
+          />
         </div>
       </div>
     </div>
