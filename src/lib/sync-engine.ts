@@ -50,7 +50,7 @@ export function getMalAuthUrl(redirectUri?: string): string {
   // 128 char code verifier
   const array = new Uint8Array(64);
   window.crypto.getRandomValues(array);
-  const codeVerifier = Array.from(array, (dec) => ('0' + dec.toString(16)).substr(-2)).join('');
+  const codeVerifier = Array.from(array, (dec) => ('0' + dec.toString(16)).slice(-2)).join('');
   localStorage.setItem(MAL_CODE_VERIFIER_KEY, codeVerifier);
 
   const params = new URLSearchParams({
@@ -69,7 +69,7 @@ export function getMalAuthUrl(redirectUri?: string): string {
  * Compare local watchlist with remote entries to produce a safe 2-way sync preview
  */
 export function buildSyncDiff(
-  localWatchlist: { anime_slug: string; anime_title: string; poster_image: string; status: WatchlistStatus; progress?: number }[],
+  localWatchlist: { anime_slug: string; anime_title: string; poster_image: string; status: WatchlistStatus; progress?: number; anilist_id?: number; anilistId?: number; mal_id?: number; malId?: number }[],
   remoteEntries: { id: number; title: string; posterImage: string; status: string; progress: number }[]
 ): SyncDiffItem[] {
   const diffs: SyncDiffItem[] = [];
@@ -87,6 +87,8 @@ export function buildSyncDiff(
     if (!remote) {
       diffs.push({
         id: local.anime_slug,
+        anilistId: local.anilist_id || (local as any).anilistId,
+        malId: local.mal_id || (local as any).malId,
         title: local.anime_title,
         posterImage: local.poster_image,
         direction: 'export',
@@ -157,7 +159,46 @@ export async function applyAniListSync(
   let failed = 0;
 
   for (const item of items) {
-    if (item.direction === 'in_sync' || !item.anilistId) continue;
+    if (item.direction === 'in_sync') continue;
+
+    let mediaId = item.anilistId;
+    // Fallback: Dynamically resolve mediaId if not present on export item
+    if (!mediaId && item.title) {
+      try {
+        const searchRes = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            query: `
+              query ($search: String) {
+                Media(search: $search, type: ANIME) {
+                  id
+                }
+              }
+            `,
+            variables: { search: item.title },
+          }),
+        });
+
+        if (searchRes.ok) {
+          const sJson = await searchRes.json();
+          mediaId = sJson?.data?.Media?.id;
+          if (mediaId) {
+            item.anilistId = mediaId;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to resolve AniList ID for:", item.title, err);
+      }
+    }
+
+    if (!mediaId) {
+      failed++;
+      continue;
+    }
 
     const mutation = `
       mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
@@ -187,7 +228,7 @@ export async function applyAniListSync(
         body: JSON.stringify({
           query: mutation,
           variables: {
-            mediaId: item.anilistId,
+            mediaId,
             progress: item.localProgress || 0,
             status: statusEnum,
           },
@@ -205,4 +246,33 @@ export async function applyAniListSync(
   }
 
   return { successful, failed };
+}
+
+/**
+ * Execute mutations to MyAnimeList for a confirmed batch of items
+ */
+export async function applyMalSync(
+  token: string,
+  items: SyncDiffItem[]
+): Promise<{ successful: number; failed: number }> {
+  try {
+    const res = await fetch("/api/sync/mal/apply", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        token: token.trim(),
+        items,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return { successful: data.successful || 0, failed: data.failed || 0 };
+    }
+  } catch (err) {
+    console.error("applyMalSync error:", err);
+  }
+  return { successful: 0, failed: items.filter((it) => it.direction !== "in_sync").length };
 }

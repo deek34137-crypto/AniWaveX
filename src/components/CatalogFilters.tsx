@@ -25,7 +25,8 @@ export default function CatalogFilters() {
   const currentYear = searchParams.get("year") || "";
   const currentSeason = searchParams.get("season") || "";
   const currentFormat = searchParams.get("format") || "";
-  const currentSort = searchParams.get("sort") || "popularity";
+  const rawSort = searchParams.get("sort") || "popularity";
+  const currentSort = rawSort === "rated" ? "rating" : rawSort === "trending" ? "popularity" : rawSort;
 
   const hasActiveFilters = Boolean(
     currentGenre || 

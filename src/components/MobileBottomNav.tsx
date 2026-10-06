@@ -10,6 +10,11 @@ function BottomNavContent() {
   const searchParams = useSearchParams();
   const format = searchParams.get("format");
 
+  // Hide MobileBottomNav on manga reader routes to prevent blocking chapter controls and page counters
+  if (pathname.includes("/read") || (pathname.startsWith("/manga/") && pathname.includes("/read"))) {
+    return null;
+  }
+
   const navItems = [
     {
       label: "Home",

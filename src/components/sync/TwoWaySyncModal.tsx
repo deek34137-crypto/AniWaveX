@@ -21,8 +21,10 @@ import {
   MAL_TOKEN_KEY,
   buildSyncDiff,
   applyAniListSync,
+  applyMalSync,
   SyncDiffItem,
 } from "@/lib/sync-engine";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface TwoWaySyncModalProps {
   isOpen: boolean;
@@ -31,6 +33,7 @@ interface TwoWaySyncModalProps {
 }
 
 export default function TwoWaySyncModal({ isOpen, onClose, localWatchlist }: TwoWaySyncModalProps) {
+  const { user, supabase } = useAuth();
   const [activeService, setActiveService] = useState<"anilist" | "mal">("anilist");
   const [token, setToken] = useState<string>("");
   const [isComparing, setIsComparing] = useState(false);
@@ -146,8 +149,23 @@ export default function TwoWaySyncModal({ isOpen, onClose, localWatchlist }: Two
         setDiffItems(computed);
         setStatusMessage(`Comparison ready: ${computed.length} items evaluated.`);
       } else {
-        // MAL Preview flow
-        setStatusMessage("MyAnimeList OAuth connection configured. Ready for token authorization.");
+        // MAL Preview flow: Query /api/sync/mal/list
+        const res = await fetch("/api/sync/mal/list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: token.trim() }),
+        });
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || "Failed to fetch MyAnimeList entries.");
+        }
+
+        const data = await res.json();
+        const remoteItems = data.items || [];
+        const computed = buildSyncDiff(localWatchlist, remoteItems);
+        setDiffItems(computed);
+        setStatusMessage(`Comparison ready: ${computed.length} items evaluated from MyAnimeList.`);
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to compare libraries.");
@@ -162,8 +180,84 @@ export default function TwoWaySyncModal({ isOpen, onClose, localWatchlist }: Two
     setStatusMessage("Applying confirmed changes...");
 
     try {
-      const { successful, failed } = await applyAniListSync(token, diffItems);
-      setStatusMessage(`Sync successfully applied! ${successful} updated, ${failed} skipped.`);
+      // 1. Persist imported entries locally (localStorage & Supabase bookmarks)
+      const importItems = diffItems.filter((it) => it.direction === "import");
+      if (importItems.length > 0) {
+        try {
+          const rawWatchlist = localStorage.getItem("aniwavex_watchlist");
+          const currentList: any[] = rawWatchlist ? JSON.parse(rawWatchlist) : [];
+          const currentMap = new Map(currentList.map((x) => [x.anime_slug, x]));
+          const toUpsertInSupabase: any[] = [];
+
+          for (const item of importItems) {
+            const slug = item.id.startsWith("remote-")
+              ? item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+              : item.id;
+
+            let mappedStatus = "plan_to_watch";
+            if (item.remoteStatus) {
+              const s = item.remoteStatus.toLowerCase();
+              if (s.includes("current") || s.includes("watch")) mappedStatus = "watching";
+              else if (s.includes("complete")) mappedStatus = "completed";
+              else if (s.includes("pause") || s.includes("hold")) mappedStatus = "on_hold";
+              else if (s.includes("drop")) mappedStatus = "dropped";
+              else if (s.includes("plan")) mappedStatus = "plan_to_watch";
+            }
+
+            const existing = currentMap.get(slug);
+            const entry = {
+              anime_slug: slug,
+              anime_title: item.title,
+              poster_image: item.posterImage || "",
+              status: mappedStatus,
+              last_episode_watched: item.remoteProgress || 0,
+              anilist_id: item.anilistId,
+              mal_id: item.malId,
+              updated_at: new Date().toISOString(),
+              created_at: existing?.created_at || new Date().toISOString(),
+            };
+
+            currentMap.set(slug, entry);
+
+            if (user && supabase) {
+              toUpsertInSupabase.push({
+                user_id: user.id,
+                anime_slug: slug,
+                anime_title: item.title,
+                poster_image: item.posterImage || "",
+                status: mappedStatus,
+                last_episode_watched: item.remoteProgress || 0,
+                updated_at: new Date().toISOString(),
+              });
+            }
+          }
+
+          localStorage.setItem("aniwavex_watchlist", JSON.stringify(Array.from(currentMap.values())));
+
+          if (user && supabase && toUpsertInSupabase.length > 0) {
+            await supabase.from("bookmarks").upsert(toUpsertInSupabase, {
+              onConflict: "user_id,anime_slug",
+            });
+          }
+
+          window.dispatchEvent(new CustomEvent("aniwavex_watchlist_updated"));
+        } catch (localErr) {
+          console.error("Failed to persist imported items locally:", localErr);
+        }
+      }
+
+      // 2. Export / push remote mutations to corresponding service
+      let result = { successful: 0, failed: 0 };
+      if (activeService === "anilist") {
+        result = await applyAniListSync(token, diffItems);
+      } else {
+        result = await applyMalSync(token, diffItems);
+      }
+
+      const totalImported = importItems.length;
+      setStatusMessage(
+        `Sync successfully applied! ${totalImported} imported locally, ${result.successful} pushed to ${activeService === "anilist" ? "AniList" : "MyAnimeList"} (${result.failed} failed/skipped).`
+      );
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to apply sync mutations.");
     } finally {

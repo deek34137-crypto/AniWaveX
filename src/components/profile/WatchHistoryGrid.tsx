@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Star, Trash2 } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import AnimeImage from "@/components/AnimeImage";
-import { filterActiveSequelPrequels, checkAnimeHasSequel } from "@/lib/franchise";
 
 interface WatchHistoryItem {
   id: string;
@@ -97,22 +96,6 @@ export default function WatchHistoryGrid({
               }
             });
             setLocalMeta((prev) => ({ ...prev, ...metaMap }));
-
-            // Background check for completed items without sequel
-            data.forEach((item: any) => {
-              if (item.last_episode_watched >= 11) {
-                checkAnimeHasSequel({ slug: item.anime_slug, title: item.anime_title }).then((hasSequel) => {
-                  if (!hasSequel) {
-                    supabase
-                      .from("watch_history")
-                      .delete()
-                      .eq("id", item.id)
-                      .then(() => {});
-                    setItems((prev) => prev.filter((it) => it.id !== item.id));
-                  }
-                });
-              }
-            });
           }
         });
     }
@@ -135,7 +118,7 @@ export default function WatchHistoryGrid({
     }
   };
 
-  const visibleItems = filterActiveSequelPrequels(items);
+  const visibleItems = items;
 
   if (!visibleItems || visibleItems.length === 0) {
     return (
@@ -161,7 +144,7 @@ export default function WatchHistoryGrid({
     <div className="mb-16">
       <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
         <Star className="w-6 h-6 text-yellow-400" />
-        Continue Watching
+        Watch History
       </h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
         {visibleItems.map((item) => {

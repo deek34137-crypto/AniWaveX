@@ -94,7 +94,7 @@ export const getTopRatedAnime = cache(async () => {
 
 export const getAiringAnime = cache(async () => {
   try {
-    const res = await fetch('https://kitsu.io/api/edge/anime?filter[status]=current&sort=-user_count&page[limit]=40&include=categories', {
+    const res = await fetch('https://kitsu.io/api/edge/anime?filter[status]=current&sort=-user_count&page[limit]=20&include=categories', {
       headers: {
         "Accept": "application/vnd.api+json",
         "Content-Type": "application/vnd.api+json",
@@ -335,19 +335,36 @@ export const getAnimeData = cache(async (slug: string) => {
     
     let allEpisodesData = includedEpisodes;
 
-    // If anime has more than the included episodes, fetch full first 100 in parallel
-    if (episodeCount && episodeCount > includedEpisodes.length && includedEpisodes.length < 100) {
+    // If anime has more than the included episodes, fetch up to 100 in parallel batches of 20 (Kitsu maximum page[limit] is 20)
+    const targetEpisodes = Math.min(episodeCount || 100, 100);
+    if (targetEpisodes > includedEpisodes.length) {
       try {
-        const epRes = await fetch(`https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=100`, {
-          headers,
-          signal: AbortSignal.timeout(6000),
-          next: { revalidate: 86400 }
-        });
-        if (epRes.ok) {
-          const epJson = await epRes.json();
-          if (epJson.data && epJson.data.length > 0) {
-            allEpisodesData = epJson.data;
-          }
+        const pageOffsets: number[] = [];
+        for (let off = 0; off < targetEpisodes; off += 20) {
+          pageOffsets.push(off);
+        }
+        const pageResults = await Promise.all(
+          pageOffsets.map(async (pageOff) => {
+            try {
+              const epRes = await fetch(
+                `https://kitsu.io/api/edge/anime/${anime.id}/episodes?page[limit]=20&page[offset]=${pageOff}&sort=number`,
+                {
+                  headers,
+                  signal: AbortSignal.timeout(6000),
+                  next: { revalidate: 86400 }
+                }
+              );
+              if (!epRes.ok) return [];
+              const epJson = await epRes.json();
+              return epJson.data || [];
+            } catch {
+              return [];
+            }
+          })
+        );
+        const fetchedEps = pageResults.flat();
+        if (fetchedEps.length > 0) {
+          allEpisodesData = fetchedEps;
         }
       } catch {}
     }
@@ -613,7 +630,9 @@ export const GENRE_MAP: Record<string, string> = {
 
 export const SORT_MAP: Record<string, string> = {
   popularity: "-userCount",
+  trending: "-userCount",
   rating: "-averageRating",
+  rated: "-averageRating",
   newest: "-startDate",
   oldest: "startDate",
   updated: "-updatedAt"

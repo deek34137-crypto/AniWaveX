@@ -434,10 +434,15 @@ export async function handleSequelPlaybackStarted({
           { onConflict: "user_id,anime_slug" }
         );
 
-        // Delete from watch_history in Supabase
+        // Mark prequel completed in watch_history in Supabase (preserve user history)
         await supabase
           .from("watch_history")
-          .delete()
+          .update({
+            completed: true,
+            completed_at: new Date().toISOString(),
+            last_episode_watched: pEp,
+            updated_at: new Date().toISOString(),
+          })
           .eq("user_id", userId)
           .eq("anime_slug", pSlug);
       }
@@ -675,7 +680,12 @@ export async function handleAnimeCompleted({
       try {
         await supabase
           .from("watch_history")
-          .delete()
+          .update({
+            completed: true,
+            completed_at: new Date().toISOString(),
+            last_episode_watched: ep,
+            updated_at: new Date().toISOString(),
+          })
           .eq("user_id", userId)
           .eq("anime_slug", slug);
       } catch {}

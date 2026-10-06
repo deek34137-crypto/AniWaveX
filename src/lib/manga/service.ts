@@ -52,13 +52,87 @@ async function anilistQuery(query: string, variables: Record<string, any>): Prom
 }
 
 export async function searchMangaList(query: string, limit = 20): Promise<MangaItem[]> {
-  if (!query.trim()) return getTrendingMangaList(limit);
+  const trimmed = query.trim();
+  if (!trimmed) return getTrendingMangaList(limit);
+
+  // 1. Direct AniList search
   const json = await anilistQuery(
     `query ($s:String,$l:Int){Page(page:1,perPage:$l){media(search:$s,type:MANGA,sort:SEARCH_MATCH){${GQL_FIELDS}}}}`,
-    { s: query.trim(), l: limit }
+    { s: trimmed, l: limit }
   );
-  return (json?.data?.Page?.media || []).map(formatMangaItem);
+  const directResults = (json?.data?.Page?.media || []).map(formatMangaItem);
+  if (directResults.length > 0) {
+    return directResults;
+  }
+
+  // 2. Fallback: AniList strict token search returned 0 (common for partial words/prefixes like "danda").
+  // Use Kitsu's flexible substring/prefix search to resolve potential canonical manga titles.
+  try {
+    const kitsuRes = await fetch(
+      `https://kitsu.io/api/edge/manga?filter[text]=${encodeURIComponent(trimmed)}&page[limit]=4`,
+      {
+        headers: { Accept: 'application/vnd.api+json' },
+        next: { revalidate: 3600 },
+      }
+    );
+    if (kitsuRes.ok) {
+      const kitsuData = await kitsuRes.json();
+      const candidateTitles: string[] = [];
+      const seenTitles = new Set<string>();
+
+      for (const item of kitsuData?.data || []) {
+        const titles = [
+          item.attributes?.canonicalTitle,
+          item.attributes?.titles?.en,
+          item.attributes?.titles?.en_jp,
+        ].filter(Boolean);
+
+        for (const t of titles) {
+          const lower = t.trim().toLowerCase();
+          if (!seenTitles.has(lower)) {
+            seenTitles.add(lower);
+            candidateTitles.push(t.trim());
+          }
+        }
+      }
+
+      if (candidateTitles.length > 0) {
+        // Query AniList using resolved titles in parallel
+        const anilistLookups = await Promise.all(
+          candidateTitles.slice(0, 3).map((title) =>
+            anilistQuery(
+              `query ($s:String,$l:Int){Page(page:1,perPage:$l){media(search:$s,type:MANGA,sort:SEARCH_MATCH){${GQL_FIELDS}}}}`,
+              { s: title, l: Math.min(limit, 10) }
+            )
+          )
+        );
+
+        const seenIds = new Set<string>();
+        const resolvedManga: MangaItem[] = [];
+
+        for (const res of anilistLookups) {
+          const media = res?.data?.Page?.media || [];
+          for (const m of media) {
+            const formatted = formatMangaItem(m);
+            if (!seenIds.has(formatted.id)) {
+              seenIds.add(formatted.id);
+              resolvedManga.push(formatted);
+            }
+          }
+        }
+
+        if (resolvedManga.length > 0) {
+          return resolvedManga.slice(0, limit);
+        }
+      }
+    }
+  } catch {
+    // If fallback lookup fails, return empty
+  }
+
+  return [];
 }
+
 
 export async function getTrendingMangaList(limit = 24): Promise<MangaItem[]> {
   const json = await anilistQuery(
@@ -166,20 +240,12 @@ function titleScore(query: string, candidate: string): number {
   return 0;
 }
 
-async function searchWeebCentralDirect(query: string): Promise<BackendSearchResult[]> {
-  try {
-    const url = `https://weebcentral.com/search/data?author=&text=${encodeURIComponent(
-      query
-    )}&sort=Best+Match&order=Ascending&official=Any&anime=Any&adult=Any&display_mode=Full+Display`;
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      },
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) return [];
-    const html = await res.text();
+async function searchWeebCentral(query: string): Promise<BackendSearchResult[]> {
+  const targetUrl = `https://weebcentral.com/search/data?author=&text=${encodeURIComponent(
+    query
+  )}&sort=Best+Match&order=Ascending&official=Any&anime=Any&adult=Any&display_mode=Full+Display`;
+
+  const parseHtml = (html: string): BackendSearchResult[] => {
     const regex = /\/series\/([0-9A-Z]+)\/([^\"]+)/g;
     let match: RegExpExecArray | null;
     const results: BackendSearchResult[] = [];
@@ -199,16 +265,52 @@ async function searchWeebCentralDirect(query: string): Promise<BackendSearchResu
       }
     }
     return results;
+  };
+
+  // 1. Try direct fetch with short timeout
+  try {
+    const res = await fetch(targetUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Referer: 'https://weebcentral.com/search',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(4000),
+      next: { revalidate: 3600 },
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const results = parseHtml(html);
+      if (results.length > 0) return results;
+    }
   } catch {
-    return [];
+    // Direct search failed or timed out (e.g. Cloudflare challenge on datacenter IP)
   }
+
+  // 2. Fallback to worker htmlProxy (Worker operates on Cloudflare edge and bypasses datacenter IP blocks)
+  try {
+    const proxyUrl = `${BACKEND}/api/proxy/html?provider=weebcentral&url=${encodeURIComponent(targetUrl)}`;
+    const res = await fetch(proxyUrl, {
+      signal: AbortSignal.timeout(6000),
+      next: { revalidate: 3600 },
+    });
+    if (res.ok) {
+      const html = await res.text();
+      return parseHtml(html);
+    }
+  } catch {
+    // Proxy fallback failed
+  }
+
+  return [];
 }
 
 async function backendSearch(query: string): Promise<BackendSearchResult[]> {
   if (!query.trim()) return [];
   try {
     const [directWc, workerResults] = await Promise.all([
-      searchWeebCentralDirect(query),
+      searchWeebCentral(query),
       (async () => {
         try {
           const res = await fetch(`${BACKEND}/api/search`, {
@@ -350,14 +452,29 @@ export async function getMangaChapters(
     }
   }
 
+  // 3. Search sanitized base title if it contains brackets, parentheses or subtitles
+  const cleanTitle = title.replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
+  if (cleanTitle && cleanTitle !== title && cleanTitle !== romajiTitle) {
+    const cleanResults = await backendSearch(cleanTitle);
+    const seen = new Set(rawResults.map((r) => `${r.provider}:${r.id}`));
+    for (const r of cleanResults) {
+      const key = `${r.provider}:${r.id}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        rawResults.push(r);
+      }
+    }
+  }
+
   if (rawResults.length === 0) return [];
 
-  // 3. Relevance filtering: compute match score against title and romaji
+  // 4. Relevance filtering: compute match score against title, romaji, and cleanTitle
   const scoredResults = rawResults
     .map((r) => {
       const scorePrimary = titleScore(title, r.title);
       const scoreRomaji = romajiTitle ? titleScore(romajiTitle, r.title) : 0;
-      return { ...r, score: Math.max(scorePrimary, scoreRomaji) };
+      const scoreClean = cleanTitle ? titleScore(cleanTitle, r.title) : 0;
+      return { ...r, score: Math.max(scorePrimary, scoreRomaji, scoreClean) };
     })
     .filter((r) => r.score >= 0.35)
     .sort((a, b) => (b.score || 0) - (a.score || 0));

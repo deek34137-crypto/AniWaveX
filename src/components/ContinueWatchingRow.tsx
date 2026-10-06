@@ -167,6 +167,19 @@ export default function ContinueWatchingRow() {
             });
           }
         } catch {}
+
+        try {
+          const { data: dbHistoryCompleted } = await supabase
+            .from("watch_history")
+            .select("anime_slug")
+            .eq("user_id", user.id)
+            .eq("completed", true);
+          if (dbHistoryCompleted) {
+            dbHistoryCompleted.forEach((h: any) => {
+              if (h.anime_slug) completedSlugs.add(h.anime_slug);
+            });
+          }
+        } catch {}
       }
 
       // If user is actively watching a sequel, remove the completed prequel from Continue Watching
@@ -192,11 +205,15 @@ export default function ContinueWatchingRow() {
                 }
               } catch {}
 
-              // Remove from Supabase
+              // Update in Supabase (mark completed: true, do not delete user watch history)
               if (user) {
                 supabase
                   .from("watch_history")
-                  .delete()
+                  .update({
+                    completed: true,
+                    completed_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  })
                   .eq("user_id", user.id)
                   .eq("anime_slug", item.animeSlug)
                   .then(() => {});
@@ -259,11 +276,15 @@ export default function ContinueWatchingRow() {
       }
     } catch {}
 
-    // 3. Remove from Supabase if authenticated
+    // 3. Dismiss from Continue Watching in Supabase (preserve record in watch history)
     if (user) {
       supabase
         .from("watch_history")
-        .delete()
+        .update({
+          completed: true,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         .eq("user_id", user.id)
         .eq("anime_slug", animeSlug)
         .then(() => {});

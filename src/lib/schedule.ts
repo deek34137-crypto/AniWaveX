@@ -366,7 +366,7 @@ async function fetchScheduleFromEngines(): Promise<AiringAnimeScheduleItem[]> {
   if (normalizedMap.size === 0) {
     try {
       const res = await fetch(
-        "https://kitsu.io/api/edge/anime?filter[status]=current&sort=-userCount&page[limit]=40",
+        "https://kitsu.io/api/edge/anime?filter[status]=current&sort=-userCount&page[limit]=20",
         {
           headers: {
             Accept: "application/vnd.api+json",

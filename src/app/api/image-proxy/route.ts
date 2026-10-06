@@ -53,6 +53,13 @@ const ALLOWED_HOST_DOMAINS = [
   // AniList covers
   "anilist.co",
   "s4.anilist.co",
+  // Kitsu media & S3 backblaze CDN
+  "kitsu.io",
+  "media.kitsu.io",
+  "kitsu-production-media.s3.us-west-002.backblazeb2.com",
+  // MyAnimeList images
+  "myanimelist.net",
+  "cdn.myanimelist.net",
   // Others
   "allmanga.to",
   "animeblkom.net",
@@ -148,6 +155,7 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": contentType,
+        "Access-Control-Allow-Origin": "*",
         "Cache-Control": "public, max-age=604800, immutable",
       },
     });

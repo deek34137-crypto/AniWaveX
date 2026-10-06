@@ -6,6 +6,8 @@ import { Star, BookOpen, ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import MangaDetailChaptersClient from "@/components/manga/MangaDetailChaptersClient";
 
+export const revalidate = 300;
+
 export default async function MangaDetailPage({
   params,
 }: {

@@ -31,8 +31,8 @@ export default async function Home() {
         <ContinueWatchingRow />
         <ContinueReadingRow />
 
-        <AnimeRow title="Trending Now" items={trendingRow} viewAllHref="/catalog?sort=trending" />
-        <AnimeRow title="Highest Rated" items={topRated} viewAllHref="/catalog?sort=rated" />
+        <AnimeRow title="Trending Now" items={trendingRow} viewAllHref="/catalog?sort=popularity" />
+        <AnimeRow title="Highest Rated" items={topRated} viewAllHref="/catalog?sort=rating" />
 
         {/* Extra discovery rows rendered exclusively inside the APK */}
         <ApkHomeSections

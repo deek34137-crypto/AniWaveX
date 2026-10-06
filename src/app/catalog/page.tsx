@@ -46,6 +46,10 @@ export default async function CatalogPage(props: {
     pageHeading = "Movies";
   } else if (sort === 'newest' || sort === '-startDate') {
     pageHeading = "New Releases";
+  } else if (sort === 'rating' || sort === 'rated') {
+    pageHeading = "Highest Rated Anime";
+  } else if (sort === 'popularity' || sort === 'trending') {
+    pageHeading = "Trending & Popular Anime";
   }
 
   return (
