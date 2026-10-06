@@ -10,43 +10,44 @@ export async function GET(req: NextRequest) {
   const logs: string[] = [];
 
   try {
-    logs.push(`Step 1: Calling POST ${WORKER}/api/search for "${title}"`);
-    const searchRes = await fetch(`${WORKER}/api/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: title }),
+    // 1. Direct WeebCentral search on worker
+    logs.push(`Step 1: Calling GET ${WORKER}/api/manga/search?q=${encodeURIComponent(title)}&provider=weebcentral`);
+    const wcSearchRes = await fetch(`${WORKER}/api/manga/search?q=${encodeURIComponent(title)}&provider=weebcentral`, {
       cache: "no-store",
     });
+    const wcSearchData = await wcSearchRes.json().catch((e) => ({ error: e.message }));
+    logs.push(`WeebCentral search status: ${wcSearchRes.status}, data: ${JSON.stringify(wcSearchData)}`);
 
-    logs.push(`Search status: ${searchRes.status}`);
-    const searchData = await searchRes.json().catch((e) => ({ error: e.message }));
-    const results = searchData?.results || [];
-    logs.push(`Found ${results.length} results: ${JSON.stringify(results.map((r: any) => ({ p: r.provider, t: r.title, id: r.id })))}`);
-
-    const chapterResults: any[] = [];
-    for (const r of results) {
-      logs.push(`Fetching chapters for [${r.provider}] id: ${r.id}...`);
-      try {
-        const chRes = await fetch(`${WORKER}/api/chapters`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider: r.provider, id: r.id, url: r.url }),
-          cache: "no-store",
-        });
-        logs.push(`  Chapters status for [${r.provider}]: ${chRes.status}`);
-        const chData = await chRes.json().catch((e) => ({ error: e.message }));
-        const count = chData?.chapters?.length || 0;
-        logs.push(`  Chapters count for [${r.provider}]: ${count}`);
-        chapterResults.push({ provider: r.provider, count, sample: chData?.chapters?.slice(0, 2) });
-      } catch (err: any) {
-        logs.push(`  Error fetching [${r.provider}]: ${err.message}`);
-      }
+    // 2. WeebCentral chapters on worker
+    if (wcSearchData?.data?.[0]?.id) {
+      const wcId = wcSearchData.data[0].id;
+      logs.push(`Step 2: Calling GET ${WORKER}/api/manga/weebcentral/${wcId}/chapters`);
+      const wcChRes = await fetch(`${WORKER}/api/manga/weebcentral/${wcId}/chapters`, {
+        cache: "no-store",
+      });
+      const wcChData = await wcChRes.json().catch((e) => ({ error: e.message }));
+      logs.push(`WeebCentral chapters status: ${wcChRes.status}, count: ${wcChData?.data?.length || 0}`);
     }
+
+    // 3. MangaKakalot search on worker
+    logs.push(`Step 3: Calling GET ${WORKER}/api/manga/search?q=${encodeURIComponent(title)}&provider=mangakakalot`);
+    const mkSearchRes = await fetch(`${WORKER}/api/manga/search?q=${encodeURIComponent(title)}&provider=mangakakalot`, {
+      cache: "no-store",
+    });
+    const mkSearchData = await mkSearchRes.json().catch((e) => ({ error: e.message }));
+    logs.push(`MangaKakalot search status: ${mkSearchRes.status}, data: ${JSON.stringify(mkSearchData)}`);
+
+    // 4. ComicK search on worker
+    logs.push(`Step 4: Calling GET ${WORKER}/api/manga/search?q=${encodeURIComponent(title)}&provider=comick`);
+    const comickSearchRes = await fetch(`${WORKER}/api/manga/search?q=${encodeURIComponent(title)}&provider=comick`, {
+      cache: "no-store",
+    });
+    const comickSearchData = await comickSearchRes.json().catch((e) => ({ error: e.message }));
+    logs.push(`ComicK search status: ${comickSearchRes.status}, data: ${JSON.stringify(comickSearchData)}`);
 
     return NextResponse.json({
       success: true,
       logs,
-      chapterResults,
     });
   } catch (err: any) {
     return NextResponse.json({
