@@ -371,18 +371,22 @@ function isDateOrTimeAgo(str: string): boolean {
 }
 
 function extractChapterNumber(rawNum: any, rawTitle: string, rawUrl: string): number {
-  // 1. Try URL extraction if URL contains explicit chapter slug e.g. chapter-211 or ch-211
-  if (rawUrl) {
-    const urlMatch = rawUrl.match(/(?:chapter|ch)[-_/](\d+(?:\.\d+)?)/i);
-    if (urlMatch) {
-      const parsed = parseFloat(urlMatch[1]);
+  // 1. Primary: Use rawNum / rawNumberValue directly if valid (API-provided chapter number)
+  if (typeof rawNum === 'number' && !isNaN(rawNum) && rawNum >= 0) {
+    return rawNum;
+  }
+  if (typeof rawNum === 'string') {
+    const trimmed = rawNum.trim();
+    // Exclude strings that look like UUIDs or hashes
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(trimmed)) {
+      const parsed = parseFloat(trimmed);
       if (!isNaN(parsed) && parsed >= 0) {
         return parsed;
       }
     }
   }
 
-  // 2. Try title extraction if title explicitly specifies a chapter number e.g. "Chapter 211" or "Ch. 5"
+  // 2. Secondary: Try title extraction if title explicitly specifies a chapter number e.g. "Chapter 211" or "Ch. 5"
   if (rawTitle && !isDateOrTimeAgo(rawTitle)) {
     const titleMatch = rawTitle.match(/(?:chapter|ch\.?|episode|ep\.?)\s*(\d+(?:\.\d+)?)/i);
     if (titleMatch) {
@@ -393,14 +397,14 @@ function extractChapterNumber(rawNum: any, rawTitle: string, rawUrl: string): nu
     }
   }
 
-  // 3. Fall back to rawNum / parseFloat(rawNum)
-  if (typeof rawNum === 'number' && !isNaN(rawNum) && rawNum >= 0) {
-    return rawNum;
-  }
-  if (typeof rawNum === 'string') {
-    const parsed = parseFloat(rawNum);
-    if (!isNaN(parsed) && parsed >= 0) {
-      return parsed;
+  // 3. Fallback: URL extraction — NEVER match UUIDs like /chapter/1f60069b-0c36-45c9-bd9d-41d51e90c552!
+  if (rawUrl && !/[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawUrl)) {
+    const urlMatch = rawUrl.match(/(?:chapter|ch)[-_/](\d+(?:\.\d+)?)(?:[^\da-f]|$)/i);
+    if (urlMatch) {
+      const parsed = parseFloat(urlMatch[1]);
+      if (!isNaN(parsed) && parsed >= 0) {
+        return parsed;
+      }
     }
   }
 
@@ -469,7 +473,7 @@ export async function getMangaChapters(
   if (rawResults.length === 0) return [];
 
   // 4. Relevance filtering: compute match score against title, romaji, and cleanTitle
-  const scoredResults = rawResults
+  let scoredResults = rawResults
     .map((r) => {
       const scorePrimary = titleScore(title, r.title);
       const scoreRomaji = romajiTitle ? titleScore(romajiTitle, r.title) : 0;
@@ -481,7 +485,15 @@ export async function getMangaChapters(
 
   if (scoredResults.length === 0) return [];
 
+  // If there are high-confidence exact/near-exact title matches (score >= 0.85),
+  // prioritize them exclusively so spin-offs (e.g. "One Piece Party" with score 0.61) don't hijack the main series
+  const highQualityMatches = scoredResults.filter((r) => (r.score || 0) >= 0.85);
+  if (highQualityMatches.length > 0) {
+    scoredResults = highQualityMatches;
+  }
+
   let bestChapters: MangaChapter[] = [];
+  let bestScore = 0;
 
   // 4. Try providers in priority order
   for (const providerId of CHAPTER_PROVIDERS) {
@@ -557,21 +569,29 @@ export async function getMangaChapters(
 
         const startsNearBeginning = uniqueChapters.length > 0 && uniqueChapters[0].chapterNumber <= 1;
 
-        // If provider has a comprehensive collection (>= 15 chapters) AND starts at the beginning (Chapter 1 or 0), select immediately
-        if (uniqueChapters.length >= 15 && startsNearBeginning) {
+        // If high-quality title match with a comprehensive collection (>= 50 chapters) starting at the beginning, select immediately
+        if ((match.score || 0) >= 0.85 && uniqueChapters.length >= 50 && startsNearBeginning) {
           return uniqueChapters;
         }
 
         // Compare against best candidate so far:
         if (bestChapters.length === 0) {
           bestChapters = uniqueChapters;
+          bestScore = match.score || 0;
         } else {
           const bestStartsNearBeginning = bestChapters[0]?.chapterNumber <= 1;
-          // A provider starting at Chapter 1 always takes precedence over one starting mid-way (e.g. at 196)
-          if (startsNearBeginning && !bestStartsNearBeginning) {
+          // Prefer higher title match score if significantly better (e.g. exact match over spin-off)
+          if ((match.score || 0) > bestScore + 0.15) {
             bestChapters = uniqueChapters;
+            bestScore = match.score || 0;
+          } else if (startsNearBeginning && !bestStartsNearBeginning) {
+            // A provider starting at Chapter 1 always takes precedence over one starting mid-way
+            bestChapters = uniqueChapters;
+            bestScore = match.score || 0;
           } else if (startsNearBeginning === bestStartsNearBeginning && uniqueChapters.length > bestChapters.length) {
+            // More comprehensive collection (e.g. 1194 chapters vs 17)
             bestChapters = uniqueChapters;
+            bestScore = match.score || 0;
           }
         }
       } catch {
