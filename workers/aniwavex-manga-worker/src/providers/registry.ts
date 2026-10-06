@@ -4,6 +4,7 @@ import { AsuraScansProvider } from './keiyoushi/asurascans';
 import { FlameComicsProvider } from './keiyoushi/flamecomics';
 import { MangaDexProvider } from './keiyoushi/mangadex';
 import { MangaKakalotProvider } from './keiyoushi/mangakakalot';
+import { MangaReadProvider } from './keiyoushi/mangaread';
 import { WeebCentralProvider } from './keiyoushi/weebcentral';
 import { ComicKProvider } from './yuzono/comick';
 
@@ -13,11 +14,12 @@ export class ProviderRegistry {
 
   constructor() {
     this.register(new MangaDexProvider());
-    this.register(new ComicKProvider());
     this.register(new WeebCentralProvider());
+    this.register(new MangaReadProvider());
     this.register(new MangaKakalotProvider());
     this.register(new AsuraScansProvider());
     this.register(new FlameComicsProvider());
+    this.register(new ComicKProvider());
   }
 
   register(provider: MangaProvider): void {

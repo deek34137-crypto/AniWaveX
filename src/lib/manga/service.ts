@@ -21,13 +21,13 @@ const BACKEND =
 // Primary working providers with verified page extraction
 const CHAPTER_PROVIDERS = [
   'weebcentral',
+  'mangaread',
   'mangadex',
   'asurascans',
   'asurascan',
   'flamecomics',
-  'comick',
   'mangakakalot',
-  'mangaread',
+  'comick',
   'novelcool',
   'kaliscan',
   'mgeko',

@@ -45,3 +45,19 @@ test('Providers - WeebCentral search query', async () => {
     assert.ok(err.code);
   }
 });
+
+test('Providers - MangaRead search query', async () => {
+  const mangaread = registry.get('mangaread');
+  try {
+    const results = await mangaread.search('Blue Lock', 1);
+    assert.ok(Array.isArray(results));
+    if (results.length > 0) {
+      assert.ok(results[0].title);
+      assert.equal(results[0].providerId, 'mangaread');
+      assert.ok(results[0].id);
+    }
+  } catch (err: any) {
+    assert.ok(err.code);
+  }
+});
+

@@ -50,6 +50,9 @@ export const CONFIG = {
     // Flame Comics
     'flamecomics.me',
     'flamecomics.xyz',
+    // MangaRead
+    'mangaread.org',
+    'www.mangaread.org',
     // Cover CDNs
     'anilist.co',
     's4.anilist.co',
