@@ -45,6 +45,7 @@ export const metadata: Metadata = {
 import NotificationManager from "@/components/NotificationManager";
 import NavigationProgress from "@/components/NavigationProgress";
 import { ThemeProvider } from "@/providers/ThemeProvider";
+import { Analytics } from "@vercel/analytics/next";
 
 export default function RootLayout({
   children,
@@ -63,6 +64,7 @@ export default function RootLayout({
             <MobileBottomNav />
           </AuthProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
