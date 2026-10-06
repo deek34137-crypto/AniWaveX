@@ -12,18 +12,22 @@
 
 import { MangaItem, MangaChapter, MangaChapterPages } from './types';
 
+const configuredUrl = process.env.NEXT_PUBLIC_MANGA_WORKER_URL || process.env.MANGA_API_URL;
 const BACKEND =
-  process.env.NEXT_PUBLIC_MANGA_WORKER_URL ||
-  process.env.MANGA_API_URL ||
-  'https://aniwavex-manga-worker.rajverma159310.workers.dev';
+  configuredUrl && !configuredUrl.includes('mangahub-backend.deek34137')
+    ? configuredUrl
+    : 'https://aniwavex-manga-worker.rajverma159310.workers.dev';
 
-// Primary working providers with verified page extraction (MangaKatana excluded due to logo fallbacks)
+// Primary working providers with verified page extraction
 const CHAPTER_PROVIDERS = [
   'weebcentral',
   'mangadex',
-  'mangaread',
+  'asurascans',
   'asurascan',
   'flamecomics',
+  'comick',
+  'mangakakalot',
+  'mangaread',
   'novelcool',
   'kaliscan',
   'mgeko',
