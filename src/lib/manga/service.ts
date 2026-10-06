@@ -237,14 +237,51 @@ interface BackendSearchResult {
   score?: number;
 }
 
+function normalizeTitle(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[卍]/g, '')
+    .replace(/\bou\b/g, 'o')
+    .replace(/toukyou/g, 'tokyo')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function titleScore(query: string, candidate: string): number {
-  const q = query.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const c = candidate.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!q || !c) return 0;
-  if (q === c) return 1.0;
-  if (c.includes(q)) return q.length / c.length;
-  if (q.includes(c)) return c.length / q.length;
-  return 0;
+  if (!query || !candidate) return 0;
+  const qNorm = normalizeTitle(query);
+  const cNorm = normalizeTitle(candidate);
+  if (!qNorm || !cNorm) return 0;
+  if (qNorm === cNorm) return 1.0;
+
+  const qPlain = qNorm.replace(/\s+/g, '');
+  const cPlain = cNorm.replace(/\s+/g, '');
+  if (qPlain === cPlain) return 1.0;
+  if (cPlain.includes(qPlain)) {
+    return qPlain.length / cPlain.length;
+  }
+  if (qPlain.includes(cPlain)) {
+    return cPlain.length / qPlain.length;
+  }
+
+  const qWords = qNorm.split(' ').filter((w) => w.length > 1);
+  const cWords = cNorm.split(' ').filter((w) => w.length > 1);
+  if (qWords.length === 0 || cWords.length === 0) return 0;
+
+  const cWordSet = new Set(cWords);
+  let matched = 0;
+  for (const w of qWords) {
+    if (cWordSet.has(w)) matched++;
+  }
+
+  if (matched === 0) return 0;
+
+  const recall = matched / qWords.length;
+  const precision = matched / cWords.length;
+  const tokenScore = (2 * recall * precision) / (recall + precision);
+
+  return Math.min(1.0, tokenScore);
 }
 
 async function searchWeebCentral(query: string): Promise<BackendSearchResult[]> {
@@ -492,9 +529,9 @@ export async function getMangaChapters(
 
   if (scoredResults.length === 0) return [];
 
-  // If there are high-confidence exact/near-exact title matches (score >= 0.85),
+  // If there are high-confidence exact/near-exact title matches (score >= 0.75),
   // prioritize them exclusively so spin-offs (e.g. "One Piece Party" with score 0.61) don't hijack the main series
-  const highQualityMatches = scoredResults.filter((r) => (r.score || 0) >= 0.85);
+  const highQualityMatches = scoredResults.filter((r) => (r.score || 0) >= 0.75);
   if (highQualityMatches.length > 0) {
     scoredResults = highQualityMatches;
   }
@@ -574,10 +611,17 @@ export async function getMangaChapters(
           }
         }
 
-        const startsNearBeginning = uniqueChapters.length > 0 && uniqueChapters[0].chapterNumber <= 1;
+        const startsNearBeginning = uniqueChapters.length > 0 && uniqueChapters[0].chapterNumber <= 1.5;
+        const isIncompleteStub = !startsNearBeginning && uniqueChapters.length < 30;
 
-        // If high-quality title match with a comprehensive collection (>= 50 chapters) starting at the beginning, select immediately
-        if ((match.score || 0) >= 0.85 && uniqueChapters.length >= 50 && startsNearBeginning) {
+        // Never accept an incomplete stub (e.g. MangaDex 5 chapters starting at Ch 153)
+        // when looking for manga chapters
+        if (isIncompleteStub) {
+          continue;
+        }
+
+        // If high-quality title match with a comprehensive collection (>= 25 chapters) starting at the beginning, select immediately
+        if ((match.score || 0) >= 0.75 && uniqueChapters.length >= 25 && startsNearBeginning) {
           return uniqueChapters;
         }
 
@@ -586,13 +630,13 @@ export async function getMangaChapters(
           bestChapters = uniqueChapters;
           bestScore = match.score || 0;
         } else {
-          const bestStartsNearBeginning = bestChapters[0]?.chapterNumber <= 1;
-          // Prefer higher title match score if significantly better (e.g. exact match over spin-off)
-          if ((match.score || 0) > bestScore + 0.15) {
+          const bestStartsNearBeginning = (bestChapters[0]?.chapterNumber ?? 999) <= 1.5;
+          if (startsNearBeginning && !bestStartsNearBeginning) {
+            // A provider starting at Chapter 1 always takes precedence over one starting mid-way
             bestChapters = uniqueChapters;
             bestScore = match.score || 0;
-          } else if (startsNearBeginning && !bestStartsNearBeginning) {
-            // A provider starting at Chapter 1 always takes precedence over one starting mid-way
+          } else if ((match.score || 0) > bestScore + 0.20 && (startsNearBeginning || !bestStartsNearBeginning)) {
+            // Prefer higher title match score if significantly better
             bestChapters = uniqueChapters;
             bestScore = match.score || 0;
           } else if (startsNearBeginning === bestStartsNearBeginning && uniqueChapters.length > bestChapters.length) {
