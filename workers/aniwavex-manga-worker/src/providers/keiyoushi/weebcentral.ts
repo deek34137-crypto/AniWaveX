@@ -65,10 +65,9 @@ export class WeebCentralProvider extends BaseProvider {
     return results;
   }
 
-  async search(query: string, page = 1): Promise<MangaSearchResult[]> {
-    const offset = Math.max(0, (page - 1) * 32);
+  private async executeSearch(text: string, offset: number): Promise<MangaSearchResult[]> {
     const url = `${BASE_URL}/search/data?author=&text=${encodeURIComponent(
-      query
+      text
     )}&sort=Best+Match&order=Ascending&official=Any&anime=Any&adult=Any&display_mode=Full+Display&limit=32&offset=${offset}`;
 
     const html = await fetchText(url, {
@@ -77,6 +76,45 @@ export class WeebCentralProvider extends BaseProvider {
     });
 
     return this.parseMangaList(html);
+  }
+
+  async search(query: string, page = 1): Promise<MangaSearchResult[]> {
+    const offset = Math.max(0, (page - 1) * 32);
+    const trimmed = query.trim();
+    if (!trimmed) return [];
+
+    // 1. Try exact query
+    let results = await this.executeSearch(trimmed, offset);
+    if (results.length > 0) return results;
+
+    // 2. If query contains apostrophes (' -> ’ or vice versa), try alternate apostrophe
+    if (trimmed.includes("'") || trimmed.includes("’")) {
+      const altApostrophe = trimmed.includes("'")
+        ? trimmed.replace(/'/g, '’')
+        : trimmed.replace(/’/g, "'");
+      results = await this.executeSearch(altApostrophe, offset);
+      if (results.length > 0) return results;
+    }
+
+    // 3. Try removing punctuation characters (?, !, :, ;, -, ', ")
+    const stripped = trimmed.replace(/['’"?!:;,\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (stripped && stripped !== trimmed) {
+      results = await this.executeSearch(stripped, offset);
+      if (results.length > 0) return results;
+    }
+
+    // 4. Try the longest significant words (e.g. "Academy Survival Guide" from "The Extra's Academy Survival Guide")
+    const words = trimmed.split(/\s+/).filter((w) => w.length > 2 && !/^(the|a|an|of|in|to|for|and)$/i.test(w));
+    if (words.length >= 2) {
+      // Try last 2-3 words (frequently contains the unique title stem)
+      const subPhrase = words.slice(-3).join(' ').replace(/['’"?!:;,\-–—]/g, '');
+      if (subPhrase && subPhrase !== stripped) {
+        results = await this.executeSearch(subPhrase, offset);
+        if (results.length > 0) return results;
+      }
+    }
+
+    return [];
   }
 
   async getPopular(page = 1): Promise<MangaSearchResult[]> {
