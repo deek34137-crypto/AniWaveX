@@ -10,6 +10,8 @@ import {
   Sparkles,
   CheckCircle2,
   Bookmark,
+  Loader2,
+  RotateCw,
 } from "lucide-react";
 import { MangaChapter } from "@/lib/manga/types";
 
@@ -36,9 +38,37 @@ export default function MangaDetailChaptersClient({
   mangaTitle,
   posterImage,
 }: MangaDetailChaptersClientProps) {
+  const [chapterList, setChapterList] = useState<MangaChapter[]>(chapters || []);
+  const [isFetching, setIsFetching] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [progress, setProgress] = useState<MangaReadingProgress | null>(null);
+
+  useEffect(() => {
+    if (chapters && chapters.length > 0) {
+      setChapterList(chapters);
+    }
+  }, [chapters]);
+
+  const fetchFallbackChapters = React.useCallback(() => {
+    if (!mangaTitle) return;
+    setIsFetching(true);
+    fetch(`/api/manga/chapters?title=${encodeURIComponent(mangaTitle)}&id=${encodeURIComponent(mangaId)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.chapters && Array.isArray(data.chapters) && data.chapters.length > 0) {
+          setChapterList(data.chapters);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsFetching(false));
+  }, [mangaId, mangaTitle]);
+
+  useEffect(() => {
+    if (chapterList.length === 0 && mangaTitle) {
+      fetchFallbackChapters();
+    }
+  }, [mangaId, mangaTitle, chapterList.length, fetchFallbackChapters]);
 
   // Restore saved reading progress from localStorage (Phase 8)
   useEffect(() => {
@@ -80,7 +110,7 @@ export default function MangaDetailChaptersClient({
 
   // Filter and sort chapters
   const filteredChapters = useMemo(() => {
-    let result = [...chapters];
+    let result = [...chapterList];
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -98,7 +128,7 @@ export default function MangaDetailChaptersClient({
     }
 
     return result;
-  }, [chapters, searchQuery, sortOrder]);
+  }, [chapterList, searchQuery, sortOrder]);
 
   const toggleSort = () => {
     setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -107,11 +137,11 @@ export default function MangaDetailChaptersClient({
   const resumeChapter = useMemo(() => {
     if (!progress) return null;
     return (
-      chapters.find((c) => c.id === progress.chapterId) ||
-      chapters.find((c) => c.chapterNumber === progress.chapterNumber) ||
+      chapterList.find((c) => c.id === progress.chapterId) ||
+      chapterList.find((c) => c.chapterNumber === progress.chapterNumber) ||
       null
     );
-  }, [chapters, progress]);
+  }, [chapterList, progress]);
 
   return (
     <div className="space-y-4">
@@ -120,8 +150,14 @@ export default function MangaDetailChaptersClient({
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-cyan-400" />
-            Chapters ({chapters.length})
+            Chapters ({chapterList.length})
           </h2>
+          {isFetching && (
+            <span className="flex items-center gap-1.5 text-xs text-cyan-400 font-normal">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Syncing chapters...
+            </span>
+          )}
         </div>
 
         {/* Action Buttons: Resume / Start Reading */}
@@ -142,9 +178,9 @@ export default function MangaDetailChaptersClient({
             </Link>
           )}
 
-          {chapters.length > 0 && (
+          {chapterList.length > 0 && (
             <Link
-              href={`/manga/${mangaId}/read?chapterId=${encodeURIComponent(chapters[0].id)}&ch=${chapters[0].chapterNumber}`}
+              href={`/manga/${mangaId}/read?chapterId=${encodeURIComponent(chapterList[0].id)}&ch=${chapterList[0].chapterNumber}`}
               onClick={() => {
                 try {
                   sessionStorage.setItem(`aniwavex_from_overview_${mangaId}`, "1");
@@ -153,7 +189,7 @@ export default function MangaDetailChaptersClient({
               className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
             >
               <Sparkles className="w-4 h-4" />
-              Start Ch. {chapters[0].chapterNumber}
+              Start Ch. {chapterList[0].chapterNumber}
             </Link>
           )}
         </div>
@@ -193,8 +229,27 @@ export default function MangaDetailChaptersClient({
 
       {/* Chapters Grid (Desktop-first expansive columns & TV focus) */}
       {filteredChapters.length === 0 ? (
-        <div className="p-12 text-center bg-slate-900/30 border border-white/5 rounded-2xl text-slate-400">
-          <p className="text-sm font-semibold">No chapters found matching "{searchQuery}"</p>
+        <div className="p-12 text-center bg-slate-900/30 border border-white/5 rounded-2xl text-slate-400 space-y-3">
+          {isFetching ? (
+            <div className="flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
+              <p className="text-sm font-semibold text-slate-300">Searching providers for available chapters...</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm font-semibold">
+                {searchQuery ? `No chapters found matching "${searchQuery}"` : "No chapters found matching this title."}
+              </p>
+              <button
+                type="button"
+                onClick={fetchFallbackChapters}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-semibold border border-white/10 transition-colors"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                Retry Search
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2.5">

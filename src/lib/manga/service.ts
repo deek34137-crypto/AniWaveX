@@ -284,7 +284,7 @@ async function searchWeebCentral(query: string): Promise<BackendSearchResult[]> 
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       signal: AbortSignal.timeout(4000),
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     });
     if (res.ok) {
       const html = await res.text();
@@ -300,7 +300,7 @@ async function searchWeebCentral(query: string): Promise<BackendSearchResult[]> 
     const proxyUrl = `${BACKEND}/api/proxy/html?provider=weebcentral&url=${encodeURIComponent(targetUrl)}`;
     const res = await fetch(proxyUrl, {
       signal: AbortSignal.timeout(6000),
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     });
     if (res.ok) {
       const html = await res.text();
@@ -324,7 +324,7 @@ async function backendSearch(query: string): Promise<BackendSearchResult[]> {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: query.trim() }),
-            next: { revalidate: 3600 },
+            cache: 'no-store',
           });
           if (!res.ok) return [];
           const data = await res.json();
@@ -515,7 +515,7 @@ export async function getMangaChapters(
             id: match.id,
             url: match.url,
           }),
-          next: { revalidate: 900 },
+          cache: 'no-store',
         });
 
         if (!res.ok) continue;
