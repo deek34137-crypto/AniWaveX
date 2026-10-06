@@ -1,39 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMangaChapters } from "@/lib/manga/service";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  const title = searchParams.get("title");
-  const romaji = searchParams.get("romaji") || undefined;
+  const title = searchParams.get("title") || "Dandadan";
+  const WORKER = "https://aniwavex-manga-worker.rajverma159310.workers.dev";
 
-  if (!title) {
-    return NextResponse.json({ error: "Missing title parameter" }, { status: 400 });
-  }
+  const logs: string[] = [];
 
   try {
-    const chapters = await getMangaChapters(title, id || undefined, romaji);
+    logs.push(`Step 1: Calling POST ${WORKER}/api/search for "${title}"`);
+    const searchRes = await fetch(`${WORKER}/api/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: title }),
+      cache: "no-store",
+    });
+
+    logs.push(`Search status: ${searchRes.status}`);
+    const searchData = await searchRes.json().catch((e) => ({ error: e.message }));
+    const results = searchData?.results || [];
+    logs.push(`Found ${results.length} results: ${JSON.stringify(results.map((r: any) => ({ p: r.provider, t: r.title, id: r.id })))}`);
+
+    const chapterResults: any[] = [];
+    for (const r of results) {
+      logs.push(`Fetching chapters for [${r.provider}] id: ${r.id}...`);
+      try {
+        const chRes = await fetch(`${WORKER}/api/chapters`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: r.provider, id: r.id, url: r.url }),
+          cache: "no-store",
+        });
+        logs.push(`  Chapters status for [${r.provider}]: ${chRes.status}`);
+        const chData = await chRes.json().catch((e) => ({ error: e.message }));
+        const count = chData?.chapters?.length || 0;
+        logs.push(`  Chapters count for [${r.provider}]: ${count}`);
+        chapterResults.push({ provider: r.provider, count, sample: chData?.chapters?.slice(0, 2) });
+      } catch (err: any) {
+        logs.push(`  Error fetching [${r.provider}]: ${err.message}`);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      chaptersCount: chapters.length,
-      chapters,
-      debug: {
-        title,
-        id,
-        romaji,
-        backendEnv: process.env.NEXT_PUBLIC_MANGA_WORKER_URL || null,
-        mangaApiUrl: process.env.MANGA_API_URL || null,
-      },
+      logs,
+      chapterResults,
     });
   } catch (err: any) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: err?.message || String(err),
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      error: err?.message,
+      logs,
+    }, { status: 500 });
   }
 }
