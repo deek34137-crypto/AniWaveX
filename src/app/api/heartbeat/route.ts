@@ -3,10 +3,14 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { isAdminUser } from "@/lib/admin";
 
-// Initialize backend Supabase client for analytics
+// Initialize backend Supabase client for analytics lazily
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createAdminClient(supabaseUrl, supabaseKey);
+const supabase =
+  supabaseUrl && supabaseKey
+    ? createAdminClient(supabaseUrl, supabaseKey)
+    : (null as any);
+
 
 export async function POST(request: NextRequest) {
   try {
