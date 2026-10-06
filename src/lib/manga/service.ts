@@ -12,7 +12,10 @@
 
 import { MangaItem, MangaChapter, MangaChapterPages } from './types';
 
-const BACKEND = 'https://mangahub-backend.deek34137.workers.dev';
+const BACKEND =
+  process.env.NEXT_PUBLIC_MANGA_WORKER_URL ||
+  process.env.MANGA_API_URL ||
+  'https://aniwavex-manga-worker.rajverma159310.workers.dev';
 
 // Primary working providers with verified page extraction (MangaKatana excluded due to logo fallbacks)
 const CHAPTER_PROVIDERS = [
