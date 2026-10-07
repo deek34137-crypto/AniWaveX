@@ -281,6 +281,7 @@ export async function getMangaDetails(id: string | number): Promise<MangaItem | 
   if (composite) {
     try {
       const res = await fetch(`${BACKEND}/api/manga/${composite.provider}/${encodeURIComponent(composite.mangaId)}`, {
+        signal: AbortSignal.timeout(6000),
         next: { revalidate: 3600 },
       });
       if (res.ok) {
@@ -498,6 +499,7 @@ async function backendSearch(query: string): Promise<BackendSearchResult[]> {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: query.trim() }),
+            signal: AbortSignal.timeout(8000),
             cache: 'no-store',
           });
           if (!res.ok) return [];
@@ -634,6 +636,7 @@ export async function getMangaChapters(
           provider: composite.provider,
           id: composite.mangaId,
         }),
+        signal: AbortSignal.timeout(8000),
         cache: 'no-store',
       });
       if (res.ok) {
@@ -765,6 +768,7 @@ export async function getMangaChapters(
             id: match.id,
             url: match.url,
           }),
+          signal: AbortSignal.timeout(8000),
           cache: 'no-store',
         });
 
@@ -787,6 +791,7 @@ export async function getMangaChapters(
                 id: sample.id,
                 url: sample.url,
               }),
+              signal: AbortSignal.timeout(5000),
             });
             const testData = await testRes.json();
             if (!testData?.pages || testData.pages.length === 0) {
@@ -906,6 +911,7 @@ export async function getChapterPages(chapterId: string): Promise<MangaChapterPa
         id: envelope.chapterId,
         url: envelope.chapterUrl,
       }),
+      signal: AbortSignal.timeout(10000),
       next: { revalidate: 300 },
     });
 

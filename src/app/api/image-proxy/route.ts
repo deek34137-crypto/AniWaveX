@@ -140,6 +140,7 @@ export async function GET(req: NextRequest) {
         Origin: origin,
         Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
       },
+      signal: AbortSignal.timeout(12000),
     });
 
     if (!upstreamRes.ok) {
