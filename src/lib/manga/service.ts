@@ -240,13 +240,28 @@ interface BackendSearchResult {
 function normalizeTitle(str: string): string {
   return str
     .toLowerCase()
+    // Greek symbols
     .replace(/[Ψψ]/g, 'psi')
     .replace(/[Ωω]/g, 'omega')
     .replace(/[αΑ]/g, 'alpha')
     .replace(/[βΒ]/g, 'beta')
-    .replace(/[卍]/g, '')
+    // Mathematical / stylized symbols
+    .replace(/[×✕✖]/g, 'x')
+    .replace(/[√]/g, 'root')
+    .replace(/[∞]/g, 'infinity')
+    .replace(/[♭]/g, 'flat')
+    .replace(/[♯]/g, 'sharp')
+    // Cultural / religious symbols
+    .replace(/[卍卐]/g, '')
+    // Quotation marks and apostrophes
+    .replace(/[’‘`´]/g, "'")
+    .replace(/[“”]/g, '"')
+    // Stars, hearts, musical notes, middle dots, full-width punctuation
+    .replace(/[★☆✦✧♥♡♪♫♬・·•〜~:;!?,._/\\+=\-]/g, ' ')
+    // Common romanization variance
     .replace(/\bou\b/g, 'o')
     .replace(/toukyou/g, 'tokyo')
+    // Strip everything else non-alphanumeric
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -505,12 +520,22 @@ export async function getMangaChapters(
   if (title && title.trim()) searchQueries.add(title.trim());
   if (romajiTitle && romajiTitle.trim()) searchQueries.add(romajiTitle.trim());
 
-  // Transliterate Greek and special anime symbols (e.g. Ψ -> Psi, Ω -> Omega)
+  // Transliterate Greek and special anime symbols (e.g. Ψ -> Psi, Ω -> Omega, × -> x)
   const transliterated = title
     .replace(/[Ψψ]/g, 'Psi')
     .replace(/[Ωω]/g, 'Omega')
     .replace(/[αΑ]/g, 'Alpha')
-    .replace(/[βΒ]/g, 'Beta');
+    .replace(/[βΒ]/g, 'Beta')
+    .replace(/[×✕✖]/g, ' x ')
+    .replace(/[√]/g, 'Root ')
+    .replace(/[∞]/g, 'Infinity')
+    .replace(/[♭]/g, ' Flat')
+    .replace(/[♯]/g, ' Sharp')
+    .replace(/[’‘`´]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[★☆✦✧♥♡♪♫♬・·•〜~]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (transliterated !== title) {
     searchQueries.add(transliterated);
   }
@@ -518,6 +543,14 @@ export async function getMangaChapters(
   // Phonetic variant for Saiki Kusuo no Ψ-nan (Sainan)
   if (/[Ψψ]-?nan/i.test(title)) {
     searchQueries.add(title.replace(/[Ψψ]-?nan/i, 'Sainan'));
+  }
+
+  // Also try replacing multiplication / cross symbol with space (e.g. "Hunter Hunter", "Spy Family")
+  if (/[×✕✖xX]/i.test(title)) {
+    const strippedCross = title.replace(/\s*[×✕✖xX]\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    if (strippedCross && strippedCross !== title) {
+      searchQueries.add(strippedCross);
+    }
   }
 
   // Sanitized base title if it contains brackets, parentheses or subtitles
