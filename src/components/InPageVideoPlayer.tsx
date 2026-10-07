@@ -1163,7 +1163,7 @@ export default function InPageVideoPlayer({
               e.stopPropagation();
               handleExecuteSkip();
             }}
-            className="relative overflow-hidden absolute bottom-14 right-4 sm:bottom-16 sm:right-6 z-40 px-4 py-2 sm:px-5 sm:py-2.5 rounded-md bg-black/65 hover:bg-black/85 border border-white/80 text-white font-semibold text-xs sm:text-sm backdrop-blur-sm shadow-2xl opacity-60 hover:opacity-100 transition-all duration-200 flex items-center justify-center cursor-pointer pointer-events-auto active:scale-95 animate-in fade-in"
+            className="absolute bottom-16 sm:bottom-[4.5rem] right-4 sm:right-6 z-40 overflow-hidden min-w-[128px] sm:min-w-[144px] h-9 sm:h-10 px-6 sm:px-7 rounded-md bg-black/70 hover:bg-black/90 border border-white/80 text-white font-semibold text-xs sm:text-sm backdrop-blur-sm shadow-2xl opacity-70 hover:opacity-100 transition-all duration-200 flex items-center justify-center cursor-pointer pointer-events-auto active:scale-95 animate-in fade-in whitespace-nowrap"
             title={`${buttonLabel} (${Math.round(activeSkip.endTime - activeSkip.startTime)}s)`}
           >
             {/* Left-to-Right Fill Progress Effect */}
@@ -1172,7 +1172,7 @@ export default function InPageVideoPlayer({
               style={{ width: `${skipProgressPercent}%` }}
             />
 
-            <span className="relative z-10 select-none tracking-wide text-white">
+            <span className="relative z-10 select-none tracking-wide text-white whitespace-nowrap">
               {buttonLabel}
             </span>
           </button>
@@ -1183,7 +1183,7 @@ export default function InPageVideoPlayer({
       {showNextEpOverlay && hasNext && episodes && currentIndex !== -1 && (
         <div 
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-6 right-4 sm:bottom-8 sm:right-6 z-40 w-72 sm:w-80 p-3.5 sm:p-4 bg-slate-950/95 border border-white/20 rounded-2xl backdrop-blur-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 text-left pointer-events-auto"
+          className="absolute bottom-16 sm:bottom-[4.5rem] right-4 sm:right-6 z-40 w-72 sm:w-80 p-3.5 sm:p-4 bg-slate-950/95 border border-white/20 rounded-2xl backdrop-blur-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 text-left pointer-events-auto"
         >
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="min-w-0">

@@ -99,6 +99,7 @@ export default function NativePlayer({
       playsInline
       currentTime={initialTime}
       autoPlay={autoPlay}
+      className="w-full h-full relative"
       onLoadedMetadata={applyInitialSeek}
       onCanPlay={applyInitialSeek}
       onStarted={applyInitialSeek}
