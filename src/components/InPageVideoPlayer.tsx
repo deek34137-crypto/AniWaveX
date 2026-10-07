@@ -472,17 +472,6 @@ export default function InPageVideoPlayer({
     }).catch(() => {});
   }, [episode?.id, anilistId, animeId]);
 
-  const handleExecuteSkip = useCallback(() => {
-    if (!activeSkip) return;
-    if (mediaPlayerRef.current) {
-      try {
-        mediaPlayerRef.current.currentTime = activeSkip.endTime;
-      } catch {}
-    }
-    showToast(`Skipped ${activeSkip.label} ⏭`);
-    setActiveSkip(null);
-  }, [activeSkip, showToast]);
-
   const toggleAutoSkip = useCallback(() => {
     setAutoSkip((prev) => {
       const next = !prev;
@@ -493,12 +482,6 @@ export default function InPageVideoPlayer({
       return next;
     });
   }, [showToast]);
-
-  const handleDismissNextEpOverlay = useCallback(() => {
-    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-    setShowNextEpOverlay(false);
-    dismissedEndscreenEpisodeRef.current = episode?.id;
-  }, [episode?.id]);
 
   // Initial watch history sync + flush on unmount / episode change
   useEffect(() => {
@@ -867,6 +850,47 @@ export default function InPageVideoPlayer({
     }
   }, [hasNext, onEpisodeChange, episodes, currentIndex, showToast]);
 
+  const handleExecuteSkip = useCallback(() => {
+    if (!activeSkip) return;
+    if (activeSkip.type === "ed" && hasNext) {
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+      }
+      setShowNextEpOverlay(false);
+      dismissedEndscreenEpisodeRef.current = episode?.id;
+      setActiveSkip(null);
+      handleNext();
+      return;
+    }
+    if (mediaPlayerRef.current) {
+      try {
+        mediaPlayerRef.current.currentTime = activeSkip.endTime;
+      } catch {}
+    }
+    showToast(`Skipped ${activeSkip.label} ⏭`);
+    setActiveSkip(null);
+  }, [activeSkip, hasNext, handleNext, showToast, episode?.id]);
+
+  const handleDismissNextEpOverlay = useCallback(() => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setShowNextEpOverlay(false);
+    dismissedEndscreenEpisodeRef.current = episode?.id;
+  }, [episode?.id]);
+
+  const handleWatchNow = useCallback(() => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setShowNextEpOverlay(false);
+    dismissedEndscreenEpisodeRef.current = episode?.id;
+    handleNext();
+  }, [handleNext, episode?.id]);
+
   const handlePrev = useCallback(() => {
     if (hasPrev && onEpisodeChange && episodes) {
       setInitialTime(0);
@@ -928,17 +952,29 @@ export default function InPageVideoPlayer({
   // Countdown effect for Next Episode Endscreen Overlay
   useEffect(() => {
     if (!showNextEpOverlay) {
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+      }
       setNextEpCountdown(5);
-      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
       return;
+    }
+
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
     }
 
     setNextEpCountdown(5);
     countdownTimerRef.current = setInterval(() => {
       setNextEpCountdown((prev) => {
         if (prev <= 1) {
-          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+          if (countdownTimerRef.current) {
+            clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+          }
           setShowNextEpOverlay(false);
+          dismissedEndscreenEpisodeRef.current = episode?.id;
           handleNext();
           return 0;
         }
@@ -947,9 +983,12 @@ export default function InPageVideoPlayer({
     }, 1000);
 
     return () => {
-      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+      }
     };
-  }, [showNextEpOverlay, handleNext]);
+  }, [showNextEpOverlay, handleNext, episode?.id]);
 
   const toggleFullscreen = useCallback(() => {
     if (typeof document === "undefined") return;
@@ -1110,7 +1149,7 @@ export default function InPageVideoPlayer({
             handleExecuteSkip();
           }}
           className="relative overflow-hidden absolute bottom-16 right-4 sm:bottom-20 sm:right-6 z-40 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-950/90 hover:bg-slate-900 border border-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xl shadow-2xl opacity-50 hover:opacity-100 transition-all duration-200 flex items-center gap-2 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-2 group cursor-pointer pointer-events-auto"
-          title={`${activeSkip.label} (${Math.round(activeSkip.endTime - activeSkip.startTime)}s)`}
+          title={`${activeSkip.type === "ed" && hasNext ? "Watch Next Episode" : activeSkip.label} (${Math.round(activeSkip.endTime - activeSkip.startTime)}s)`}
         >
           {/* Left-to-Right Fill Progress Effect */}
           <div
@@ -1119,7 +1158,9 @@ export default function InPageVideoPlayer({
           />
 
           <FastForward className="relative z-10 w-4 h-4 text-blue-400 group-hover:text-white transition-colors" />
-          <span className="relative z-10">{activeSkip.label}</span>
+          <span className="relative z-10">
+            {activeSkip.type === "ed" && hasNext ? "Watch Next" : activeSkip.label}
+          </span>
           <span className="relative z-10 text-[10px] font-mono opacity-60 ml-0.5">
             {Math.max(1, 10 - Math.floor((skipProgressPercent / 100) * 10))}s
           </span>
@@ -1162,10 +1203,7 @@ export default function InPageVideoPlayer({
           <div className="flex items-center gap-2 mt-2">
             <button
               type="button"
-              onClick={() => {
-                setShowNextEpOverlay(false);
-                handleNext();
-              }}
+              onClick={handleWatchNow}
               className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/30 active:scale-95 transition-all cursor-pointer"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
