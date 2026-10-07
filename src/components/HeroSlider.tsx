@@ -114,7 +114,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
 
               <div className={`flex flex-row items-center gap-2.5 sm:gap-4 transition-all duration-700 delay-700 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 <Link 
-                  href={`/anime/${anime.slug}`}
+                  href={`/anime/${anime.slug}?play=1`}
                   prefetch={true}
                   className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-105 active:scale-95 focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:outline-none"
                 >

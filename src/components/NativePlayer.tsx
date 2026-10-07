@@ -17,6 +17,7 @@ interface NativePlayerProps {
   onEnded?: () => void;
   onError?: (error: any) => void;
   playerRef?: React.RefObject<MediaPlayerInstance | null>;
+  children?: React.ReactNode;
 }
 
 function isValidVttSubtitle(url: string): boolean {
@@ -35,7 +36,8 @@ export default function NativePlayer({
   onTimeUpdate,
   onEnded,
   onError,
-  playerRef: externalRef
+  playerRef: externalRef,
+  children
 }: NativePlayerProps) {
   const internalRef = useRef<MediaPlayerInstance>(null);
   const player = externalRef || internalRef;
@@ -129,6 +131,7 @@ export default function NativePlayer({
         })}
       </MediaProvider>
       <DefaultVideoLayout icons={defaultLayoutIcons} />
+      {children}
     </MediaPlayer>
   );
 }

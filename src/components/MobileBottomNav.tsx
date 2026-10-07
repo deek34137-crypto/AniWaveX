@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { Home, Compass, Film, Search, User, BookOpen } from "lucide-react";
+import { Home, Compass, Film, Calendar, User, BookOpen } from "lucide-react";
 
 function BottomNavContent() {
   const pathname = usePathname();
@@ -35,10 +35,10 @@ function BottomNavContent() {
       isActive: pathname.startsWith("/manga"),
     },
     {
-      label: "Search",
-      href: "/search",
-      icon: Search,
-      isActive: pathname === "/search",
+      label: "Schedule",
+      href: "/airing",
+      icon: Calendar,
+      isActive: pathname === "/airing",
     },
     {
       label: "Profile",

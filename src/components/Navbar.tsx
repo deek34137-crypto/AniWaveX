@@ -2,7 +2,6 @@ import SearchBar from "./SearchBar";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import NavbarActions from "./NavbarActions";
-import MobileNav from "./MobileNav";
 import { Search } from "lucide-react";
 
 export default async function Navbar() {
@@ -12,9 +11,8 @@ export default async function Navbar() {
   return (
     <nav id="main-navbar" className="fixed top-0 left-0 w-full z-50 bg-[#0a0a0c]/95 backdrop-blur-xl border-b border-white/10 pt-[env(safe-area-inset-top,0px)] transition-all">
       <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-10 2xl:px-12 h-14 sm:h-16 flex items-center justify-between">
-        {/* Left Section: Logo & Menu */}
+        {/* Left Section: Logo & Desktop Links */}
         <div className="flex items-center gap-2 sm:gap-4">
-          <MobileNav />
           <Link href="/" className="flex items-center gap-1.5 sm:gap-2 focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-1">
             <span className="text-lg sm:text-2xl font-black tracking-tighter bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent select-none">
               AniWaveX

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity } from "lucide-react";
+import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity, FastForward, Play } from "lucide-react";
 import NativePlayer from "./NativePlayer";
 import SyncHudToast from "./player/SyncHudToast";
 import { useAuth } from "@/providers/AuthProvider";
 import { benchmarkStreamSources, getFastestServerIndex, formatLatencyBadge } from "@/lib/latency-benchmarker";
 import { syncProgressToAniList } from "@/lib/sync/anilist-sync";
 import { handleSequelPlaybackStarted, handleAnimeCompleted } from "@/lib/franchise";
+import { getEpisodeSkipTimes, type SkipInterval } from "@/lib/aniskip";
 import type { MediaPlayerInstance } from "@vidstack/react";
 import type { LiveSyncResult } from "@/types/sync";
 
@@ -159,6 +160,19 @@ export default function InPageVideoPlayer({
   const [liveSyncResult, setLiveSyncResult] = useState<LiveSyncResult | null>(null);
   const completionSyncedEpisodeRef = useRef<number | null>(null);
   const hasInitialSeekSettledRef = useRef<boolean>(true);
+
+  // AniSkip & Next Episode Endscreen State
+  const [skipIntervals, setSkipIntervals] = useState<SkipInterval[]>([]);
+  const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
+  const [autoSkip, setAutoSkip] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("aniwavex_auto_skip") === "true";
+  });
+  const [showNextEpOverlay, setShowNextEpOverlay] = useState(false);
+  const [nextEpCountdown, setNextEpCountdown] = useState(5);
+  const dismissedEndscreenEpisodeRef = useRef<number | null>(null);
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasAutoSkippedRef = useRef<Set<string>>(new Set());
   
   const currentUserRef = useRef<any>(authUser || initialUser);
   const playerRef = useRef<HTMLDivElement>(null);
@@ -169,6 +183,17 @@ export default function InPageVideoPlayer({
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Timestamp of the last manual server switch — auto-failover is suppressed for 8s after a manual switch
   const manualSwitchAtRef = useRef<number>(0);
+
+  // Helper to trigger temporary server toast notifications
+  const showToast = useCallback((msg: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setServerToast(msg);
+    toastTimeoutRef.current = setTimeout(() => setServerToast(null), 3500);
+  }, []);
+
+  const currentIndex = episodes ? episodes.findIndex((ep) => ep.id === episode?.id) : -1;
+  const hasNext = Boolean(episodes && currentIndex !== -1 && currentIndex < episodes.length - 1);
+  const hasPrev = Boolean(episodes && currentIndex > 0);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -377,12 +402,92 @@ export default function InPageVideoPlayer({
       }
     }
 
+    // AniSkip check
+    if (skipIntervals && skipIntervals.length > 0) {
+      const currentSkip = skipIntervals.find(
+        (int) => floorTime >= Math.floor(int.startTime) && floorTime < Math.floor(int.endTime)
+      );
+
+      if (currentSkip) {
+        const skipKey = `${episode.id}_${currentSkip.type}_${Math.floor(currentSkip.startTime)}`;
+        if (autoSkip && !hasAutoSkippedRef.current.has(skipKey)) {
+          hasAutoSkippedRef.current.add(skipKey);
+          if (mediaPlayerRef.current) {
+            try {
+              mediaPlayerRef.current.currentTime = currentSkip.endTime;
+            } catch {}
+            showToast(`Auto-skipped ${currentSkip.label} ⏭`);
+          }
+        } else if (!autoSkip) {
+          setActiveSkip(currentSkip);
+        }
+      } else {
+        setActiveSkip(null);
+      }
+    } else {
+      setActiveSkip(null);
+    }
+
+    // Next Episode Endscreen trigger: within 25 seconds of end or >= 95% of episode
+    if (hasNext && floorDur > 60 && (floorTime >= floorDur - 25 || (floorDur > 0 && floorTime / floorDur >= 0.95))) {
+      if (dismissedEndscreenEpisodeRef.current !== episode.id && !showNextEpOverlay) {
+        setShowNextEpOverlay(true);
+      }
+    }
+
     // Sync to Supabase periodically every 35 seconds during continuous playback to avoid DB write flooding
     if (Math.abs(currentTime - lastSupabaseSyncRef.current) >= 35 && floorTime > 0) {
       lastSupabaseSyncRef.current = currentTime;
       syncToSupabase(floorTime);
     }
-  }, [episode?.id, episode?.title, animeSlug, animeTitle, animePosterImage, syncToSupabase]);
+  }, [episode?.id, episode?.title, animeSlug, animeTitle, animePosterImage, syncToSupabase, skipIntervals, autoSkip, hasNext, showNextEpOverlay, showToast]);
+
+  // Fetch AniSkip timestamps whenever episode changes
+  useEffect(() => {
+    if (!episode?.id) return;
+    hasAutoSkippedRef.current.clear();
+    setSkipIntervals([]);
+    setActiveSkip(null);
+    setShowNextEpOverlay(false);
+    dismissedEndscreenEpisodeRef.current = null;
+
+    getEpisodeSkipTimes({
+      anilistId,
+      kitsuId: animeId,
+      episodeNumber: Number(episode.id),
+      duration: lastKnownDurationRef.current || 1440,
+    }).then((intervals) => {
+      setSkipIntervals(intervals);
+    }).catch(() => {});
+  }, [episode?.id, anilistId, animeId]);
+
+  const handleExecuteSkip = useCallback(() => {
+    if (!activeSkip) return;
+    if (mediaPlayerRef.current) {
+      try {
+        mediaPlayerRef.current.currentTime = activeSkip.endTime;
+      } catch {}
+    }
+    showToast(`Skipped ${activeSkip.label} ⏭`);
+    setActiveSkip(null);
+  }, [activeSkip, showToast]);
+
+  const toggleAutoSkip = useCallback(() => {
+    setAutoSkip((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("aniwavex_auto_skip", String(next));
+      } catch {}
+      showToast(next ? "Auto-Skip OP/ED Enabled" : "Auto-Skip OP/ED Disabled");
+      return next;
+    });
+  }, [showToast]);
+
+  const handleDismissNextEpOverlay = useCallback(() => {
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    setShowNextEpOverlay(false);
+    dismissedEndscreenEpisodeRef.current = episode?.id;
+  }, [episode?.id]);
 
   // Initial watch history sync + flush on unmount / episode change
   useEffect(() => {
@@ -477,12 +582,6 @@ export default function InPageVideoPlayer({
   const failedServersRef = useRef<Set<number>>(new Set());
   const lastFailoverAtRef = useRef(0);
 
-  // Helper to trigger temporary server toast notifications
-  const showToast = useCallback((msg: string) => {
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    setServerToast(msg);
-    toastTimeoutRef.current = setTimeout(() => setServerToast(null), 3500);
-  }, []);
 
   const activeSources: StreamSource[] | undefined = useMemo(() => {
     if (!streams) return undefined;
@@ -531,8 +630,6 @@ export default function InPageVideoPlayer({
   const selectedSource = activeSources?.[validServerIndex];
   const currentUrl = selectedSource?.url;
   const isM3U8 = Boolean(selectedSource?.isM3U8 || (currentUrl && currentUrl.includes('.m3u8')));
-  const availableEmbedIndex = activeSources?.findIndex((s) => !s.isM3U8 && isValidEmbedUrl(s.url)) ?? -1;
-  const hasEmbedOption = availableEmbedIndex !== -1;
   const isFloatingPiP = isScrolledPast && !isMiniPlayerDismissed && Boolean(currentUrl) && !playerError && !isLoading;
   const userExplicitlySelectedServerRef = useRef(false);
   const lastAniListSyncEpRef = useRef<number | null>(null);
@@ -748,9 +845,6 @@ export default function InPageVideoPlayer({
     };
   }, [episode, animeSlug, animeTitle, animeType, activeTab, anilistId, showToast]);
 
-  const currentIndex = episodes ? episodes.findIndex((ep) => ep.id === episode?.id) : -1;
-  const hasNext = episodes && currentIndex !== -1 && currentIndex < episodes.length - 1;
-  const hasPrev = episodes && currentIndex > 0;
 
   const handleNext = useCallback(() => {
     if (hasNext && onEpisodeChange && episodes) {
@@ -816,9 +910,35 @@ export default function InPageVideoPlayer({
     }
 
     if (autoplayNext && hasNext) {
-      handleNext();
+      setShowNextEpOverlay(true);
     }
-  }, [anilistId, episode, autoplayNext, hasNext, handleNext, showToast, currentUser, authUser, initialUser, animeSlug, animeTitle, animePosterImage, supabase, episodes, animeId, triggerLiveProgressSync]);
+  }, [anilistId, episode, autoplayNext, hasNext, showToast, currentUser, authUser, initialUser, animeSlug, animeTitle, animePosterImage, supabase, episodes, animeId, triggerLiveProgressSync]);
+
+  // Countdown effect for Next Episode Endscreen Overlay
+  useEffect(() => {
+    if (!showNextEpOverlay) {
+      setNextEpCountdown(5);
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+      return;
+    }
+
+    setNextEpCountdown(5);
+    countdownTimerRef.current = setInterval(() => {
+      setNextEpCountdown((prev) => {
+        if (prev <= 1) {
+          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+          setShowNextEpOverlay(false);
+          handleNext();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    };
+  }, [showNextEpOverlay, handleNext]);
 
   const toggleFullscreen = useCallback(() => {
     if (typeof document === "undefined") return;
@@ -968,6 +1088,82 @@ export default function InPageVideoPlayer({
 
   if (!episode) return null;
 
+  const playbackOverlays = (
+    <>
+      {/* AniSkip On-Screen Skip Button */}
+      {activeSkip && !playerError && !isLoading && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleExecuteSkip();
+          }}
+          className="absolute bottom-16 right-4 sm:bottom-20 sm:right-6 z-40 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-950/90 hover:bg-blue-600 border border-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xl shadow-2xl transition-all duration-200 flex items-center gap-2 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-2 group cursor-pointer pointer-events-auto"
+          title={`${activeSkip.label} (${Math.round(activeSkip.endTime - activeSkip.startTime)}s)`}
+        >
+          <FastForward className="w-4 h-4 text-blue-400 group-hover:text-white transition-colors" />
+          <span>{activeSkip.label}</span>
+        </button>
+      )}
+
+      {/* Netflix-Style Next Episode Endscreen Overlay */}
+      {showNextEpOverlay && hasNext && episodes && currentIndex !== -1 && (
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="absolute bottom-6 right-4 sm:bottom-8 sm:right-6 z-40 w-72 sm:w-80 p-3.5 sm:p-4 bg-slate-950/95 border border-white/20 rounded-2xl backdrop-blur-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 text-left pointer-events-auto"
+        >
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="min-w-0">
+              <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-wider block">
+                Up Next in {nextEpCountdown}s
+              </span>
+              <h4 className="text-xs sm:text-sm font-bold text-white truncate">
+                Episode {episodes[currentIndex + 1]?.id} {episodes[currentIndex + 1]?.title ? `• ${episodes[currentIndex + 1]?.title}` : ''}
+              </h4>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismissNextEpOverlay}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+              title="Dismiss next episode countdown"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Countdown Progress Bar */}
+          <div className="w-full bg-slate-800 h-1 rounded-full my-2.5 overflow-hidden">
+            <div
+              className="bg-blue-500 h-full transition-all duration-1000 ease-linear rounded-full"
+              style={{ width: `${((5 - nextEpCountdown) / 5) * 100}%` }}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowNextEpOverlay(false);
+                handleNext();
+              }}
+              className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/30 active:scale-95 transition-all cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Watch Now</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDismissNextEpOverlay}
+              className="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-white/10 active:scale-95 transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div ref={playerRef} className="w-full flex flex-col gap-4 bg-slate-950 py-8 scroll-mt-20">
       <div className="w-full max-w-5xl mx-auto">
@@ -1025,7 +1221,8 @@ export default function InPageVideoPlayer({
 
                 <div className="flex gap-1.5 overflow-x-auto max-w-[240px] sm:max-w-[320px] md:max-w-[420px] lg:max-w-[480px] scrollbar-none py-0.5 min-w-0">
                   {activeSources.map((source, idx) => {
-                    const latBadge = formatLatencyBadge(serverLatencies[source.url]);
+                    const latency = serverLatencies[source.url];
+                    const latBadge = formatLatencyBadge(latency);
                     return (
                       <button
                         key={`${source.url}-${idx}`}
@@ -1035,18 +1232,26 @@ export default function InPageVideoPlayer({
                           e.stopPropagation();
                           handleSelectServer(idx);
                         }}
+                        title={latency !== undefined ? `Server: ${source.quality} • ${latBadge.text}` : `Server: ${source.quality}`}
                         className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer select-none ${
                           validServerIndex === idx 
                             ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400' 
                             : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-white'
                         }`}
                       >
-                        <Server className="w-3 h-3 opacity-70" />
+                        <Server className="w-3 h-3 opacity-70 shrink-0" />
                         <span>{source.quality}</span>
-                        {serverLatencies[source.url] !== undefined && (
-                          <span className={`text-[10px] ${latBadge.colorClass}`}>
-                            • {latBadge.text}
-                          </span>
+                        {latency !== undefined && (
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              latency < 150
+                                ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)] animate-pulse'
+                                : latency < 400
+                                ? 'bg-blue-400'
+                                : 'bg-amber-400'
+                            }`}
+                            aria-label={latBadge.text}
+                          />
                         )}
                       </button>
                     );
@@ -1321,7 +1526,9 @@ export default function InPageVideoPlayer({
                   setPlayerError(true);
                 }}
                 onEnded={handleEnded}
-              />
+              >
+                {playbackOverlays}
+              </NativePlayer>
             ) : isValidEmbedUrl(currentUrl) ? (
               <iframe 
                 key={currentUrl}
@@ -1342,7 +1549,9 @@ export default function InPageVideoPlayer({
                 onTimeUpdate={handleTimeUpdate}
                 onError={() => setPlayerError(true)}
                 onEnded={handleEnded}
-              />
+              >
+                {playbackOverlays}
+              </NativePlayer>
             ) : !isLoading ? (
               <div className="flex flex-col items-center justify-center p-8 text-center gap-3 w-full h-full bg-slate-950/80">
                 <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
@@ -1387,6 +1596,9 @@ export default function InPageVideoPlayer({
               onDismiss={() => setLiveSyncResult(null)} 
               onRetry={handleRetrySync} 
             />
+
+            {/* Fallback Overlays when playing via iframe (since iframe can't embed React children) */}
+            {(fallbackToIframe || !isM3U8) && isValidEmbedUrl(currentUrl) && playbackOverlays}
           </div>
         </div>
 
@@ -1422,31 +1634,6 @@ export default function InPageVideoPlayer({
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
-
-            {/* Quick Source Controls */}
-            {activeSources && activeSources.length > 1 && (
-              <div className="flex items-center gap-1.5 bg-slate-900/60 p-1 rounded-lg border border-white/5">
-                <button
-                  onClick={handlePrevSource}
-                  className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1"
-                  title="Previous Server (Shift + S)"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Prev Source</span>
-                </button>
-                <span className="text-xs font-bold text-indigo-400 px-1">
-                  {validServerIndex + 1}/{activeSources.length}
-                </span>
-                <button
-                  onClick={handleNextSource}
-                  className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1"
-                  title="Next Server (S)"
-                >
-                  <span className="hidden md:inline">Next Source</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -1463,32 +1650,6 @@ export default function InPageVideoPlayer({
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Ambient Glow</span>
             </button>
-
-            {/* Manual Player Mode Switcher (only shown if both HLS and Embed servers exist) */}
-            {hasEmbedOption && (
-              <button
-                onClick={() => {
-                  if (fallbackToIframe) {
-                    const firstHlsIdx = activeSources?.findIndex((s) => s.isM3U8) ?? 0;
-                    setSelectedServerIndex(firstHlsIdx >= 0 ? firstHlsIdx : 0);
-                    setFallbackToIframe(false);
-                  } else {
-                    setSelectedServerIndex(availableEmbedIndex);
-                    setFallbackToIframe(true);
-                  }
-                  setPlayerError(false);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
-                  fallbackToIframe
-                    ? "bg-amber-600/20 text-amber-300 border-amber-500/30"
-                    : "bg-slate-900/50 text-slate-400 hover:text-white border-white/5"
-                }`}
-                title={fallbackToIframe ? "Switch to Native Player" : "Switch to Embed Player"}
-              >
-                <Tv className="w-3.5 h-3.5" />
-                <span>{fallbackToIframe ? "Embed Server" : "Native Player"}</span>
-              </button>
-            )}
 
             {/* Fullscreen Toggle Button */}
             <button
@@ -1509,6 +1670,21 @@ export default function InPageVideoPlayer({
               <Keyboard className="w-4 h-4" />
               <span className="hidden sm:inline">Shortcuts</span>
             </button>
+
+            {/* Auto-Skip OP/ED Toggle */}
+            <div className="flex items-center gap-2.5 bg-slate-900/50 px-3.5 py-2 rounded-lg border border-white/5">
+              <span className="text-xs sm:text-sm font-medium text-slate-300 whitespace-nowrap">Auto-Skip OP/ED</span>
+              <button 
+                type="button"
+                onClick={toggleAutoSkip}
+                className={`relative w-11 h-6 rounded-full transition-colors ${autoSkip ? 'bg-blue-600' : 'bg-slate-700'}`}
+                title="Automatically skip opening and ending sequences"
+              >
+                <div 
+                  className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${autoSkip ? 'translate-x-5' : 'translate-x-0'}`} 
+                />
+              </button>
+            </div>
 
             {/* Autoplay Toggle */}
             <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-2 rounded-lg border border-white/5">

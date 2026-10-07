@@ -18,8 +18,20 @@ import {
   Search,
   ArrowUpDown,
   Sparkles,
+  Download,
+  CheckCircle2,
+  Columns,
+  ScrollText,
+  Cloud,
 } from "lucide-react";
 import { MangaChapter } from "@/lib/manga/types";
+import {
+  saveChapterOffline,
+  getOfflineChapter,
+  isChapterDownloaded,
+  deleteOfflineChapter,
+  type OfflineChapter,
+} from "@/lib/manga/offline-storage";
 
 interface ReaderPageProps {
   mangaId: string;
@@ -32,12 +44,19 @@ interface ReaderPageProps {
 }
 
 type ReaderWidth = "standard" | "fit-screen" | "wide" | "full";
+export type ReadingMode = "webtoon" | "paged-rtl" | "paged-ltr";
 
 const WIDTH_LABELS: Record<ReaderWidth, string> = {
   standard: "Standard (768px)",
   "fit-screen": "Fit Screen (Height)",
   wide: "Wide (1024px)",
   full: "Full Width (1280px+)",
+};
+
+const MODE_LABELS: Record<ReadingMode, string> = {
+  webtoon: "Vertical Webtoon",
+  "paged-rtl": "Manga (Right to Left)",
+  "paged-ltr": "Comic (Left to Right)",
 };
 
 export default function MangaReaderClient({
@@ -60,9 +79,20 @@ export default function MangaReaderClient({
   const [error, setError] = useState<string | null>(null);
   const [currentVisiblePage, setCurrentVisiblePage] = useState(initialPage || 1);
   const [readerWidth, setReaderWidth] = useState<ReaderWidth>("standard");
+  const [readingMode, setReadingMode] = useState<ReadingMode>("webtoon");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isChapterListOpen, setIsChapterListOpen] = useState(false);
   const [failedImages, setFailedImages] = useState<Record<number, number>>({});
+
+  // Offline Chapter Download & Playback State
+  const [isDownloaded, setIsDownloaded] = useState<boolean>(false);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadProgress, setDownloadProgress] = useState<number>(0);
+  const [offlineBlobs, setOfflineBlobs] = useState<Record<number, string>>({});
+
+  // Cloud Sync Status Indicator
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState<number | null>(null);
 
   // Chapter modal search & sort
   const [modalSearch, setModalSearch] = useState("");
@@ -75,15 +105,122 @@ export default function MangaReaderClient({
     setActiveChapterNum(chapterNumber);
   }, [chapterId, chapterNumber]);
 
-  // Restore saved width preference from localStorage
+  // Restore saved width and reading mode preference from localStorage
   useEffect(() => {
     try {
       const savedWidth = localStorage.getItem("aniwavex_manga_reader_width") as ReaderWidth;
       if (savedWidth && ["standard", "fit-screen", "wide", "full"].includes(savedWidth)) {
         setReaderWidth(savedWidth);
       }
+      const savedMode = localStorage.getItem("aniwavex_manga_reading_mode") as ReadingMode;
+      if (savedMode && ["webtoon", "paged-rtl", "paged-ltr"].includes(savedMode)) {
+        setReadingMode(savedMode);
+      }
     } catch {}
   }, []);
+
+  // Check if current chapter is saved offline in IndexedDB
+  useEffect(() => {
+    let isMounted = true;
+    if (!activeChapterId) return;
+
+    isChapterDownloaded(mangaId, activeChapterId)
+      .then((downloaded) => {
+        if (!isMounted) return;
+        setIsDownloaded(downloaded);
+        if (downloaded) {
+          getOfflineChapter(mangaId, activeChapterId).then((offlineCh) => {
+            if (!isMounted || !offlineCh) return;
+            const blobsMap: Record<number, string> = {};
+            offlineCh.pages.forEach((p) => {
+              blobsMap[p.pageNumber] = URL.createObjectURL(p.blob);
+            });
+            setOfflineBlobs(blobsMap);
+          });
+        } else {
+          setOfflineBlobs({});
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [mangaId, activeChapterId]);
+
+  // Clean up object URLs on unmount or chapter change
+  useEffect(() => {
+    return () => {
+      Object.values(offlineBlobs).forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {}
+      });
+    };
+  }, [offlineBlobs]);
+
+  // Download entire current chapter for 100% offline access
+  const handleDownloadChapterOffline = async () => {
+    if (pages.length === 0 || isDownloading) return;
+    setIsDownloading(true);
+    setDownloadProgress(0);
+
+    try {
+      const downloadedPageBlobs: OfflineChapter["pages"] = [];
+      const blobsMap: Record<number, string> = {};
+
+      for (let i = 0; i < pages.length; i++) {
+        const p = pages[i];
+        const refererQuery = p.referer ? `&referer=${encodeURIComponent(p.referer)}` : "";
+        const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(p.imageUrl)}${refererQuery}`;
+
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error(`Failed to download page ${p.pageNumber}`);
+        const blob = await res.blob();
+
+        downloadedPageBlobs.push({
+          pageNumber: p.pageNumber,
+          blob,
+          mimeType: blob.type || "image/jpeg",
+        });
+
+        blobsMap[p.pageNumber] = URL.createObjectURL(blob);
+        setDownloadProgress(Math.round(((i + 1) / pages.length) * 100));
+      }
+
+      await saveChapterOffline({
+        id: `${mangaId}_${activeChapterId}`,
+        mangaId,
+        mangaTitle,
+        posterImage,
+        chapterId: activeChapterId,
+        chapterNumber: activeChapterNum || currentChapterObj?.chapterNumber || 1,
+        chapterTitle: currentChapterObj?.title,
+        downloadedAt: Date.now(),
+        totalPages: pages.length,
+        pages: downloadedPageBlobs,
+      });
+
+      setOfflineBlobs(blobsMap);
+      setIsDownloaded(true);
+    } catch (err: any) {
+      console.error("[Offline Download] Error:", err);
+      alert("Failed to download chapter offline: " + (err.message || "Network issue"));
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
+
+  const handleRemoveOfflineChapter = async () => {
+    try {
+      await deleteOfflineChapter(mangaId, activeChapterId);
+      setIsDownloaded(false);
+      setOfflineBlobs({});
+    } catch (err) {
+      console.error("[Offline Removal] Error:", err);
+    }
+  };
 
   // Fullscreen state listener
   useEffect(() => {
@@ -130,9 +267,9 @@ export default function MangaReaderClient({
     fetchPages();
   }, [fetchPages]);
 
-  // Track currently visible page using IntersectionObserver during scroll
+  // Track currently visible page using IntersectionObserver during scroll (Webtoon mode only)
   useEffect(() => {
-    if (pages.length === 0) return;
+    if (pages.length === 0 || readingMode !== "webtoon") return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -155,9 +292,9 @@ export default function MangaReaderClient({
     elements.forEach((el) => observer.observe(el));
 
     return () => observer.disconnect();
-  }, [pages]);
+  }, [pages, readingMode]);
 
-  // Restore scroll to target page (Page Y) when opening chapter
+  // Restore scroll to target page (Page Y) when opening chapter in Webtoon mode
   const hasRestoredPageRef = useRef(false);
 
   useEffect(() => {
@@ -189,44 +326,50 @@ export default function MangaReaderClient({
       hasRestoredPageRef.current = true;
       setCurrentVisiblePage(targetPage);
 
-      const performScroll = () => {
-        const pageEl = document.querySelector(`[data-page="${targetPage}"]`);
-        if (pageEl) {
-          pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      };
+      if (readingMode === "webtoon") {
+        const performScroll = () => {
+          const pageEl = document.querySelector(`[data-page="${targetPage}"]`);
+          if (pageEl) {
+            pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        };
 
-      const t1 = setTimeout(performScroll, 100);
-      const t2 = setTimeout(performScroll, 350);
-      const t3 = setTimeout(performScroll, 700);
+        const t1 = setTimeout(performScroll, 100);
+        const t2 = setTimeout(performScroll, 350);
+        const t3 = setTimeout(performScroll, 700);
 
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-      };
+        return () => {
+          clearTimeout(t1);
+          clearTimeout(t2);
+          clearTimeout(t3);
+        };
+      }
     }
-  }, [pages, isLoading, initialPage, activeChapterId, activeChapterNum, mangaId]);
+  }, [pages, isLoading, initialPage, activeChapterId, activeChapterNum, mangaId, readingMode]);
 
-  // Save reading progress to localStorage
+  // Save reading progress to localStorage and sync to Supabase in background
+  const lastCloudSyncRef = useRef<number>(0);
+
   useEffect(() => {
     if (isLoading || pages.length === 0) return;
-    // Prevent premature overwrite before scroll restoration finishes
     if (initialPage && initialPage > 1 && !hasRestoredPageRef.current) return;
 
+    const progressRecord = {
+      mangaId,
+      mangaTitle,
+      posterImage: posterImage || undefined,
+      chapterId: activeChapterId,
+      chapterNumber: activeChapterNum || currentChapterObj?.chapterNumber || 1,
+      pageNumber: currentVisiblePage,
+      totalPages: pages.length,
+      readingMode,
+      updatedAt: Date.now(),
+    };
+
+    // 1. Local storage & broadcast
     try {
-      const progressRecord = {
-        mangaId,
-        mangaTitle,
-        posterImage: posterImage || undefined,
-        chapterId: activeChapterId,
-        chapterNumber: activeChapterNum || currentChapterObj?.chapterNumber || 1,
-        pageNumber: currentVisiblePage,
-        updatedAt: Date.now(),
-      };
       localStorage.setItem(`aniwavex_manga_progress_${mangaId}`, JSON.stringify(progressRecord));
 
-      // Also maintain recent manga list for Continue Reading row
       try {
         const listRaw = localStorage.getItem("aniwavex_recent_manga");
         let list = listRaw ? JSON.parse(listRaw) : [];
@@ -244,6 +387,28 @@ export default function MangaReaderClient({
         );
       }
     } catch {}
+
+    // 2. Debounced Cloud sync to Supabase (/api/manga/progress)
+    const now = Date.now();
+    if (now - lastCloudSyncRef.current > 4000) {
+      lastCloudSyncRef.current = now;
+      setIsSyncingCloud(true);
+
+      fetch("/api/manga/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(progressRecord),
+      })
+        .then((res) => {
+          if (res.ok) {
+            setLastCloudSyncAt(Date.now());
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setIsSyncingCloud(false);
+        });
+    }
   }, [
     mangaId,
     mangaTitle,
@@ -255,6 +420,7 @@ export default function MangaReaderClient({
     isLoading,
     pages.length,
     initialPage,
+    readingMode,
   ]);
 
   // Back to Manga Overview: cleanly pops the reader entry when navigated from overview
@@ -326,17 +492,59 @@ export default function MangaReaderClient({
           handleBackToOverview();
         }
       } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
-        if (prevChapter && !isChapterListOpen) {
-          navigateToChapter(prevChapter);
+        if (readingMode === "paged-rtl") {
+          // Right to Left: Left Arrow advances forward
+          if (currentVisiblePage < pages.length) {
+            setCurrentVisiblePage((p) => p + 1);
+          } else if (nextChapter && !isChapterListOpen) {
+            navigateToChapter(nextChapter);
+          }
+        } else if (readingMode === "paged-ltr") {
+          // Left to Right: Left Arrow goes back
+          if (currentVisiblePage > 1) {
+            setCurrentVisiblePage((p) => p - 1);
+          } else if (prevChapter && !isChapterListOpen) {
+            navigateToChapter(prevChapter);
+          }
+        } else {
+          // Webtoon: navigate chapters
+          if (prevChapter && !isChapterListOpen) {
+            navigateToChapter(prevChapter);
+          }
         }
       } else if (e.key === "ArrowRight" || e.key === "PageDown") {
-        if (nextChapter && !isChapterListOpen) {
-          navigateToChapter(nextChapter);
+        if (readingMode === "paged-rtl") {
+          // Right to Left: Right Arrow goes backward
+          if (currentVisiblePage > 1) {
+            setCurrentVisiblePage((p) => p - 1);
+          } else if (prevChapter && !isChapterListOpen) {
+            navigateToChapter(prevChapter);
+          }
+        } else if (readingMode === "paged-ltr") {
+          // Left to Right: Right Arrow goes forward
+          if (currentVisiblePage < pages.length) {
+            setCurrentVisiblePage((p) => p + 1);
+          } else if (nextChapter && !isChapterListOpen) {
+            navigateToChapter(nextChapter);
+          }
+        } else {
+          // Webtoon: navigate chapters
+          if (nextChapter && !isChapterListOpen) {
+            navigateToChapter(nextChapter);
+          }
         }
       } else if (e.key === "ArrowDown") {
-        window.scrollBy({ top: 400, behavior: "smooth" });
+        if (readingMode === "webtoon") {
+          window.scrollBy({ top: 400, behavior: "smooth" });
+        } else {
+          if (currentVisiblePage < pages.length) setCurrentVisiblePage((p) => p + 1);
+        }
       } else if (e.key === "ArrowUp") {
-        window.scrollBy({ top: -400, behavior: "smooth" });
+        if (readingMode === "webtoon") {
+          window.scrollBy({ top: -400, behavior: "smooth" });
+        } else {
+          if (currentVisiblePage > 1) setCurrentVisiblePage((p) => p - 1);
+        }
       } else if (e.key === "f" || e.key === "F") {
         toggleFullscreen();
       }
@@ -344,7 +552,28 @@ export default function MangaReaderClient({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [prevChapter, nextChapter, isChapterListOpen, handleBackToOverview, navigateToChapter, toggleFullscreen]);
+  }, [
+    prevChapter,
+    nextChapter,
+    isChapterListOpen,
+    handleBackToOverview,
+    navigateToChapter,
+    toggleFullscreen,
+    readingMode,
+    currentVisiblePage,
+    pages.length,
+  ]);
+
+  // Mode cycle helper
+  const cycleReadingMode = () => {
+    const modes: ReadingMode[] = ["webtoon", "paged-rtl", "paged-ltr"];
+    const nextIdx = (modes.indexOf(readingMode) + 1) % modes.length;
+    const nextMode = modes[nextIdx];
+    setReadingMode(nextMode);
+    try {
+      localStorage.setItem("aniwavex_manga_reading_mode", nextMode);
+    } catch {}
+  };
 
   // Retry individual broken image
   const handleImageError = (pageNumber: number) => {
@@ -369,7 +598,7 @@ export default function MangaReaderClient({
   };
 
   const getImageClass = () => {
-    if (readerWidth === "fit-screen") {
+    if (readerWidth === "fit-screen" || readingMode !== "webtoon") {
       return "max-h-[88vh] 2xl:max-h-[90vh] w-auto max-w-full object-contain mx-auto select-none";
     }
     return "w-full max-w-full h-auto object-contain select-none";
@@ -425,9 +654,23 @@ export default function MangaReaderClient({
                 {currentChapterObj?.title || `Chapter ${activeChapterNum ?? activeChapterId}`}
               </h1>
             </div>
-            <p className="text-[11px] sm:text-xs text-slate-400 font-mono">
-              Page {currentVisiblePage} of {pages.length || "?"}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] sm:text-xs text-slate-400 font-mono">
+                Page {currentVisiblePage} of {pages.length || "?"}
+              </p>
+              {isSyncingCloud && (
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-cyan-400 font-mono">
+                  <Cloud className="w-3 h-3 animate-pulse" />
+                  Syncing
+                </span>
+              )}
+              {isDownloaded && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-semibold px-1.5 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  <CheckCircle2 className="w-2.5 h-2.5" />
+                  Offline
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -458,7 +701,7 @@ export default function MangaReaderClient({
                 setModalSearch("");
                 setIsChapterListOpen(true);
               }}
-              className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 text-cyan-400 hover:text-cyan-300 text-xs font-bold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+              className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 text-cyan-400 hover:text-cyan-300 text-xs font-bold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
               title="Select Chapter from List"
               aria-label="Select Chapter"
             >
@@ -485,11 +728,64 @@ export default function MangaReaderClient({
             <ChevronRight className="w-4 h-4" />
           </button>
 
+          {/* Reading Mode Switcher Button (Webtoon / Manga RTL / Comic LTR) */}
+          <button
+            type="button"
+            onClick={cycleReadingMode}
+            className="flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-300 hover:text-white transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
+            title={`Reading Mode: ${MODE_LABELS[readingMode]} (Click to cycle)`}
+            aria-label="Cycle reading mode"
+          >
+            {readingMode === "webtoon" ? (
+              <ScrollText className="w-4 h-4 text-cyan-400" />
+            ) : (
+              <Columns className="w-4 h-4 text-indigo-400" />
+            )}
+            <span className="text-[11px] font-mono capitalize hidden lg:inline">
+              {readingMode === "webtoon" ? "Webtoon" : readingMode === "paged-rtl" ? "Manga (RTL)" : "Comic (LTR)"}
+            </span>
+          </button>
+
+          {/* Offline Download Button */}
+          {pages.length > 0 && (
+            <button
+              type="button"
+              onClick={isDownloaded ? handleRemoveOfflineChapter : handleDownloadChapterOffline}
+              disabled={isDownloading}
+              className={`p-2 rounded-xl border transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer ${
+                isDownloaded
+                  ? "bg-emerald-600/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-600/30"
+                  : isDownloading
+                  ? "bg-cyan-900/30 border-cyan-500/30 text-cyan-300"
+                  : "bg-slate-900 hover:bg-slate-800 border-white/15 text-slate-300 hover:text-white"
+              }`}
+              title={
+                isDownloaded
+                  ? "Chapter downloaded offline. Click to remove from cache."
+                  : isDownloading
+                  ? `Downloading chapter offline (${downloadProgress}%)...`
+                  : "Download chapter for offline reading"
+              }
+              aria-label="Toggle offline chapter storage"
+            >
+              {isDownloading ? (
+                <div className="flex items-center gap-1">
+                  <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                  <span className="text-[10px] font-mono hidden md:inline">{downloadProgress}%</span>
+                </div>
+              ) : isDownloaded ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+            </button>
+          )}
+
           {/* Width Mode Toggle (Desktop only) */}
           <button
             type="button"
             onClick={cycleWidth}
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-300 hover:text-white transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-300 hover:text-white transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
             title={`Reading Width: ${WIDTH_LABELS[readerWidth]} (Click to cycle)`}
             aria-label="Toggle reader width"
           >
@@ -501,7 +797,7 @@ export default function MangaReaderClient({
           <button
             type="button"
             onClick={toggleFullscreen}
-            className="hidden sm:flex p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-300 hover:text-white transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+            className="hidden sm:flex p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-300 hover:text-white transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
             title={isFullscreen ? "Exit Fullscreen (F)" : "Fullscreen (F)"}
             aria-label="Toggle Fullscreen"
           >
@@ -512,7 +808,7 @@ export default function MangaReaderClient({
           <button
             type="button"
             onClick={fetchPages}
-            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-300 hover:text-white transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-300 hover:text-white transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
             title="Reload chapter"
             aria-label="Reload chapter"
           >
@@ -569,11 +865,13 @@ export default function MangaReaderClient({
           </div>
         )}
 
-        {!isLoading &&
+        {/* Webtoon Mode: Vertical Continuous Stream */}
+        {!isLoading && readingMode === "webtoon" &&
           pages.map((p, index) => {
             const refererQuery = p.referer ? `&referer=${encodeURIComponent(p.referer)}` : "";
             const retryCount = failedImages[p.pageNumber] || 0;
-            const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(p.imageUrl)}${refererQuery}${retryCount > 0 ? `&_r=${retryCount}` : ""}`;
+            const liveProxyUrl = `/api/image-proxy?url=${encodeURIComponent(p.imageUrl)}${refererQuery}${retryCount > 0 ? `&_r=${retryCount}` : ""}`;
+            const srcUrl = offlineBlobs[p.pageNumber] || liveProxyUrl;
 
             return (
               <div
@@ -583,15 +881,15 @@ export default function MangaReaderClient({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={proxyUrl}
+                  src={srcUrl}
                   alt={`Page ${p.pageNumber}`}
                   loading={index < 3 ? "eager" : "lazy"}
                   className={getImageClass()}
                   onError={() => handleImageError(p.pageNumber)}
                 />
 
-                {/* Individual Failed Image Overlay with Retry Button (Phase 17) */}
-                {retryCount > 0 && (
+                {/* Individual Failed Image Overlay with Retry Button */}
+                {retryCount > 0 && !offlineBlobs[p.pageNumber] && (
                   <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center gap-3">
                     <AlertCircle className="w-8 h-8 text-rose-400" />
                     <p className="text-sm font-semibold text-slate-200">Failed to load Page {p.pageNumber}</p>
@@ -599,7 +897,7 @@ export default function MangaReaderClient({
                     <button
                       type="button"
                       onClick={() => handleImageError(p.pageNumber)}
-                      className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+                      className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       Retry Page {p.pageNumber}
@@ -614,6 +912,103 @@ export default function MangaReaderClient({
               </div>
             );
           })}
+
+        {/* Paged Mode (Manga RTL or Comic LTR): Single Focused Page with Tap Navigation */}
+        {!isLoading && readingMode !== "webtoon" && pages.length > 0 && (() => {
+          const activePageIndex = Math.max(0, Math.min(pages.length - 1, currentVisiblePage - 1));
+          const p = pages[activePageIndex];
+          const refererQuery = p.referer ? `&referer=${encodeURIComponent(p.referer)}` : "";
+          const retryCount = failedImages[p.pageNumber] || 0;
+          const liveProxyUrl = `/api/image-proxy?url=${encodeURIComponent(p.imageUrl)}${refererQuery}${retryCount > 0 ? `&_r=${retryCount}` : ""}`;
+          const srcUrl = offlineBlobs[p.pageNumber] || liveProxyUrl;
+
+          const isRTL = readingMode === "paged-rtl";
+
+          const handlePrevPage = () => {
+            if (currentVisiblePage > 1) {
+              setCurrentVisiblePage((prev) => prev - 1);
+            } else if (prevChapter) {
+              navigateToChapter(prevChapter);
+            }
+          };
+
+          const handleNextPage = () => {
+            if (currentVisiblePage < pages.length) {
+              setCurrentVisiblePage((prev) => prev + 1);
+            } else if (nextChapter) {
+              navigateToChapter(nextChapter);
+            }
+          };
+
+          return (
+            <div className="relative w-full flex flex-col items-center select-none">
+              {/* Main Paged Frame */}
+              <div className="relative w-full bg-slate-950 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center min-h-[60vh] max-h-[90vh]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={srcUrl}
+                  alt={`Page ${p.pageNumber}`}
+                  className="max-h-[85vh] 2xl:max-h-[88vh] w-auto max-w-full object-contain mx-auto"
+                  onError={() => handleImageError(p.pageNumber)}
+                />
+
+                {/* Tap Zones: Left (30%) & Right (30%) */}
+                <button
+                  type="button"
+                  onClick={isRTL ? handleNextPage : handlePrevPage}
+                  className="absolute inset-y-0 left-0 w-1/3 z-20 cursor-w-resize opacity-0 hover:opacity-100 bg-gradient-to-r from-black/20 to-transparent transition-opacity flex items-center justify-start pl-4"
+                  title={isRTL ? "Next Page (RTL)" : "Previous Page (LTR)"}
+                >
+                  <ChevronLeft className="w-8 h-8 text-white/70" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={isRTL ? handlePrevPage : handleNextPage}
+                  className="absolute inset-y-0 right-0 w-1/3 z-20 cursor-e-resize opacity-0 hover:opacity-100 bg-gradient-to-l from-black/20 to-transparent transition-opacity flex items-center justify-end pr-4"
+                  title={isRTL ? "Previous Page (RTL)" : "Next Page (LTR)"}
+                >
+                  <ChevronRight className="w-8 h-8 text-white/70" />
+                </button>
+
+                {/* Page number badge */}
+                <div className="absolute bottom-3 right-3 px-3 py-1 rounded-md bg-black/80 backdrop-blur-md text-xs text-slate-300 font-mono border border-white/10 pointer-events-none z-30">
+                  {p.pageNumber} / {pages.length}
+                </div>
+              </div>
+
+              {/* Paged Navigation Bar */}
+              <div className="w-full flex items-center justify-between gap-3 mt-4 px-2">
+                <button
+                  type="button"
+                  onClick={isRTL ? handleNextPage : handlePrevPage}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>{isRTL ? "Next Page" : "Prev Page"}</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-slate-400">
+                    {p.pageNumber} / {pages.length}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    ({isRTL ? "RTL Manga" : "LTR Comic"})
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={isRTL ? handlePrevPage : handleNextPage}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <span>{isRTL ? "Prev Page" : "Next Page"}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </main>
 
       {/* End of Chapter Section — Obvious Continuous Flow (Phase 5, 6, 7) */}

@@ -40,11 +40,23 @@ export default function AnimePageClient({
     const epParam = searchParams.get("ep");
     const playParam = searchParams.get("play");
 
+    // Helper to auto-play if ?play=1 is requested
+    const triggerAutoPlayIfRequested = (targetEpId?: number | null) => {
+      if (playParam === "1" && data.episodes && data.episodes.length > 0) {
+        const ep = targetEpId
+          ? (data.episodes.find((e: any) => Number(e.id) === Number(targetEpId)) || data.episodes[0])
+          : data.episodes[0];
+        if (ep) {
+          setActiveEpisode(ep);
+        }
+      }
+    };
+
     if (epParam) {
       const epId = parseInt(epParam, 10);
       setLastWatchedEpisode(epId);
 
-      // Only direct auto-play if ?play=1 is present (e.g. user clicked direct Play icon on card)
+      // Direct auto-play if ?play=1 is present
       if (playParam === "1") {
         const ep = data.episodes?.find((e: any) => e.id === epId);
         if (ep) {
@@ -79,6 +91,7 @@ export default function AnimePageClient({
               Number(entry.totalSeconds || 0)
             );
             setLastWatchedEpisode(resolvedEp);
+            triggerAutoPlayIfRequested(resolvedEp);
             return;
           }
         }
@@ -93,6 +106,7 @@ export default function AnimePageClient({
         Number(serverTotalSeconds || 0)
       );
       setLastWatchedEpisode(resolvedEp);
+      triggerAutoPlayIfRequested(resolvedEp);
       return;
     }
 
@@ -118,8 +132,13 @@ export default function AnimePageClient({
       if (bestEpId) {
         const resolvedEp = getNextEpisodeIfCompleted(bestEpId, bestProgress, bestDuration);
         setLastWatchedEpisode(resolvedEp);
+        triggerAutoPlayIfRequested(resolvedEp);
+        return;
       }
     } catch {}
+
+    // Fallback: If ?play=1 requested but no watch history existed, auto-play first episode
+    triggerAutoPlayIfRequested(data.episodes?.[0]?.id ?? 1);
   }, [data, searchParams, serverLastWatched, serverProgressSeconds, serverTotalSeconds]);
 
   // Listen for live episode updates from player or background sync

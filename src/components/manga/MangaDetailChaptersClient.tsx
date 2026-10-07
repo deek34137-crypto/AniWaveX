@@ -70,7 +70,7 @@ export default function MangaDetailChaptersClient({
     }
   }, [mangaId, mangaTitle, chapterList.length, fetchFallbackChapters]);
 
-  // Restore saved reading progress from localStorage (Phase 8)
+  // Restore saved reading progress from localStorage and sync from Supabase
   useEffect(() => {
     try {
       const raw = localStorage.getItem(`aniwavex_manga_progress_${mangaId}`);
@@ -106,6 +106,36 @@ export default function MangaDetailChaptersClient({
         }
       }
     } catch {}
+
+    // Check cloud progress from Supabase (/api/manga/progress?mangaId=...)
+    fetch(`/api/manga/progress?mangaId=${encodeURIComponent(mangaId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.progress) {
+          const cloudP = data.progress;
+          const cloudUpdatedAt = new Date(cloudP.updated_at).getTime();
+
+          setProgress((currentLocal) => {
+            if (!currentLocal || cloudUpdatedAt > (currentLocal.updatedAt || 0)) {
+              const mapped: MangaReadingProgress = {
+                mangaId: cloudP.manga_id,
+                chapterId: cloudP.chapter_id,
+                chapterNumber: Number(cloudP.chapter_number),
+                pageNumber: cloudP.page_number,
+                updatedAt: cloudUpdatedAt,
+                mangaTitle: cloudP.manga_title || mangaTitle,
+                posterImage: cloudP.poster_image || posterImage,
+              };
+              try {
+                localStorage.setItem(`aniwavex_manga_progress_${mangaId}`, JSON.stringify(mapped));
+              } catch {}
+              return mapped;
+            }
+            return currentLocal;
+          });
+        }
+      })
+      .catch(() => {});
   }, [mangaId, mangaTitle, posterImage]);
 
   // Filter and sort chapters

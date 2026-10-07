@@ -3,7 +3,6 @@ import HeroSlider from "@/components/HeroSlider";
 import AnimeRow from "@/components/AnimeRow";
 import ContinueWatchingRow from "@/components/ContinueWatchingRow";
 import ContinueReadingRow from "@/components/manga/ContinueReadingRow";
-import ApkHomeSections from "@/components/ApkHomeSections";
 import { getTrendingAnime, getTopRatedAnime, getGenreAnime } from "@/lib/api";
 
 export default async function Home() {
@@ -25,7 +24,7 @@ export default async function Home() {
       <Navbar />
       <div className="page-top-spacer"></div>
 
-      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-10 2xl:px-12">
+      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-10 2xl:px-12 space-y-2">
         <HeroSlider animeList={heroAnimeList} />
         
         <ContinueWatchingRow />
@@ -34,12 +33,29 @@ export default async function Home() {
         <AnimeRow title="Trending Now" items={trendingRow} viewAllHref="/catalog?sort=popularity" />
         <AnimeRow title="Highest Rated" items={topRated} viewAllHref="/catalog?sort=rating" />
 
-        {/* Extra discovery rows rendered exclusively inside the APK */}
-        <ApkHomeSections
-          romance={romance}
-          comedy={comedy}
-          isekai={isekai}
-        />
+        {romance && romance.length > 0 && (
+          <AnimeRow
+            title="Best of Romance"
+            items={romance}
+            viewAllHref="/catalog?genre=romance&sort=popularity"
+          />
+        )}
+
+        {comedy && comedy.length > 0 && (
+          <AnimeRow
+            title="Top Comedy"
+            items={comedy}
+            viewAllHref="/catalog?genre=comedy&sort=popularity"
+          />
+        )}
+
+        {isekai && isekai.length > 0 && (
+          <AnimeRow
+            title="Best Isekai"
+            items={isekai}
+            viewAllHref="/catalog?genre=isekai&sort=popularity"
+          />
+        )}
       </div>
     </main>
   );

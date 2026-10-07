@@ -94,13 +94,11 @@ export default function AnimeCard({
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent pointer-events-none" />
 
           {/* Top Status & Score Badges */}
-          <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-10">
-            {isOngoing ? (
+          <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 pointer-events-none z-10 max-w-[calc(100%-2.5rem)]">
+            {isOngoing && (
               <span className="px-2 py-0.5 bg-blue-600/90 text-white text-[10px] font-extrabold uppercase tracking-wider rounded-md backdrop-blur-md shadow-sm">
                 AIRING
               </span>
-            ) : (
-              <span />
             )}
 
             {anime.rating && anime.rating !== "N/A" && (
@@ -120,7 +118,7 @@ export default function AnimeCard({
 
           {/* Bottom Title & Details Overlay */}
           <div className="absolute bottom-0 left-0 right-0 p-3.5 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
-            <div className="flex items-start justify-between gap-1.5 mb-1 pr-7">
+            <div className="flex items-start justify-between gap-1.5 mb-1">
               <h3
                 className="text-white font-bold text-sm line-clamp-1 leading-snug drop-shadow-md group-hover:text-blue-400 group-focus-visible:text-blue-400 transition-colors"
                 title={anime.title}
@@ -132,7 +130,7 @@ export default function AnimeCard({
             <div className="flex items-center justify-between text-xs font-medium text-slate-300">
               <span className="text-slate-400">{anime.year || "Unknown"}</span>
               {anime.tags && anime.tags.length > 0 && (
-                <span className="text-blue-400 text-[11px] font-semibold truncate max-w-[100px]">
+                <span className="text-blue-400 text-[11px] font-semibold truncate max-w-[120px]">
                   {anime.tags[0]}
                 </span>
               )}
@@ -140,16 +138,16 @@ export default function AnimeCard({
           </div>
         </Link>
 
-        {/* Quick Bookmark Button (Sibling overlay, NOT inside Link) */}
+        {/* Quick Bookmark Button (Top-Right Corner Sibling Overlay, NOT inside Link) */}
         <button
           type="button"
           onClick={handleQuickBookmark}
           disabled={isBookmarking}
           aria-label={isBookmarked ? `Remove ${anime.title} from watchlist` : `Add ${anime.title} to watchlist`}
-          className={`absolute bottom-[32px] right-2.5 sm:bottom-[34px] sm:right-3.5 z-20 shrink-0 w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg sm:rounded-md transition-all active:scale-90 touch-manipulation sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none backdrop-blur-sm ${
+          className={`absolute top-2.5 right-2.5 z-20 shrink-0 w-7 h-7 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg transition-all active:scale-90 touch-manipulation sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none backdrop-blur-md shadow-md ${
             isBookmarked
               ? "bg-blue-600 text-white shadow-sm"
-              : "bg-black/60 hover:bg-blue-600 text-slate-300 hover:text-white border border-white/10"
+              : "bg-black/70 hover:bg-blue-600 text-slate-300 hover:text-white border border-white/15"
           }`}
           title={isBookmarked ? "In Watchlist" : "Add to Watchlist"}
         >
