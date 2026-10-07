@@ -164,6 +164,7 @@ export default function InPageVideoPlayer({
   // AniSkip & Next Episode Endscreen State
   const [skipIntervals, setSkipIntervals] = useState<SkipInterval[]>([]);
   const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
+  const [skipProgressPercent, setSkipProgressPercent] = useState<number>(0);
   const [autoSkip, setAutoSkip] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("aniwavex_auto_skip") === "true";
@@ -419,19 +420,23 @@ export default function InPageVideoPlayer({
             showToast(`Auto-skipped ${currentSkip.label} ⏭`);
           }
         } else if (!autoSkip) {
-          // Visible for starting 5 seconds of the intro/outro sequence
-          const secondsSinceStart = floorTime - Math.floor(currentSkip.startTime);
-          if (secondsSinceStart >= 0 && secondsSinceStart <= 5) {
+          // Visible for starting 10 seconds of the intro/outro sequence with filling animation
+          const secondsSinceStart = currentTime - currentSkip.startTime;
+          if (secondsSinceStart >= 0 && secondsSinceStart <= 10) {
             setActiveSkip(currentSkip);
+            setSkipProgressPercent(Math.min(100, Math.max(0, (secondsSinceStart / 10) * 100)));
           } else {
             setActiveSkip(null);
+            setSkipProgressPercent(0);
           }
         }
       } else {
         setActiveSkip(null);
+        setSkipProgressPercent(0);
       }
     } else {
       setActiveSkip(null);
+      setSkipProgressPercent(0);
     }
 
     // Next Episode Endscreen trigger: within 25 seconds of end or >= 95% of episode
@@ -1096,7 +1101,7 @@ export default function InPageVideoPlayer({
 
   const playbackOverlays = (
     <>
-      {/* AniSkip On-Screen Skip Button */}
+      {/* AniSkip On-Screen Skip Button with Left-to-Right Countdown Fill Effect */}
       {activeSkip && !playerError && !isLoading && (
         <button
           type="button"
@@ -1104,11 +1109,20 @@ export default function InPageVideoPlayer({
             e.stopPropagation();
             handleExecuteSkip();
           }}
-          className="absolute bottom-16 right-4 sm:bottom-20 sm:right-6 z-40 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-950/90 hover:bg-blue-600 border border-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xl shadow-2xl opacity-50 hover:opacity-100 transition-all duration-200 flex items-center gap-2 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-2 group cursor-pointer pointer-events-auto"
+          className="relative overflow-hidden absolute bottom-16 right-4 sm:bottom-20 sm:right-6 z-40 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-950/90 hover:bg-slate-900 border border-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xl shadow-2xl opacity-50 hover:opacity-100 transition-all duration-200 flex items-center gap-2 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-2 group cursor-pointer pointer-events-auto"
           title={`${activeSkip.label} (${Math.round(activeSkip.endTime - activeSkip.startTime)}s)`}
         >
-          <FastForward className="w-4 h-4 text-blue-400 group-hover:text-white transition-colors" />
-          <span>{activeSkip.label}</span>
+          {/* Left-to-Right Fill Progress Effect */}
+          <div
+            className="absolute inset-y-0 left-0 bg-blue-600/35 border-r border-blue-400/50 pointer-events-none transition-all duration-500 ease-linear"
+            style={{ width: `${skipProgressPercent}%` }}
+          />
+
+          <FastForward className="relative z-10 w-4 h-4 text-blue-400 group-hover:text-white transition-colors" />
+          <span className="relative z-10">{activeSkip.label}</span>
+          <span className="relative z-10 text-[10px] font-mono opacity-60 ml-0.5">
+            {Math.max(1, 10 - Math.floor((skipProgressPercent / 100) * 10))}s
+          </span>
         </button>
       )}
 
