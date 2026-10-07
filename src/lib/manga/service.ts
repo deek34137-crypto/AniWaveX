@@ -240,6 +240,10 @@ interface BackendSearchResult {
 function normalizeTitle(str: string): string {
   return str
     .toLowerCase()
+    .replace(/[Ψψ]/g, 'psi')
+    .replace(/[Ωω]/g, 'omega')
+    .replace(/[αΑ]/g, 'alpha')
+    .replace(/[βΒ]/g, 'beta')
     .replace(/[卍]/g, '')
     .replace(/\bou\b/g, 'o')
     .replace(/toukyou/g, 'tokyo')
@@ -248,40 +252,52 @@ function normalizeTitle(str: string): string {
     .trim();
 }
 
-function titleScore(query: string, candidate: string): number {
+function titleScore(query: string, candidate: string, altTitles?: string[]): number {
   if (!query || !candidate) return 0;
-  const qNorm = normalizeTitle(query);
-  const cNorm = normalizeTitle(candidate);
-  if (!qNorm || !cNorm) return 0;
-  if (qNorm === cNorm) return 1.0;
 
-  const qPlain = qNorm.replace(/\s+/g, '');
-  const cPlain = cNorm.replace(/\s+/g, '');
-  if (qPlain === cPlain) return 1.0;
-  if (cPlain.includes(qPlain)) {
-    return qPlain.length / cPlain.length;
+  const scoreOne = (q: string, c: string): number => {
+    const qNorm = normalizeTitle(q);
+    const cNorm = normalizeTitle(c);
+    if (!qNorm || !cNorm) return 0;
+    if (qNorm === cNorm) return 1.0;
+
+    const qPlain = qNorm.replace(/\s+/g, '');
+    const cPlain = cNorm.replace(/\s+/g, '');
+    if (qPlain === cPlain) return 1.0;
+    if (cPlain.includes(qPlain)) {
+      return qPlain.length / cPlain.length;
+    }
+    if (qPlain.includes(cPlain)) {
+      return cPlain.length / qPlain.length;
+    }
+
+    const qWords = qNorm.split(' ').filter((w) => w.length > 1);
+    const cWords = cNorm.split(' ').filter((w) => w.length > 1);
+    if (qWords.length === 0 || cWords.length === 0) return 0;
+
+    const cWordSet = new Set(cWords);
+    let matched = 0;
+    for (const w of qWords) {
+      if (cWordSet.has(w)) matched++;
+    }
+
+    if (matched === 0) return 0;
+
+    const recall = matched / qWords.length;
+    const precision = matched / cWords.length;
+    const tokenScore = (2 * recall * precision) / (recall + precision);
+
+    return Math.min(1.0, tokenScore);
+  };
+
+  let maxScore = scoreOne(query, candidate);
+  if (altTitles && altTitles.length > 0) {
+    for (const alt of altTitles) {
+      const s = scoreOne(query, alt);
+      if (s > maxScore) maxScore = s;
+    }
   }
-  if (qPlain.includes(cPlain)) {
-    return cPlain.length / qPlain.length;
-  }
-
-  const qWords = qNorm.split(' ').filter((w) => w.length > 1);
-  const cWords = cNorm.split(' ').filter((w) => w.length > 1);
-  if (qWords.length === 0 || cWords.length === 0) return 0;
-
-  const cWordSet = new Set(cWords);
-  let matched = 0;
-  for (const w of qWords) {
-    if (cWordSet.has(w)) matched++;
-  }
-
-  if (matched === 0) return 0;
-
-  const recall = matched / qWords.length;
-  const precision = matched / cWords.length;
-  const tokenScore = (2 * recall * precision) / (recall + precision);
-
-  return Math.min(1.0, tokenScore);
+  return maxScore;
 }
 
 async function searchWeebCentral(query: string): Promise<BackendSearchResult[]> {
@@ -484,31 +500,48 @@ export async function getMangaChapters(
   _mangaId?: string | number,
   romajiTitle?: string
 ): Promise<MangaChapter[]> {
-  // 1. Search with title
-  let rawResults = await backendSearch(title);
+  // 1. Build comprehensive search query variants
+  const searchQueries = new Set<string>();
+  if (title && title.trim()) searchQueries.add(title.trim());
+  if (romajiTitle && romajiTitle.trim()) searchQueries.add(romajiTitle.trim());
 
-  // 2. If romajiTitle is different, also search romaji
-  if (romajiTitle && romajiTitle !== title) {
-    const romajiResults = await backendSearch(romajiTitle);
-    const seen = new Set(rawResults.map((r) => `${r.provider}:${r.id}`));
-    for (const r of romajiResults) {
-      const key = `${r.provider}:${r.id}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        rawResults.push(r);
-      }
-    }
+  // Transliterate Greek and special anime symbols (e.g. Ψ -> Psi, Ω -> Omega)
+  const transliterated = title
+    .replace(/[Ψψ]/g, 'Psi')
+    .replace(/[Ωω]/g, 'Omega')
+    .replace(/[αΑ]/g, 'Alpha')
+    .replace(/[βΒ]/g, 'Beta');
+  if (transliterated !== title) {
+    searchQueries.add(transliterated);
   }
 
-  // 3. Search sanitized base title if it contains brackets, parentheses or subtitles
+  // Phonetic variant for Saiki Kusuo no Ψ-nan (Sainan)
+  if (/[Ψψ]-?nan/i.test(title)) {
+    searchQueries.add(title.replace(/[Ψψ]-?nan/i, 'Sainan'));
+  }
+
+  // Sanitized base title if it contains brackets, parentheses or subtitles
   const cleanTitle = title.replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
-  if (cleanTitle && cleanTitle !== title && cleanTitle !== romajiTitle) {
-    const cleanResults = await backendSearch(cleanTitle);
-    const seen = new Set(rawResults.map((r) => `${r.provider}:${r.id}`));
-    for (const r of cleanResults) {
+  if (cleanTitle) searchQueries.add(cleanTitle);
+
+  // If title has special symbols, also add stripped alphanumeric core name if >= 2 words
+  const coreAlpha = title.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (coreAlpha && coreAlpha !== title && coreAlpha.split(' ').length >= 2) {
+    searchQueries.add(coreAlpha);
+  }
+
+  // 2. Perform backend search across query variants in parallel
+  const searchResultsArrays = await Promise.all(
+    Array.from(searchQueries).map((q) => backendSearch(q))
+  );
+
+  const seenKeys = new Set<string>();
+  const rawResults: BackendSearchResult[] = [];
+  for (const list of searchResultsArrays) {
+    for (const r of list) {
       const key = `${r.provider}:${r.id}`;
-      if (!seen.has(key)) {
-        seen.add(key);
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
         rawResults.push(r);
       }
     }
@@ -516,12 +549,12 @@ export async function getMangaChapters(
 
   if (rawResults.length === 0) return [];
 
-  // 4. Relevance filtering: compute match score against title, romaji, and cleanTitle
+  // 3. Relevance filtering: compute match score against title, romaji, and cleanTitle with altTitles support
   let scoredResults = rawResults
     .map((r) => {
-      const scorePrimary = titleScore(title, r.title);
-      const scoreRomaji = romajiTitle ? titleScore(romajiTitle, r.title) : 0;
-      const scoreClean = cleanTitle ? titleScore(cleanTitle, r.title) : 0;
+      const scorePrimary = titleScore(title, r.title, r.altTitles);
+      const scoreRomaji = romajiTitle ? titleScore(romajiTitle, r.title, r.altTitles) : 0;
+      const scoreClean = cleanTitle ? titleScore(cleanTitle, r.title, r.altTitles) : 0;
       return { ...r, score: Math.max(scorePrimary, scoreRomaji, scoreClean) };
     })
     .filter((r) => r.score >= 0.35)
