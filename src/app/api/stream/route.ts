@@ -431,7 +431,7 @@ async function fetchHindiWorkerStream(
   }
 }
 
-const TOONSTREAM_BASE_URL = "https://toonstream.shop";
+const TOONSTREAM_BASE_URL = "https://toonstream.us";
 
 async function fetchLocalHindiStream(
   title: string,
@@ -459,17 +459,19 @@ async function fetchLocalHindiStream(
       const clean = candTitle.replace(/[^a-zA-Z0-9\s]/g, " ").trim();
       if (!clean) continue;
 
+      // Primary: ToonStream search/all endpoint (JSON)
       try {
-        const searchApiUrl = `${TOONSTREAM_BASE_URL}/wp-json/kiranime/v1/anime/search?query=${encodeURIComponent(clean)}`;
+        const searchApiUrl = `${TOONSTREAM_BASE_URL}/search/all?q=${encodeURIComponent(clean)}`;
         const res = await fetch(searchApiUrl, { headers, signal: combinedSignal });
         if (res.ok) {
-          const data = await res.json();
-          const html = data?.result || "";
-          const matches = [...html.matchAll(/<a[^>]*href=["']https?:\/\/[^"']+\/anime\/([^"'/]+)\/?["'][^>]*>([\s\S]*?)<\/a>/gi)];
-          if (matches.length > 0) {
-            const hindiNamed = matches.find(m => /hindi|sony\s*yay/i.test(m[0]));
-            seriesSlug = hindiNamed ? hindiNamed[1] : matches[0][1];
-            break;
+          const data = await res.json().catch(() => ({}));
+          if (Array.isArray(data.data) && data.data.length > 0) {
+            const hindiNamed = data.data.find((item: any) => /hindi|sony\s*yay|muse/i.test(item.title) && item.type === 'series');
+            const targetItem = hindiNamed || data.data.find((item: any) => item.type === 'series') || data.data[0];
+            if (targetItem?.url) {
+              seriesSlug = targetItem.url.replace(/^\/(?:series|anime)\//, '').replace(/\/$/, '');
+              break;
+            }
           }
         }
       } catch {}
@@ -479,7 +481,7 @@ async function fetchLocalHindiStream(
         const res = await fetch(`${TOONSTREAM_BASE_URL}/?s=${encodeURIComponent(clean)}`, { headers, signal: combinedSignal });
         if (res.ok) {
           const html = await res.text();
-          const match = html.match(/href=["']https?:\/\/[^"']+\/anime\/([^"'/]+)\/?["']/i);
+          const match = html.match(/href=["']https?:\/\/[^"']+\/(?:anime|series)\/([^"'/]+)\/?["']/i);
           if (match) {
             seriesSlug = match[1];
             break;
@@ -490,8 +492,11 @@ async function fetchLocalHindiStream(
 
     if (!seriesSlug) return null;
 
-    // Episode watch URL candidates
+    // Episode watch URL candidates with /episode/ prioritized
     const epCandidates = [
+      `${TOONSTREAM_BASE_URL}/episode/${seriesSlug}-1x${ep}/`,
+      `${TOONSTREAM_BASE_URL}/episode/${seriesSlug}-${ep}/`,
+      `${TOONSTREAM_BASE_URL}/episode/${seriesSlug}-season-1-episode-${ep}/`,
       `${TOONSTREAM_BASE_URL}/watch/${seriesSlug}-episode-${ep}/`,
       `${TOONSTREAM_BASE_URL}/watch/${seriesSlug}-s1-episode-${ep}/`,
       `${TOONSTREAM_BASE_URL}/watch/${seriesSlug}-${ep}/`,
@@ -509,16 +514,17 @@ async function fetchLocalHindiStream(
       } catch {}
     }
 
-    // Fallback: find episode link in anime page
+    // Fallback: find episode link in series page
     if (!epHtml) {
       try {
-        const seriesRes = await fetch(`${TOONSTREAM_BASE_URL}/anime/${seriesSlug}/`, { headers, signal: combinedSignal });
+        const seriesRes = await fetch(`${TOONSTREAM_BASE_URL}/series/${seriesSlug}/`, { headers, signal: combinedSignal });
         if (seriesRes.ok) {
           const seriesHtml = await seriesRes.text();
-          const epRegex = new RegExp(`href=["'](https?:\\/\\/[^"']+\\/watch\\/[^"']*?-episode-${ep}\\/?)["']`, "i");
+          const epRegex = new RegExp(`href=["']((?:https?:\\/\\/[^"']*)?\\/(?:episode|watch)\\/[^"']*?-(?:\\d+x)?${ep}\\/?)["']`, "i");
           const match = seriesHtml.match(epRegex);
           if (match) {
-            const epRes = await fetch(match[1], { headers, signal: combinedSignal });
+            const targetEpUrl = match[1].startsWith("http") ? match[1] : `${TOONSTREAM_BASE_URL}${match[1]}`;
+            const epRes = await fetch(targetEpUrl, { headers, signal: combinedSignal });
             if (epRes.ok) {
               epHtml = await epRes.text();
             }
@@ -567,10 +573,36 @@ async function fetchLocalHindiStream(
         ifr.includes("chaty") ||
         ifr.includes("google") ||
         ifr.includes("facebook") ||
-        ifr.includes("twitter")
+        ifr.includes("twitter") ||
+        ifr.includes("youtube.com")
       ) continue;
+
       if (!sources.some(s => s.url === ifr)) {
-        const label = ifr.includes("ruby") ? "Ruby" : ifr.includes("wish") ? "Streamwish" : "External Embed";
+        // Direct VidMoly HLS check
+        if (ifr.includes("vidmoly.net") || ifr.includes("vidmoly.to") || ifr.includes("vidmoly.me")) {
+          try {
+            const vmRes = await fetch(ifr, {
+              headers: { "User-Agent": headers["User-Agent"], "Referer": `${TOONSTREAM_BASE_URL}/` },
+              signal: AbortSignal.timeout(3000),
+            });
+            if (vmRes.ok) {
+              const vmText = await vmRes.text();
+              const m3u8Match = vmText.match(/https?:\/\/[^"'\s]+\.m3u8[^"'\s]*/i);
+              if (m3u8Match) {
+                sources.unshift({
+                  server: "VidMoly (Hindi HLS)",
+                  url: m3u8Match[0],
+                  quality: "VidMoly [Hindi Dub]",
+                  isM3U8: true,
+                  isHindi: true,
+                });
+                continue;
+              }
+            }
+          } catch {}
+        }
+
+        const label = ifr.includes("ruby") ? "Ruby" : ifr.includes("wish") ? "Streamwish" : ifr.includes("abyss") ? "AbyssPlayer" : ifr.includes("cloudy") ? "Cloudy" : "External Embed";
         sources.push({
           server: `${label} (Hindi Dub)`,
           url: ifr,

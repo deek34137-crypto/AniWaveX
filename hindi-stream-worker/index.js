@@ -3,46 +3,77 @@
  * Standalone Cloudflare Worker for Hindi & Indian Regional Anime Dubs
  *
  * Scrapes & streams from ToonStream with multi-host video extractors:
+ * - VidMoly: Direct HLS (.m3u8) extraction with built-in proxying
  * - AS-CDN: Multi-Audio HLS (Hindi, Tamil, Telugu, English, Japanese)
- * - Turbovid: Direct HLS
+ * - Turbovid: Direct HLS (.m3u8)
  * - Kiranime Embeds: VidPlay, StreamRuby, EmbedWish, MyCloud, VidMoly
- * - Streamwish / Ruby & AbyssPlayer: Embed fallbacks
+ * - Streamwish / Ruby, AbyssPlayer, Cloudy, FilesForever, BlakiteApi embed fallbacks
  * - Built-in CORS / HLS stream proxy
  */
 
-let cachedToonstreamBase = "https://toonstream.shop";
+let cachedToonstreamBase = "https://toonstream.us";
 let lastDomainCheck = 0;
 
 const DOMAINS_SYNC_URL = "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json";
-const FALLBACK_DOMAINS = ["https://toonstream.shop", "https://toonstream.co", "https://toonstream.vip"];
+const KNOWN_MIRRORS = ["https://toonstream.us", "https://toonstream.vip", "https://toonstream.org", "https://toonstream.shop"];
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 async function getToonstreamBase() {
   const now = Date.now();
-  if (now - lastDomainCheck < 3600000 && cachedToonstreamBase) {
+  if (now - lastDomainCheck < 1800000 && cachedToonstreamBase) {
     return cachedToonstreamBase;
   }
 
+  // 1. Check TVVVV remote domain sync
   try {
     const res = await fetch(DOMAINS_SYNC_URL, {
       headers: { "User-Agent": UA },
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(2500),
     });
     if (res.ok) {
       const data = await res.json();
       if (data && data.toonstream && data.toonstream.startsWith("http")) {
         const remoteDomain = data.toonstream.replace(/\/+$/, "");
-        // Only use if domain is not known-dead vip
-        if (!remoteDomain.includes("toonstream.vip")) {
-          cachedToonstreamBase = remoteDomain;
-          lastDomainCheck = now;
-          return cachedToonstreamBase;
+        // Follow redirect if needed
+        const probe = await fetch(remoteDomain, {
+          headers: { "User-Agent": UA },
+          signal: AbortSignal.timeout(3000),
+          redirect: "follow",
+        });
+        if (probe.ok) {
+          const finalUrl = new URL(probe.url).origin;
+          const text = await probe.text();
+          if (text.includes("/search/all") || (text.includes("ToonStream") && !text.includes("/lander"))) {
+            cachedToonstreamBase = finalUrl;
+            lastDomainCheck = now;
+            return cachedToonstreamBase;
+          }
         }
       }
     }
   } catch {}
 
-  cachedToonstreamBase = "https://toonstream.shop";
+  // 2. Test known active mirrors in priority order
+  for (const mirror of KNOWN_MIRRORS) {
+    try {
+      const probe = await fetch(mirror, {
+        headers: { "User-Agent": UA },
+        signal: AbortSignal.timeout(3000),
+        redirect: "follow",
+      });
+      if (probe.ok) {
+        const finalUrl = new URL(probe.url).origin;
+        const text = await probe.text();
+        if (text.includes("/search/all") || (text.includes("ToonStream") && !text.includes("/lander"))) {
+          cachedToonstreamBase = finalUrl;
+          lastDomainCheck = now;
+          return cachedToonstreamBase;
+        }
+      }
+    } catch {}
+  }
+
+  cachedToonstreamBase = "https://toonstream.us";
   lastDomainCheck = now;
   return cachedToonstreamBase;
 }
@@ -96,10 +127,27 @@ async function searchToonstream(query) {
   const headers = getHeaders(base);
   const cleanQuery = query.replace(/[^a-zA-Z0-9\s]/g, " ").trim();
 
-  // Try 1: Kiranime REST API (Active on toonstream.shop)
+  // Try 1: Active ToonStream search/all endpoint (Instant JSON)
+  try {
+    const searchUrl = `${base}/search/all?q=${encodeURIComponent(cleanQuery)}`;
+    const res = await fetch(searchUrl, { headers, signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data.data) && data.data.length > 0) {
+        return data.data.map((item) => ({
+          title: item.title,
+          type: item.type,
+          slug: item.url.replace(/^\/(?:series|movies|anime)\//, "").replace(/\/$/, ""),
+          url: item.url.startsWith("http") ? item.url : `${base}${item.url}`,
+        }));
+      }
+    }
+  } catch {}
+
+  // Try 2: Kiranime REST API (Older mirrors)
   try {
     const apiUrl = `${base}/wp-json/kiranime/v1/anime/search?query=${encodeURIComponent(cleanQuery)}`;
-    const res = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(4000) });
+    const res = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(3000) });
     if (res.ok) {
       const data = await res.json();
       const html = data?.result || "";
@@ -119,13 +167,13 @@ async function searchToonstream(query) {
     }
   } catch {}
 
-  // Try 2: Standard WordPress search HTML
+  // Try 3: Standard WordPress search HTML
   try {
     const searchUrl = `${base}/?s=${encodeURIComponent(cleanQuery)}`;
-    const res = await fetch(searchUrl, { headers, signal: AbortSignal.timeout(4000) });
+    const res = await fetch(searchUrl, { headers, signal: AbortSignal.timeout(3500) });
     if (res.ok) {
       const html = await res.text();
-      const matches = [...html.matchAll(/href=["'](https?:\/\/[^"']+\/anime\/([^"'/]+)\/?)["']/gi)];
+      const matches = [...html.matchAll(/href=["'](https?:\/\/[^"']+\/(?:anime|series)\/([^"'/]+)\/?)["']/gi)];
       const unique = new Map();
       for (const m of matches) {
         if (!unique.has(m[2])) {
@@ -139,23 +187,6 @@ async function searchToonstream(query) {
       }
       if (unique.size > 0) {
         return Array.from(unique.values());
-      }
-    }
-  } catch {}
-
-  // Try 3: Legacy ToonStream search/all endpoint
-  try {
-    const legacyUrl = `${base}/search/all?q=${encodeURIComponent(cleanQuery)}`;
-    const res = await fetch(legacyUrl, { headers, signal: AbortSignal.timeout(4000) });
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      if (Array.isArray(data.data) && data.data.length > 0) {
-        return data.data.map((item) => ({
-          title: item.title,
-          type: item.type,
-          slug: item.url.replace(/^\/(?:series|movies|anime)\//, "").replace(/\/$/, ""),
-          url: item.url.startsWith("http") ? item.url : `${base}${item.url}`,
-        }));
       }
     }
   } catch {}
@@ -203,10 +234,8 @@ async function getAnilistTitles(anilistId) {
 async function resolveSeriesSlug(queryOrId, fallbackTitle = "") {
   const candidateQueries = [];
 
+  // If query is already a known slug format, check directly or use as candidate
   if (queryOrId && !/^\d+$/.test(queryOrId)) {
-    if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(queryOrId)) {
-      return queryOrId;
-    }
     candidateQueries.push(queryOrId);
   }
 
@@ -233,6 +262,11 @@ async function resolveSeriesSlug(queryOrId, fallbackTitle = "") {
     }
   }
 
+  // If search didn't return matches but query was formatted like a slug (e.g. "demon-slayer-kimetsu-no-yaiba")
+  if (queryOrId && /^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(queryOrId)) {
+    return queryOrId;
+  }
+
   return null;
 }
 
@@ -241,10 +275,11 @@ async function getEpisodesForSeries(seriesSlug) {
   const base = await getToonstreamBase();
   const headers = getHeaders(base);
 
-  // Try both new /anime/ and legacy /series/ paths
+  // Try both new /series/ and legacy /anime/ paths
   const seriesUrls = [
-    `${base}/anime/${seriesSlug}/`,
     `${base}/series/${seriesSlug}/`,
+    `${base}/series/${seriesSlug}`,
+    `${base}/anime/${seriesSlug}/`,
   ];
 
   let html = "";
@@ -263,7 +298,27 @@ async function getEpisodesForSeries(seriesSlug) {
   const episodes = [];
   const seen = new Set();
 
-  // 1. Look for new watch URL pattern: /watch/slug-episode-12/
+  // 1. Look for episode URL patterns: /episode/slug-1x12/ or /episode/slug-12/
+  const epMatches = [...html.matchAll(/href=["']([^"']*\/episode\/([^"'/]+)\/?)["']/g)];
+  for (const m of epMatches) {
+    const epSlug = m[2];
+    if (seen.has(epSlug)) continue;
+    seen.add(epSlug);
+
+    const numMatch = epSlug.match(/(\d+)[xX](\d+)/);
+    const season = numMatch ? parseInt(numMatch[1], 10) : 1;
+    const number = numMatch ? parseInt(numMatch[2], 10) : (parseInt(epSlug.match(/-(\d+)$/)?.[1] || "0", 10) || episodes.length + 1);
+
+    episodes.push({
+      id: epSlug,
+      number,
+      season,
+      title: `Episode ${number}`,
+      audio: "hindi",
+    });
+  }
+
+  // 2. Look for watch URL pattern: /watch/slug-episode-12/
   const watchMatches = [...html.matchAll(/href=["']([^"']*\/watch\/([^"'/]+)\/?)["']/g)];
   for (const m of watchMatches) {
     const epSlug = m[2];
@@ -282,26 +337,6 @@ async function getEpisodesForSeries(seriesSlug) {
     });
   }
 
-  // 2. Look for legacy episode URL pattern: /episode/slug-1x12/
-  const epMatches = [...html.matchAll(/href=["']([^"']*\/episode\/([^"'/]+)\/?)["']/g)];
-  for (const m of epMatches) {
-    const epSlug = m[2];
-    if (seen.has(epSlug)) continue;
-    seen.add(epSlug);
-
-    const numMatch = epSlug.match(/(\d+)[xX](\d+)/);
-    const season = numMatch ? parseInt(numMatch[1], 10) : 1;
-    const number = numMatch ? parseInt(numMatch[2], 10) : episodes.length + 1;
-
-    episodes.push({
-      id: epSlug,
-      number,
-      season,
-      title: `Episode ${number}`,
-      audio: "hindi",
-    });
-  }
-
   episodes.sort((a, b) => (a.season === b.season ? a.number - b.number : a.season - b.season));
   return episodes;
 }
@@ -315,13 +350,14 @@ async function extractEpisodeStreams(seriesSlug, epIdentifier, requestUrl) {
 
   let epNum = parseInt(String(epIdentifier).replace(/[^\d]/g, ""), 10) || 1;
 
-  // Build episode URL candidates
+  // Build episode URL candidates with primary Toonstream /episode/ structure prioritized
   const candidates = [
+    `${base}/episode/${seriesSlug}-1x${epNum}/`,
+    `${base}/episode/${seriesSlug}-${epNum}/`,
+    `${base}/episode/${seriesSlug}-season-1-episode-${epNum}/`,
     `${base}/watch/${seriesSlug}-episode-${epNum}/`,
     `${base}/watch/${seriesSlug}-s1-episode-${epNum}/`,
     `${base}/watch/${seriesSlug}-${epNum}/`,
-    `${base}/episode/${seriesSlug}-1x${epNum}/`,
-    `${base}/episode/${seriesSlug}-${epNum}/`,
   ];
 
   let epHtml = null;
@@ -336,16 +372,17 @@ async function extractEpisodeStreams(seriesSlug, epIdentifier, requestUrl) {
     } catch {}
   }
 
-  // If direct candidates failed, inspect anime page to locate the exact episode watch link
+  // If direct candidates failed, inspect series page to locate the exact episode link
   if (!epHtml) {
     try {
-      const seriesRes = await fetch(`${base}/anime/${seriesSlug}/`, { headers, signal: AbortSignal.timeout(4000) });
+      const seriesRes = await fetch(`${base}/series/${seriesSlug}/`, { headers, signal: AbortSignal.timeout(4000) });
       if (seriesRes.ok) {
         const seriesHtml = await seriesRes.text();
-        const epRegex = new RegExp(`href=["'](https?:\\/\\/[^"']+\\/watch\\/[^"']*?-episode-${epNum}\\/?)["']`, "i");
+        const epRegex = new RegExp(`href=["']((?:https?:\\/\\/[^"']*)?\\/(?:episode|watch)\\/[^"']*?-(?:\\d+x)?${epNum}\\/?)["']`, "i");
         const match = seriesHtml.match(epRegex);
         if (match) {
-          const epRes = await fetch(match[1], { headers, signal: AbortSignal.timeout(4000) });
+          const targetEpUrl = match[1].startsWith("http") ? match[1] : `${base}${match[1]}`;
+          const epRes = await fetch(targetEpUrl, { headers, signal: AbortSignal.timeout(4000) });
           if (epRes.ok) {
             epHtml = await epRes.text();
           }
@@ -411,7 +448,36 @@ async function extractEpisodeStreams(seriesSlug, epIdentifier, requestUrl) {
     if (streams.some((s) => s.url === serverUrl)) continue;
 
     try {
-      // 1. AS-CDN (FirePlayer / PlayerJS Multi-Audio HLS)
+      // 1. VidMoly (Direct HLS Extraction)
+      if (serverUrl.includes("vidmoly.net") || serverUrl.includes("vidmoly.to") || serverUrl.includes("vidmoly.me")) {
+        try {
+          const vmRes = await fetch(serverUrl, {
+            headers: { "User-Agent": UA, Referer: `${base}/` },
+            signal: AbortSignal.timeout(3500),
+          });
+          if (vmRes.ok) {
+            const vmHtml = await vmRes.text();
+            const m3u8Match = vmHtml.match(/https?:\/\/[^"'\s]+\.m3u8[^"'\s]*/i);
+            if (m3u8Match) {
+              const proxiedUrl = `${workerOrigin}/proxy?url=${encodeURIComponent(m3u8Match[0])}&ref=${encodeURIComponent("https://vidmoly.net/")}`;
+              streams.unshift({
+                server: "VidMoly (Hindi HLS)",
+                url: proxiedUrl,
+                directUrl: m3u8Match[0],
+                type: "hls",
+                quality: "VidMoly [Hindi Dub]",
+                isM3U8: true,
+                hasHindi: true,
+                isHindi: true,
+                headers: { Referer: "https://vidmoly.net/" },
+              });
+              continue;
+            }
+          }
+        } catch {}
+      }
+
+      // 2. AS-CDN (FirePlayer / PlayerJS Multi-Audio HLS)
       const asMatch = serverUrl.match(/https?:\/\/(as-cdn\d*\.top)\/video\/([a-zA-Z0-9_-]+)/i);
       if (asMatch) {
         const [, domain, hash] = asMatch;
@@ -471,7 +537,7 @@ async function extractEpisodeStreams(seriesSlug, epIdentifier, requestUrl) {
         continue;
       }
 
-      // 2. Turbovid (HLS)
+      // 3. Turbovid (HLS)
       if (serverUrl.includes("emturbovid.com")) {
         const tvRes = await fetch(serverUrl, { headers: { ...headers, Referer: base } });
         if (tvRes.ok) {
@@ -495,13 +561,19 @@ async function extractEpisodeStreams(seriesSlug, epIdentifier, requestUrl) {
         continue;
       }
 
-      // 3. Fallback embeds (Streamwish, Ruby, MyCloud, VidMoly, etc.)
+      // 4. Fallback embeds (VidMoly embed, AbyssPlayer, Cloudy, FilesForever, BlakiteApi, Streamwish, Ruby)
       const serverLabel = serverUrl.includes("ruby")
         ? "Ruby"
         : serverUrl.includes("wish")
         ? "Streamwish"
         : serverUrl.includes("abyss")
         ? "AbyssPlayer"
+        : serverUrl.includes("cloudy")
+        ? "Cloudy"
+        : serverUrl.includes("vidmoly")
+        ? "VidMoly"
+        : serverUrl.includes("blakiteapi")
+        ? "Blakite"
         : serverUrl.includes("filesforever")
         ? "FilesForever"
         : "External Embed";
@@ -600,10 +672,10 @@ export default {
       return json({
         name: "AniWaveX Universal Hindi Streaming Worker",
         status: "ok",
-        version: "1.2.0",
+        version: "1.3.0",
         provider: "toonstream",
         activeUpstream: activeBase,
-        features: ["search", "episodes", "stream", "hls-proxy", "multi-audio-hindi"],
+        features: ["search", "episodes", "stream", "hls-proxy", "multi-audio-hindi", "vidmoly-hls"],
         routes: [
           "/health",
           "/search?q=:query",
