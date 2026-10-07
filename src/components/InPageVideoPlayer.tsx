@@ -417,7 +417,8 @@ export default function InPageVideoPlayer({
             try {
               mediaPlayerRef.current.currentTime = currentSkip.endTime;
             } catch {}
-            showToast(`Auto-skipped ${currentSkip.label} ⏭`);
+            const skipLabel = currentSkip.type === "op" ? "Intro" : (currentSkip.type === "ed" ? "Outro" : "Recap");
+            showToast(`Auto-skipped ${skipLabel} ⏭`);
           }
         } else if (!autoSkip) {
           // Visible for starting 10 seconds of the intro/outro sequence with filling animation
@@ -852,7 +853,10 @@ export default function InPageVideoPlayer({
 
   const handleExecuteSkip = useCallback(() => {
     if (!activeSkip) return;
-    if (activeSkip.type === "ed" && hasNext) {
+    const dur = lastKnownDurationRef.current || 1440;
+    const isPostCredits = activeSkip.type === "ed" && (dur - activeSkip.endTime > 90);
+
+    if (activeSkip.type === "ed" && hasNext && !isPostCredits) {
       if (countdownTimerRef.current) {
         clearInterval(countdownTimerRef.current);
         countdownTimerRef.current = null;
@@ -863,12 +867,14 @@ export default function InPageVideoPlayer({
       handleNext();
       return;
     }
+
     if (mediaPlayerRef.current) {
       try {
         mediaPlayerRef.current.currentTime = activeSkip.endTime;
       } catch {}
     }
-    showToast(`Skipped ${activeSkip.label} ⏭`);
+    const skipName = activeSkip.type === "op" ? "Intro" : (activeSkip.type === "ed" ? "Outro" : "Recap");
+    showToast(`Skipped ${skipName} ⏭`);
     setActiveSkip(null);
   }, [activeSkip, hasNext, handleNext, showToast, episode?.id]);
 
@@ -1140,32 +1146,38 @@ export default function InPageVideoPlayer({
 
   const playbackOverlays = (
     <>
-      {/* AniSkip On-Screen Skip Button with Left-to-Right Countdown Fill Effect */}
-      {activeSkip && !playerError && !isLoading && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleExecuteSkip();
-          }}
-          className="relative overflow-hidden absolute bottom-16 right-4 sm:bottom-20 sm:right-6 z-40 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-950/90 hover:bg-slate-900 border border-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xl shadow-2xl opacity-50 hover:opacity-100 transition-all duration-200 flex items-center gap-2 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-2 group cursor-pointer pointer-events-auto"
-          title={`${activeSkip.type === "ed" && hasNext ? "Watch Next Episode" : activeSkip.label} (${Math.round(activeSkip.endTime - activeSkip.startTime)}s)`}
-        >
-          {/* Left-to-Right Fill Progress Effect */}
-          <div
-            className="absolute inset-y-0 left-0 bg-blue-600/35 border-r border-blue-400/50 pointer-events-none transition-all duration-500 ease-linear"
-            style={{ width: `${skipProgressPercent}%` }}
-          />
+      {/* On-Screen Skip / Watch Next Button Matching Reference UI */}
+      {activeSkip && !playerError && !isLoading && (() => {
+        const dur = lastKnownDurationRef.current || 1440;
+        const isPostCredits = activeSkip.type === "ed" && (dur - activeSkip.endTime > 90);
+        const buttonLabel = activeSkip.type === "op"
+          ? "Skip Intro"
+          : activeSkip.type === "ed"
+          ? (hasNext && !isPostCredits ? "Watch Next" : "Skip Outro")
+          : "Skip Recap";
 
-          <FastForward className="relative z-10 w-4 h-4 text-blue-400 group-hover:text-white transition-colors" />
-          <span className="relative z-10">
-            {activeSkip.type === "ed" && hasNext ? "Watch Next" : activeSkip.label}
-          </span>
-          <span className="relative z-10 text-[10px] font-mono opacity-60 ml-0.5">
-            {Math.max(1, 10 - Math.floor((skipProgressPercent / 100) * 10))}s
-          </span>
-        </button>
-      )}
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleExecuteSkip();
+            }}
+            className="relative overflow-hidden absolute bottom-14 right-4 sm:bottom-16 sm:right-6 z-40 px-4 py-2 sm:px-5 sm:py-2.5 rounded-md bg-black/65 hover:bg-black/85 border border-white/80 text-white font-semibold text-xs sm:text-sm backdrop-blur-sm shadow-2xl opacity-60 hover:opacity-100 transition-all duration-200 flex items-center justify-center cursor-pointer pointer-events-auto active:scale-95 animate-in fade-in"
+            title={`${buttonLabel} (${Math.round(activeSkip.endTime - activeSkip.startTime)}s)`}
+          >
+            {/* Left-to-Right Fill Progress Effect */}
+            <div
+              className="absolute inset-y-0 left-0 bg-white/20 border-r border-white/40 pointer-events-none transition-all duration-300 ease-linear"
+              style={{ width: `${skipProgressPercent}%` }}
+            />
+
+            <span className="relative z-10 select-none tracking-wide text-white">
+              {buttonLabel}
+            </span>
+          </button>
+        );
+      })()}
 
       {/* Netflix-Style Next Episode Endscreen Overlay */}
       {showNextEpOverlay && hasNext && episodes && currentIndex !== -1 && (
