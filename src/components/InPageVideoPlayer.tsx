@@ -419,7 +419,13 @@ export default function InPageVideoPlayer({
             showToast(`Auto-skipped ${currentSkip.label} ⏭`);
           }
         } else if (!autoSkip) {
-          setActiveSkip(currentSkip);
+          // Visible for starting 5 seconds of the intro/outro sequence
+          const secondsSinceStart = floorTime - Math.floor(currentSkip.startTime);
+          if (secondsSinceStart >= 0 && secondsSinceStart <= 5) {
+            setActiveSkip(currentSkip);
+          } else {
+            setActiveSkip(null);
+          }
         }
       } else {
         setActiveSkip(null);
@@ -1098,7 +1104,7 @@ export default function InPageVideoPlayer({
             e.stopPropagation();
             handleExecuteSkip();
           }}
-          className="absolute bottom-16 right-4 sm:bottom-20 sm:right-6 z-40 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-950/90 hover:bg-blue-600 border border-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xl shadow-2xl transition-all duration-200 flex items-center gap-2 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-2 group cursor-pointer pointer-events-auto"
+          className="absolute bottom-16 right-4 sm:bottom-20 sm:right-6 z-40 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-950/90 hover:bg-blue-600 border border-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xl shadow-2xl opacity-50 hover:opacity-100 transition-all duration-200 flex items-center gap-2 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-2 group cursor-pointer pointer-events-auto"
           title={`${activeSkip.label} (${Math.round(activeSkip.endTime - activeSkip.startTime)}s)`}
         >
           <FastForward className="w-4 h-4 text-blue-400 group-hover:text-white transition-colors" />
