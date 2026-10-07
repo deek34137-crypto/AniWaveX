@@ -134,7 +134,48 @@ export async function searchMangaList(query: string, limit = 20): Promise<MangaI
       }
     }
   } catch {
-    // If fallback lookup fails, return empty
+    // If fallback Kitsu lookup fails, continue to backend search fallback
+  }
+
+  // 3. Fallback: Query backend providers directly for fan-made manga, doujinshi, or uncataloged indie webcomics
+  try {
+    const fallbackResults = await backendSearch(trimmed);
+    if (fallbackResults.length > 0) {
+      const seenIds = new Set<string>();
+      const items: MangaItem[] = [];
+
+      for (const r of fallbackResults) {
+        const compositeId = `${r.provider}__${r.id}`;
+        if (!seenIds.has(compositeId)) {
+          seenIds.add(compositeId);
+          items.push({
+            id: compositeId,
+            slug: compositeId,
+            title: r.title,
+            posterImage: r.coverImage || '',
+            bannerImage: r.coverImage || '',
+            description: `Fan-made / indie work streamed from ${r.provider.toUpperCase()}.`,
+            status: 'Ongoing',
+            type: 'manga',
+            rating: 'N/A',
+            genres: ['Fan Manga', 'Doujinshi'],
+            source:
+              r.provider === 'mangadex'
+                ? 'MangaDex'
+                : r.provider === 'mangaread'
+                ? 'MangaRead'
+                : r.provider === 'weebcentral'
+                ? 'WeebCentral'
+                : r.provider,
+          });
+        }
+      }
+      if (items.length > 0) {
+        return items.slice(0, limit);
+      }
+    }
+  } catch {
+    // Fallback search failed
   }
 
   return [];
@@ -214,13 +255,78 @@ export async function filterMangaList(options: MangaFilterOptions): Promise<Mang
   return getTrendingMangaList(limit);
 }
 
+function parseCompositeId(id: string | number): { provider: string; mangaId: string } | null {
+  if (!id) return null;
+  const decoded = decodeURIComponent(String(id)).trim();
+  if (decoded.includes('__')) {
+    const parts = decoded.split('__');
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return { provider: parts[0], mangaId: parts.slice(1).join('__') };
+    }
+  }
+  if (decoded.includes(':')) {
+    const parts = decoded.split(':');
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return { provider: parts[0], mangaId: parts.slice(1).join(':') };
+    }
+  }
+  return null;
+}
+
 export async function getMangaDetails(id: string | number): Promise<MangaItem | null> {
-  const json = await anilistQuery(
-    `query ($id:Int){Media(id:$id,type:MANGA){${GQL_FIELDS}}}`,
-    { id: Number(id) }
-  );
-  const m = json?.data?.Media;
-  return m ? formatMangaItem(m) : null;
+  const strId = String(id).trim();
+  const composite = parseCompositeId(strId);
+
+  // 1. If it's a composite provider ID (e.g. "mangadex__fcae8a53-..." or "mangaread__...")
+  if (composite) {
+    try {
+      const res = await fetch(`${BACKEND}/api/manga/${composite.provider}/${encodeURIComponent(composite.mangaId)}`, {
+        next: { revalidate: 3600 },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const m = data?.data;
+        if (m) {
+          return {
+            id: strId,
+            slug: strId,
+            title: m.title || 'Manga',
+            romajiTitle: m.altTitles?.[0],
+            posterImage: m.cover || '',
+            bannerImage: m.cover || '',
+            description: m.description ? m.description.replace(/<[^>]*>?/gm, '').trim() : '',
+            status: m.status === 'Completed' ? 'Completed' : 'Ongoing',
+            type: 'manga',
+            rating: 'N/A',
+            genres: m.genres && m.genres.length > 0 ? m.genres : ['Fan Manga', 'Doujinshi'],
+            source:
+              composite.provider === 'mangadex'
+                ? 'MangaDex'
+                : composite.provider === 'mangaread'
+                ? 'MangaRead'
+                : composite.provider === 'weebcentral'
+                ? 'WeebCentral'
+                : composite.provider,
+          };
+        }
+      }
+    } catch {
+      // Fall through to AniList
+    }
+  }
+
+  // 2. Standard AniList lookup (numeric ID)
+  const numId = Number(strId);
+  if (!isNaN(numId)) {
+    const json = await anilistQuery(
+      `query ($id:Int){Media(id:$id,type:MANGA){${GQL_FIELDS}}}`,
+      { id: numId }
+    );
+    const m = json?.data?.Media;
+    if (m) return formatMangaItem(m);
+  }
+
+  return null;
 }
 
 /* ───────────────────────────────────────────────
@@ -515,6 +621,47 @@ export async function getMangaChapters(
   _mangaId?: string | number,
   romajiTitle?: string
 ): Promise<MangaChapter[]> {
+  const strMangaId = String(_mangaId || '').trim();
+  const composite = parseCompositeId(strMangaId);
+
+  // Fast path: If manga has a direct composite provider ID (e.g. "mangadex__fcae8a53-..."), query provider directly
+  if (composite) {
+    try {
+      const res = await fetch(`${BACKEND}/api/chapters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: composite.provider,
+          id: composite.mangaId,
+        }),
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const rawChapters: BackendChapter[] = data?.chapters || [];
+        if (rawChapters.length > 0) {
+          return rawChapters
+            .map((ch): MangaChapter => {
+              const num = extractChapterNumber(ch.numberValue ?? ch.number, ch.title, ch.url);
+              return {
+                id: JSON.stringify({
+                  provider: composite.provider,
+                  chapterId: ch.id,
+                  chapterUrl: ch.url,
+                }),
+                chapterNumber: num,
+                title: cleanChapterTitle(ch.title, num || ch.number || ch.numberValue),
+                source: data.providerName || composite.provider,
+              };
+            })
+            .sort((a, b) => a.chapterNumber - b.chapterNumber);
+        }
+      }
+    } catch {
+      // Fallback to title search if direct fetch fails
+    }
+  }
+
   // 1. Build comprehensive search query variants
   const searchQueries = new Set<string>();
   if (title && title.trim()) searchQueries.add(title.trim());
