@@ -7,7 +7,6 @@ import {
   Search,
   ArrowUpDown,
   BookOpen,
-  Sparkles,
   CheckCircle2,
   Bookmark,
   Loader2,
@@ -174,6 +173,8 @@ export default function MangaDetailChaptersClient({
     );
   }, [chapterList, progress]);
 
+  const hasReadAny = Boolean(resumeChapter || progress);
+
   return (
     <div className="space-y-4">
       {/* Top Action Bar: Start / Resume Reading + Search & Sort */}
@@ -193,9 +194,13 @@ export default function MangaDetailChaptersClient({
 
         {/* Action Buttons: Resume / Start Reading */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {resumeChapter && (
+          {hasReadAny && (
             <Link
-              href={`/manga/${mangaId}/read?chapterId=${encodeURIComponent(resumeChapter.id)}&ch=${resumeChapter.chapterNumber}${progress?.pageNumber ? `&page=${progress.pageNumber}` : ""}`}
+              href={
+                resumeChapter
+                  ? `/manga/${mangaId}/read?chapterId=${encodeURIComponent(resumeChapter.id)}&ch=${resumeChapter.chapterNumber}${progress?.pageNumber ? `&page=${progress.pageNumber}` : ""}`
+                  : `/manga/${mangaId}/read?chapterId=${encodeURIComponent(progress!.chapterId)}&ch=${progress!.chapterNumber}${progress?.pageNumber ? `&page=${progress.pageNumber}` : ""}`
+              }
               onClick={() => {
                 try {
                   sessionStorage.setItem(`aniwavex_from_overview_${mangaId}`, "1");
@@ -204,12 +209,12 @@ export default function MangaDetailChaptersClient({
               className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
             >
               <Bookmark className="w-4 h-4 fill-current" />
-              Resume Ch. {resumeChapter.chapterNumber}
+              Resume Ch. {resumeChapter?.chapterNumber ?? progress?.chapterNumber}
               {progress?.pageNumber ? ` (p. ${progress.pageNumber})` : ""}
             </Link>
           )}
 
-          {chapterList.length > 0 && (
+          {!hasReadAny && chapterList.length > 0 && (
             <Link
               href={`/manga/${mangaId}/read?chapterId=${encodeURIComponent(chapterList[0].id)}&ch=${chapterList[0].chapterNumber}`}
               onClick={() => {
@@ -217,9 +222,15 @@ export default function MangaDetailChaptersClient({
                   sessionStorage.setItem(`aniwavex_from_overview_${mangaId}`, "1");
                 } catch {}
               }}
-              className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+              className="group px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
             >
-              <Sparkles className="w-4 h-4" />
+              <span
+                className="text-sm sm:text-base leading-none select-none -ml-0.5 filter drop-shadow shrink-0 transition-transform duration-200 group-hover:scale-125 group-hover:rotate-12"
+                role="img"
+                aria-label="Cute sticker"
+              >
+                🌸
+              </span>
               Start Ch. {chapterList[0].chapterNumber}
             </Link>
           )}

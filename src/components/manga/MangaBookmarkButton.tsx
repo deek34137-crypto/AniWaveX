@@ -251,7 +251,7 @@ export default function MangaBookmarkButton({
 
       {isOpen && (
         <div
-          className="absolute left-0 top-12 w-52 bg-slate-900/95 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+          className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-52 bg-slate-900/95 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
