@@ -1,8 +1,7 @@
 import Navbar from "@/components/Navbar";
 import HeroSlider from "@/components/HeroSlider";
 import AnimeRow from "@/components/AnimeRow";
-import ContinueWatchingRow from "@/components/ContinueWatchingRow";
-import ContinueReadingRow from "@/components/manga/ContinueReadingRow";
+import JumpBackInRow from "@/components/JumpBackInRow";
 import TodayAiringRow from "@/components/TodayAiringRow";
 import { getTrendingAnime, getTopRatedAnime, getGenreAnime } from "@/lib/api";
 import { getUnifiedAiringSchedule } from "@/lib/schedule";
@@ -30,8 +29,7 @@ export default async function Home() {
       <div className="tv-safe-container space-y-4 tv:space-y-8">
         <HeroSlider animeList={heroAnimeList} />
         
-        <ContinueWatchingRow />
-        <ContinueReadingRow />
+        <JumpBackInRow />
 
         <TodayAiringRow initialSchedule={airingSchedule} />
 
