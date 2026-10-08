@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Search, Loader2, Clock, X, Trash2 } from "lucide-react";
+import { Search, Loader2, Clock, X, Trash2, Camera } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import ImageSearchModal from "@/components/ImageSearchModal";
 import {
   getSearchHistory,
   saveSearchQuery,
@@ -38,9 +39,29 @@ export default function SearchBar() {
   const [hasSearchError, setHasSearchError] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [pastedFile, setPastedFile] = useState<File | null>(null);
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRequestIdRef = useRef(0);
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          setPastedFile(file);
+          setIsImageModalOpen(true);
+          setIsOpen(false);
+          break;
+        }
+      }
+    }
+  };
 
   useEffect(() => {
     setHistory(getSearchHistory());
@@ -142,36 +163,55 @@ export default function SearchBar() {
   };
 
   return (
-    <div className="relative w-full max-w-sm" ref={dropdownRef}>
-      <div className="relative flex items-center">
-        <Search className="absolute left-3 w-4 h-4 text-slate-400" />
-        <input
-          type="text"
-          placeholder="Search anime..."
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setIsOpen(true);
-          }}
-          onKeyDown={handleKeyDown}
-          onFocus={() => {
-            if (results.length > 0 || history.length > 0) setIsOpen(true);
-          }}
-          className="w-full pl-10 pr-16 py-2 bg-white/5 border border-white/10 rounded-full text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white/10 transition-all"
-        />
-        {isSearching ? (
-          <Loader2 className="absolute right-3 w-4 h-4 text-blue-400 animate-spin" />
-        ) : (
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
-            className="hidden sm:flex absolute right-2.5 items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] font-mono text-slate-400 hover:text-white transition-colors"
-            title="Open Command Palette (Ctrl+K)"
-          >
-            <span>⌘</span>K
-          </button>
-        )}
-      </div>
+    <>
+      <div className="relative w-full max-w-sm" ref={dropdownRef}>
+        <div className="relative flex items-center">
+          <Search className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search anime..."
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setIsOpen(true);
+            }}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onFocus={() => {
+              if (results.length > 0 || history.length > 0) setIsOpen(true);
+            }}
+            className="w-full pl-10 pr-20 py-2 bg-white/5 border border-white/10 rounded-full text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/60 focus:bg-white/10 transition-all"
+          />
+          <div className="absolute right-2 flex items-center gap-1.5">
+            {/* Camera reverse screenshot search button */}
+            <button
+              type="button"
+              onClick={() => {
+                setPastedFile(null);
+                setIsImageModalOpen(true);
+                setIsOpen(false);
+              }}
+              className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-white/10 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              title="Search anime by screenshot or image (Ctrl+V)"
+              aria-label="Search anime by image"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
+
+            {isSearching ? (
+              <Loader2 className="w-4 h-4 text-cyan-400 animate-spin mr-1" />
+            ) : (
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+                className="hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] font-mono text-slate-400 hover:text-white transition-colors"
+                title="Open Command Palette (Ctrl+K)"
+              >
+                <span>⌘</span>K
+              </button>
+            )}
+          </div>
+        </div>
 
       {/* Dropdown for Recent Searches when query is empty */}
       {isOpen && !query.trim() && history.length > 0 && (
@@ -270,6 +310,17 @@ export default function SearchBar() {
           ) : null}
         </div>
       )}
-    </div>
+      </div>
+
+      {/* Reverse Screenshot Search Modal */}
+      <ImageSearchModal
+        isOpen={isImageModalOpen}
+        initialFile={pastedFile}
+        onClose={() => {
+          setIsImageModalOpen(false);
+          setPastedFile(null);
+        }}
+      />
+    </>
   );
 }
