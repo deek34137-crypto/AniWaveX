@@ -86,6 +86,65 @@ export function AuthProvider({
             setBookmarkedSlugs((prev) => new Set([...prev, ...dbSlugs]));
           }
         });
+
+      // 3. Batched Manga bookmarks cloud sync & hydration
+      supabase
+        .from("manga_bookmarks")
+        .select("*")
+        .eq("user_id", user.id)
+        .then((res: any) => {
+          if (res?.data && Array.isArray(res.data)) {
+            try {
+              const rawLocal = localStorage.getItem("aniwavex_manga_bookmarks") || "[]";
+              const localList = JSON.parse(rawLocal);
+              const map = new Map();
+
+              if (Array.isArray(localList)) {
+                localList.forEach((it: any) => {
+                  if (it?.manga_id) map.set(it.manga_id, it);
+                });
+              }
+
+              res.data.forEach((cloudItem: any) => {
+                if (cloudItem?.manga_id) {
+                  const existing = map.get(cloudItem.manga_id);
+                  map.set(cloudItem.manga_id, {
+                    ...existing,
+                    ...cloudItem,
+                    id: cloudItem.manga_id,
+                  });
+                }
+              });
+
+              const merged = Array.from(map.values());
+              localStorage.setItem("aniwavex_manga_bookmarks", JSON.stringify(merged));
+              window.dispatchEvent(new CustomEvent("aniwavex_manga_bookmarks_updated", { detail: merged }));
+            } catch {}
+          }
+        });
+
+      // Push un-synced guest manga bookmarks to cloud
+      try {
+        const rawLocal = localStorage.getItem("aniwavex_manga_bookmarks") || "[]";
+        const localList = JSON.parse(rawLocal);
+        if (Array.isArray(localList) && localList.length > 0) {
+          const toUpload = localList.filter((it: any) => !it.user_id || it.user_id !== user.id);
+          if (toUpload.length > 0) {
+            const records = toUpload.map((b: any) => ({
+              user_id: user.id,
+              manga_id: b.manga_id,
+              manga_title: b.manga_title || "Manga",
+              poster_image: b.poster_image || null,
+              status: b.status || "reading",
+              last_chapter_read: b.last_chapter_read || null,
+              last_chapter_id: b.last_chapter_id || null,
+              last_page_read: b.last_page_read || 1,
+              updated_at: new Date().toISOString(),
+            }));
+            supabase.from("manga_bookmarks").upsert(records, { onConflict: "user_id,manga_id" }).then(() => {});
+          }
+        }
+      } catch {}
     }
   }, [user?.id, supabase]);
 

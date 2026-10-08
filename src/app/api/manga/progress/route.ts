@@ -107,6 +107,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Also sync progress into manga_bookmarks if user has bookmarked this manga
+    try {
+      await supabase
+        .from('manga_bookmarks')
+        .update({
+          last_chapter_read: String(body.chapterNumber || 1),
+          last_chapter_id: body.chapterId,
+          last_page_read: pageNum,
+          updated_at: nowIso,
+        })
+        .eq('user_id', user.id)
+        .eq('manga_id', body.mangaId);
+    } catch {}
+
     return NextResponse.json({ success: true, progress: data });
   } catch (err: any) {
     console.error('[API /manga/progress] Unexpected error:', err);

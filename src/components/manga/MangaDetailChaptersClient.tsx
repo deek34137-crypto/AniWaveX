@@ -14,6 +14,7 @@ import {
   RotateCw,
 } from "lucide-react";
 import { MangaChapter } from "@/lib/manga/types";
+import MangaBookmarkButton from "@/components/manga/MangaBookmarkButton";
 
 interface MangaDetailChaptersClientProps {
   mangaId: string;
@@ -222,6 +223,13 @@ export default function MangaDetailChaptersClient({
               Start Ch. {chapterList[0].chapterNumber}
             </Link>
           )}
+
+          <MangaBookmarkButton
+            mangaId={mangaId}
+            mangaTitle={mangaTitle || "Manga"}
+            posterImage={posterImage}
+            variant="hero"
+          />
         </div>
       </div>
 

@@ -7,14 +7,25 @@ export default async function WatchlistPage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   let bookmarks: any[] = [];
+  let mangaBookmarks: any[] = [];
+
   if (user) {
-    const { data } = await supabase
-      .from("bookmarks")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    bookmarks = data || [];
+    const [animeRes, mangaRes] = await Promise.all([
+      supabase
+        .from("bookmarks")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("manga_bookmarks")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(100),
+    ]);
+    bookmarks = animeRes.data || [];
+    mangaBookmarks = mangaRes.data || [];
   }
 
   return (
@@ -22,7 +33,7 @@ export default async function WatchlistPage() {
       <Navbar />
       <div className="page-top-spacer" />
       <div className="tv-safe-container pt-4 sm:pt-6">
-        <WatchlistGrid initialItems={bookmarks} />
+        <WatchlistGrid initialItems={bookmarks} initialMangaItems={mangaBookmarks} />
       </div>
     </main>
   );

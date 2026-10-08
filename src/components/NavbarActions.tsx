@@ -152,7 +152,7 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
               onClick={() => setIsMenuOpen(false)}
               className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
             >
-              <Bookmark className="w-4 h-4 text-amber-400" /> Watchlist
+              <Bookmark className="w-4 h-4 text-cyan-400" /> My Library
             </Link>
             {isAdmin && (
               <Link 

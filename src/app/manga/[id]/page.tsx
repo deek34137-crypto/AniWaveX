@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Star, BookOpen, ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import MangaDetailChaptersClient from "@/components/manga/MangaDetailChaptersClient";
+import MangaBookmarkButton from "@/components/manga/MangaBookmarkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +90,16 @@ export default async function MangaDetailPage({
             {manga.romajiTitle && manga.romajiTitle !== manga.title && (
               <p className="text-xs sm:text-sm text-slate-400 font-medium">{manga.romajiTitle}</p>
             )}
+
+            {/* Quick Bookmark / Reading List Button */}
+            <div className="pt-2">
+              <MangaBookmarkButton
+                mangaId={manga.id}
+                mangaTitle={manga.title}
+                posterImage={manga.posterImage}
+                variant="hero"
+              />
+            </div>
           </div>
         </div>
       </div>

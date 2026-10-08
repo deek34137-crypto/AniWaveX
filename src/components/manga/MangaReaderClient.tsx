@@ -379,6 +379,28 @@ export default function MangaReaderClient({
         localStorage.setItem("aniwavex_recent_manga", JSON.stringify(list.slice(0, 20)));
       } catch {}
 
+      // Keep local manga bookmarks list synchronized with current chapter & page
+      try {
+        const bookmarksRaw = localStorage.getItem("aniwavex_manga_bookmarks");
+        if (bookmarksRaw) {
+          const bList = JSON.parse(bookmarksRaw);
+          if (Array.isArray(bList)) {
+            const idx = bList.findIndex((it: any) => it.manga_id === mangaId);
+            if (idx >= 0) {
+              bList[idx] = {
+                ...bList[idx],
+                last_chapter_read: String(progressRecord.chapterNumber),
+                last_chapter_id: progressRecord.chapterId,
+                last_page_read: progressRecord.pageNumber,
+                updated_at: new Date().toISOString(),
+              };
+              localStorage.setItem("aniwavex_manga_bookmarks", JSON.stringify(bList));
+              window.dispatchEvent(new CustomEvent("aniwavex_manga_bookmarks_updated", { detail: bList }));
+            }
+          }
+        }
+      } catch {}
+
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("aniwavex_manga_progress_updated", {
