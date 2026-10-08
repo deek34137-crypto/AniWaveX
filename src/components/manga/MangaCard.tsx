@@ -51,11 +51,15 @@ export default function MangaCard({ manga }: { manga: MangaItem }) {
           </h3>
 
           <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-white/5 text-xs text-slate-400">
-            <span className="font-medium">{manga.status}</span>
+            <span className="font-medium text-slate-400 truncate max-w-[110px]">
+              {manga.genres?.[0] || manga.status}
+            </span>
             {manga.totalChapters ? (
               <span className="font-semibold text-cyan-400/90">{manga.totalChapters} ch</span>
             ) : (
-              <span className="text-slate-500">Active</span>
+              <span className="font-medium text-cyan-400/80">
+                {manga.status === "Completed" ? "Completed" : "Releasing"}
+              </span>
             )}
           </div>
         </div>

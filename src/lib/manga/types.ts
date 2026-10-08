@@ -8,6 +8,7 @@ export interface MangaItem {
   title: string;
   romajiTitle?: string;
   nativeTitle?: string;
+  synonyms?: string[];
   posterImage: string;
   bannerImage?: string;
   description?: string;

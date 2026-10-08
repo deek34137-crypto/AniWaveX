@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMangaChapters } from "@/lib/manga/service";
+import { getMangaChapters, getMangaDetails } from "@/lib/manga/service";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   const title = searchParams.get("title");
   const mangaId = searchParams.get("id") || undefined;
   const romajiTitle = searchParams.get("romajiTitle") || undefined;
+  const rawSynonyms = searchParams.get("synonyms");
 
   if (!title) {
     return NextResponse.json({ success: false, error: "Title parameter required" }, { status: 400 });
@@ -16,6 +17,24 @@ export async function GET(req: NextRequest) {
   const logs: string[] = [];
   logs.push(`title: ${title}`);
   logs.push(`configuredUrl: ${process.env.NEXT_PUBLIC_MANGA_WORKER_URL || process.env.MANGA_API_URL || 'default'}`);
+
+  let synonyms: string[] | undefined;
+  if (rawSynonyms) {
+    try {
+      synonyms = JSON.parse(rawSynonyms);
+    } catch {
+      synonyms = rawSynonyms.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+  } else if (mangaId) {
+    try {
+      const details = await getMangaDetails(mangaId);
+      if (details?.synonyms && details.synonyms.length > 0) {
+        synonyms = details.synonyms;
+      }
+    } catch {
+      // Ignore details lookup failure
+    }
+  }
 
   try {
     // 1. Test worker search directly from Vercel
@@ -33,7 +52,7 @@ export async function GET(req: NextRequest) {
       logs.push(`top result: ${postData.results[0].provider} - ${postData.results[0].title} (${postData.results[0].id})`);
     }
 
-    const chapters = await getMangaChapters(title, mangaId, romajiTitle);
+    const chapters = await getMangaChapters(title, mangaId, romajiTitle, synonyms);
     logs.push(`getMangaChapters returned: ${chapters.length}`);
 
     return NextResponse.json({

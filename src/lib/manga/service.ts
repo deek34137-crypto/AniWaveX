@@ -39,6 +39,7 @@ const CHAPTER_PROVIDERS = [
 
 const GQL_FIELDS = `
   id title { english romaji native }
+  synonyms
   coverImage { extraLarge large }
   bannerImage description status format
   averageScore genres chapters
@@ -386,11 +387,19 @@ function titleScore(query: string, candidate: string, altTitles?: string[]): num
     const qPlain = qNorm.replace(/\s+/g, '');
     const cPlain = cNorm.replace(/\s+/g, '');
     if (qPlain === cPlain) return 1.0;
+    // Direct prefix match: candidate starts with query (e.g. "Pick Me Up" -> "Pick Me Up, Infinite Gacha")
+    if (cPlain.startsWith(qPlain)) {
+      return 0.90;
+    }
+    if (qPlain.startsWith(cPlain)) {
+      return 0.85;
+    }
+
     if (cPlain.includes(qPlain)) {
-      return qPlain.length / cPlain.length;
+      return 0.80;
     }
     if (qPlain.includes(cPlain)) {
-      return cPlain.length / qPlain.length;
+      return 0.75;
     }
 
     const qWords = qNorm.split(' ').filter((w) => w.length > 1);
@@ -621,7 +630,8 @@ function cleanChapterTitle(rawTitle: string, num: number | string): string {
 export async function getMangaChapters(
   title: string,
   _mangaId?: string | number,
-  romajiTitle?: string
+  romajiTitle?: string,
+  synonyms?: string[]
 ): Promise<MangaChapter[]> {
   const strMangaId = String(_mangaId || '').trim();
   const composite = parseCompositeId(strMangaId);
@@ -669,6 +679,16 @@ export async function getMangaChapters(
   const searchQueries = new Set<string>();
   if (title && title.trim()) searchQueries.add(title.trim());
   if (romajiTitle && romajiTitle.trim()) searchQueries.add(romajiTitle.trim());
+  if (synonyms && Array.isArray(synonyms)) {
+    // Filter to Latin-alphabet alternative titles (our upstream providers are English-based)
+    // Limit to top 4 to keep search instant and avoid network bottlenecks
+    const latinSynonyms = synonyms
+      .filter((s) => typeof s === "string" && /[a-zA-Z]/.test(s))
+      .slice(0, 4);
+    for (const syn of latinSynonyms) {
+      if (syn && syn.trim()) searchQueries.add(syn.trim());
+    }
+  }
 
   // Transliterate Greek and special anime symbols (e.g. Ψ -> Psi, Ω -> Omega, × -> x)
   const transliterated = title
@@ -732,32 +752,42 @@ export async function getMangaChapters(
 
   if (rawResults.length === 0) return [];
 
-  // 3. Relevance filtering: compute match score against title, romaji, and cleanTitle with altTitles support
+  // 3. Relevance filtering: compute match score against title, romaji, cleanTitle, and synonyms
   let scoredResults = rawResults
     .map((r) => {
       const scorePrimary = titleScore(title, r.title, r.altTitles);
       const scoreRomaji = romajiTitle ? titleScore(romajiTitle, r.title, r.altTitles) : 0;
       const scoreClean = cleanTitle ? titleScore(cleanTitle, r.title, r.altTitles) : 0;
-      return { ...r, score: Math.max(scorePrimary, scoreRomaji, scoreClean) };
+      let scoreSynonyms = 0;
+      if (synonyms && Array.isArray(synonyms)) {
+        for (const s of synonyms) {
+          if (s && s.trim()) {
+            scoreSynonyms = Math.max(scoreSynonyms, titleScore(s.trim(), r.title, r.altTitles));
+          }
+        }
+      }
+      return { ...r, score: Math.max(scorePrimary, scoreRomaji, scoreClean, scoreSynonyms) };
     })
     .filter((r) => r.score >= 0.35)
     .sort((a, b) => (b.score || 0) - (a.score || 0));
 
   if (scoredResults.length === 0) return [];
 
-  // If there are high-confidence exact/near-exact title matches (score >= 0.75),
-  // prioritize them exclusively so spin-offs (e.g. "One Piece Party" with score 0.61) don't hijack the main series
+  // Prioritize high-confidence exact/near-exact title matches in Tier 1.
+  // If Tier 1 matches return 0 chapters, smoothly fall back to Tier 2 (all scored matches)
   const highQualityMatches = scoredResults.filter((r) => (r.score || 0) >= 0.75);
-  if (highQualityMatches.length > 0) {
-    scoredResults = highQualityMatches;
-  }
+  const candidateTiers =
+    highQualityMatches.length > 0 && highQualityMatches.length < scoredResults.length
+      ? [highQualityMatches, scoredResults]
+      : [scoredResults];
 
   let bestChapters: MangaChapter[] = [];
   let bestScore = 0;
 
-  // 4. Try providers in priority order
-  for (const providerId of CHAPTER_PROVIDERS) {
-    const matches = scoredResults.filter((r) => r.provider === providerId);
+  // 4. Try providers across candidate tiers
+  for (const candidateSet of candidateTiers) {
+    for (const providerId of CHAPTER_PROVIDERS) {
+      const matches = candidateSet.filter((r) => r.provider === providerId);
     for (const match of matches) {
       try {
         const res = await fetch(`${BACKEND}/api/chapters`, {
@@ -868,6 +898,11 @@ export async function getMangaChapters(
       }
     }
   }
+  // If high quality matches yielded chapters, don't fall through to lower quality matches
+  if (bestChapters.length > 0) {
+    break;
+  }
+}
 
   return bestChapters;
 }
@@ -963,6 +998,7 @@ function formatMangaItem(m: any): MangaItem {
     title,
     romajiTitle: m.title?.romaji,
     nativeTitle: m.title?.native,
+    synonyms: Array.isArray(m.synonyms) ? m.synonyms : [],
     posterImage: m.coverImage?.extraLarge || m.coverImage?.large || '',
     bannerImage: m.bannerImage || '',
     description: desc,
