@@ -18,19 +18,34 @@ export const viewport: Viewport = {
   themeColor: "#0a0a0c",
 };
 
+import { SITE_CONFIG, getAbsoluteUrl } from "@/lib/seo/site-config";
+import { JsonLd, createWebSiteSchema, createOrganizationSchema } from "@/lib/seo/jsonld";
+import NotificationManager from "@/components/NotificationManager";
+import NavigationProgress from "@/components/NavigationProgress";
+import { ThemeProvider } from "@/providers/ThemeProvider";
+import { Analytics } from "@vercel/analytics/next";
+
 export const metadata: Metadata = {
-  title: "AniWaveX - Premium Anime Streaming",
-  description: "Discover, track, and stream your favorite anime in high quality without interruptions.",
+  metadataBase: new URL(SITE_CONFIG.siteUrl),
+  title: {
+    default: "AniWaveX — Premium Anime Streaming & Manga Discovery",
+    template: "%s | AniWaveX",
+  },
+  description: SITE_CONFIG.description,
+  alternates: {
+    canonical: getAbsoluteUrl("/"),
+  },
   openGraph: {
-    title: "AniWaveX",
-    description: "Discover, track, and stream your favorite anime in high quality without interruptions.",
-    url: "https://aniwavex.com",
-    siteName: "AniWaveX",
+    title: "AniWaveX — Premium Anime Streaming & Discovery",
+    description: SITE_CONFIG.description,
+    url: SITE_CONFIG.siteUrl,
+    siteName: SITE_CONFIG.name,
     images: [
       {
-        url: "https://media.kitsu.io/anime/poster_images/1/large.jpg", // A fallback generic anime poster or logo
-        width: 800,
-        height: 600,
+        url: SITE_CONFIG.ogImage,
+        width: 1200,
+        height: 630,
+        alt: "AniWaveX Anime Streaming Platform",
       },
     ],
     locale: "en_US",
@@ -38,15 +53,22 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "AniWaveX - Premium Anime Streaming",
-    description: "Discover, track, and stream your favorite anime in high quality without interruptions.",
+    title: "AniWaveX — Premium Anime Streaming & Discovery",
+    description: SITE_CONFIG.description,
+    images: [SITE_CONFIG.ogImage],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
 };
-
-import NotificationManager from "@/components/NotificationManager";
-import NavigationProgress from "@/components/NavigationProgress";
-import { ThemeProvider } from "@/providers/ThemeProvider";
-import { Analytics } from "@vercel/analytics/next";
 
 export default function RootLayout({
   children,
@@ -56,6 +78,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col pb-20 md:pb-0">
+        <JsonLd schema={createWebSiteSchema()} />
+        <JsonLd schema={createOrganizationSchema()} />
         <NavigationProgress />
         <ThemeProvider>
           <AuthProvider>

@@ -7,6 +7,7 @@ import EpisodesGrid from "@/components/EpisodesGrid";
 import Recommendations from "@/components/Recommendations";
 import InPageVideoPlayer from "@/components/InPageVideoPlayer";
 import AnimeWatchMetaBar from "@/components/AnimeWatchMetaBar";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { useAuth } from "@/providers/AuthProvider";
 
 function parseTimestamp(raw?: string | null): number | null {
@@ -193,9 +194,23 @@ export default function AnimePageClient({
 
   if (!data) return <div className="text-white p-10">Loading...</div>;
 
+  const primaryGenre = (data.tags || []).find(
+    (t: string) => t && t.toLowerCase() !== "anime" && t.toLowerCase() !== "animation"
+  );
+  const breadcrumbItems = [
+    { name: "Anime", path: "/anime" },
+    ...(primaryGenre
+      ? [{ name: `${primaryGenre} Anime`, path: `/genre/${primaryGenre.toLowerCase().replace(/\s+/g, "-")}` }]
+      : []),
+    { name: data.title, path: `/anime/${data.slug}` },
+  ];
+
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
       <div className="tv-safe-container space-y-6 tv:space-y-10">
+        <div className="pt-2">
+          <Breadcrumbs items={breadcrumbItems.slice(1)} />
+        </div>
         
         {activeEpisode ? (
           <div className="space-y-4">

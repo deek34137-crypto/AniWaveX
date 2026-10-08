@@ -5,8 +5,30 @@ import Link from "next/link";
 import { Star, BookOpen, ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import MangaDetailChaptersClient from "@/components/manga/MangaDetailChaptersClient";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import { generateMangaMetadata } from "@/lib/seo/metadata";
+import { JsonLd, createMangaBookSchema, createBreadcrumbSchema } from "@/lib/seo/jsonld";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const manga = await getMangaDetails(id);
+
+  if (!manga) {
+    return {
+      title: "Manga Not Found | AniWaveX",
+      robots: { index: false, follow: true },
+    };
+  }
+
+  return generateMangaMetadata(manga);
+}
 
 export default async function MangaDetailPage({
   params,
@@ -27,15 +49,22 @@ export default async function MangaDetailPage({
     manga.synonyms
   );
 
+  const breadcrumbItems = [
+    { name: "Manga", path: "/manga" },
+    { name: manga.title, path: `/manga/${manga.id}` },
+  ];
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-32">
+      <JsonLd schema={createMangaBookSchema(manga)} />
+      <JsonLd schema={createBreadcrumbSchema(breadcrumbItems)} />
       <Navbar />
       <div className="page-top-spacer"></div>
 
       {/* Banner / Header Hero - Expansive Widescreen */}
       <div className="relative w-full h-72 sm:h-96 2xl:h-[420px] overflow-hidden bg-slate-900 border-b border-white/10 shadow-2xl">
         {/* Quick Back to Manga Catalog Link */}
-        <div className="absolute top-4 left-4 sm:left-8 lg:left-12 z-20">
+        <div className="absolute top-4 left-4 sm:left-8 lg:left-12 z-20 flex items-center gap-3">
           <Link
             href="/manga"
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-white/15 text-slate-300 hover:text-white text-xs font-semibold backdrop-blur-md transition-all shadow-lg focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
@@ -48,7 +77,7 @@ export default async function MangaDetailPage({
         {manga.bannerImage ? (
           <Image
             src={manga.bannerImage}
-            alt={manga.title}
+            alt={`${manga.title} official banner artwork`}
             fill
             className="object-cover opacity-35 blur-sm scale-105"
             priority
@@ -56,7 +85,7 @@ export default async function MangaDetailPage({
         ) : manga.posterImage ? (
           <Image
             src={manga.posterImage}
-            alt={manga.title}
+            alt={`${manga.title} cover art`}
             fill
             className="object-cover opacity-25 blur-md scale-105"
             priority
@@ -68,7 +97,12 @@ export default async function MangaDetailPage({
         <div className="absolute bottom-6 left-4 sm:left-8 lg:left-12 max-w-[1720px] 2xl:max-w-[1920px] mx-auto flex items-end gap-6 z-10">
           <div className="relative w-28 sm:w-44 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 shrink-0 hidden xs:block bg-slate-800">
             {manga.posterImage && (
-              <Image src={manga.posterImage} alt={manga.title} fill className="object-cover" />
+              <Image
+                src={manga.posterImage}
+                alt={`${manga.title} manga volume cover visual`}
+                fill
+                className="object-cover"
+              />
             )}
           </div>
 
@@ -94,51 +128,53 @@ export default async function MangaDetailPage({
             {manga.romajiTitle && manga.romajiTitle !== manga.title && (
               <p className="text-xs sm:text-sm text-slate-400 font-medium">{manga.romajiTitle}</p>
             )}
-
-
           </div>
         </div>
       </div>
 
       {/* Main Body - Expansive Desktop / TV Container */}
-      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12 mt-8 grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-        {/* Left Column: Synopsis, Genres & Info */}
-        <div className="space-y-6">
-          <div className="p-6 bg-slate-900/60 border border-white/10 rounded-3xl space-y-4 shadow-xl">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-cyan-400" />
-              Synopsis
-            </h2>
-            <p className="text-sm text-slate-300 leading-relaxed max-h-96 overflow-y-auto pr-1 hide-scrollbar">
-              {manga.description || "No synopsis available for this title."}
-            </p>
+      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12 mt-4 space-y-6">
+        <Breadcrumbs items={breadcrumbItems.slice(1)} />
 
-            {manga.genres.length > 0 && (
-              <div className="pt-4 border-t border-white/5 space-y-2">
-                <p className="text-xs font-semibold text-slate-400">Genres</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {manga.genres.map((g) => (
-                    <span
-                      key={g}
-                      className="px-2.5 py-1 rounded-lg bg-white/5 text-slate-300 text-xs font-medium border border-white/5 hover:border-cyan-500/30 transition-colors"
-                    >
-                      {g}
-                    </span>
-                  ))}
+        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+          {/* Left Column: Synopsis, Genres & Info */}
+          <div className="space-y-6">
+            <div className="p-6 bg-slate-900/60 border border-white/10 rounded-3xl space-y-4 shadow-xl">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-cyan-400" />
+                Synopsis
+              </h2>
+              <p className="text-sm text-slate-300 leading-relaxed max-h-96 overflow-y-auto pr-1 hide-scrollbar">
+                {manga.description || "No synopsis available for this title."}
+              </p>
+
+              {manga.genres.length > 0 && (
+                <div className="pt-4 border-t border-white/5 space-y-2">
+                  <p className="text-xs font-semibold text-slate-400">Genres</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {manga.genres.map((g) => (
+                      <span
+                        key={g}
+                        className="px-2.5 py-1 rounded-lg bg-white/5 text-slate-300 text-xs font-medium border border-white/5 hover:border-cyan-500/30 transition-colors"
+                      >
+                        {g}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Right Column: Chapters Index Client */}
-        <div className="lg:col-span-2 xl:col-span-3">
-          <MangaDetailChaptersClient
-            mangaId={manga.id}
-            chapters={chapters}
-            mangaTitle={manga.title}
-            posterImage={manga.posterImage}
-          />
+          {/* Right Column: Chapters Index Client */}
+          <div className="lg:col-span-2 xl:col-span-3">
+            <MangaDetailChaptersClient
+              mangaId={manga.id}
+              chapters={chapters}
+              mangaTitle={manga.title}
+              posterImage={manga.posterImage}
+            />
+          </div>
         </div>
       </div>
     </div>

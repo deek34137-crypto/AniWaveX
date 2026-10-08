@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
 import PublicProfileClient from "./PublicProfileClient";
+import { getAbsoluteUrl } from "@/lib/seo/site-config";
 
 interface Props {
   params: Promise<{ username: string }>;
@@ -12,10 +14,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const decoded = decodeURIComponent(username);
 
   return {
-    title: `${decoded}'s Anime Profile - AniWaveX`,
+    title: `${decoded}'s Anime Profile — AniWaveX`,
     description: `Explore ${decoded}'s favorite anime masterpieces, watch statistics, and tier lists on AniWaveX.`,
+    alternates: {
+      canonical: getAbsoluteUrl(`/user/${username}`),
+    },
+    robots: {
+      index: false,
+      follow: true,
+    },
     openGraph: {
-      title: `${decoded}'s Anime Profile - AniWaveX`,
+      title: `${decoded}'s Anime Profile — AniWaveX`,
       description: `Explore ${decoded}'s favorite anime masterpieces, watch statistics, and tier lists on AniWaveX.`,
     },
   };
@@ -43,7 +52,7 @@ export default async function PublicProfilePage({ params }: Props) {
 
   // 2. Determine target user ID
   let targetUserId = profileRecord?.id;
-  
+
   if (!targetUserId && currentUser) {
     const currentUsername = (
       currentUser.user_metadata?.username ||
@@ -118,6 +127,11 @@ export default async function PublicProfilePage({ params }: Props) {
         decodedUsername.toLowerCase()
     ? currentUser
     : null;
+
+  // Prevent soft 404: if user doesn't exist and has no public content, return actual 404
+  if (!profileRecord && !profileUser && tierLists.length === 0) {
+    notFound();
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 pb-32">

@@ -5,8 +5,12 @@ import { isAdminUser } from "@/lib/admin";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Live Analytics & Traffic Heartbeat - AniWaveX",
-  description: "View real-time concurrent users, daily unique visitors, and site traffic telemetry.",
+  title: "Live Analytics & Traffic Heartbeat — AniWaveX",
+  description: "Internal real-time concurrent users, daily unique visitors, and site traffic telemetry.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default async function AnalyticsPage() {

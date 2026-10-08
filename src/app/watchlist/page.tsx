@@ -1,6 +1,10 @@
 import Navbar from "@/components/Navbar";
 import { createClient } from "@/lib/supabase/server";
 import WatchlistGrid from "@/components/profile/WatchlistGrid";
+import { generatePrivateMetadata } from "@/lib/seo/metadata";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = generatePrivateMetadata("Watchlist & Bookmarks");
 
 export default async function WatchlistPage() {
   const supabase = await createClient();

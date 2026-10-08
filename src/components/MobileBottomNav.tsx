@@ -146,6 +146,15 @@ function BottomNavContent() {
 
   const exploreLinks = [
     {
+      title: "Anime Discovery Hub",
+      subtitle: "Explore anime by genres, seasons & years",
+      icon: Film,
+      iconColor: "text-blue-400",
+      iconBg: "bg-blue-500/10 border-blue-500/20",
+      href: "/anime",
+      badge: "Hub",
+    },
+    {
       title: "Anime Tier List Maker",
       subtitle: "Drag-and-drop ranking & community tiers",
       icon: Trophy,

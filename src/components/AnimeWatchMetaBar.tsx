@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Star, Calendar, Clock, ChevronDown, Sparkles, Building2 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import WatchlistDropdown from "@/components/WatchlistDropdown";
@@ -36,7 +37,7 @@ export default function AnimeWatchMetaBar({
             <div className="w-14 sm:w-16 md:w-20 aspect-[2/3] shrink-0 rounded-xl overflow-hidden shadow-lg border border-white/15 relative bg-slate-900 group">
               <AnimeImage
                 src={anime.posterImage}
-                alt={anime.title}
+                alt={`${anime.title} thumbnail`}
                 fill
                 sizes="(max-width: 640px) 56px, 80px"
                 className="object-cover transform transition-transform duration-300 group-hover:scale-105"
@@ -54,12 +55,13 @@ export default function AnimeWatchMetaBar({
               )}
               {anime.tags && anime.tags.length > 0 && (
                 anime.tags.slice(0, 3).map((tag: string) => (
-                  <span
+                  <Link
                     key={tag}
-                    className="px-2 py-0.5 bg-white/5 text-slate-300 text-[10px] sm:text-[11px] font-medium rounded-md border border-white/5 truncate max-w-[120px]"
+                    href={`/genre/${tag.toLowerCase().replace(/\s+/g, '-')}`}
+                    className="px-2 py-0.5 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[10px] sm:text-[11px] font-medium rounded-md border border-white/5 truncate max-w-[120px] transition-colors"
                   >
                     {tag}
-                  </span>
+                  </Link>
                 ))
               )}
               <span className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] border border-white/10 font-bold">
@@ -81,10 +83,10 @@ export default function AnimeWatchMetaBar({
                 </div>
               )}
               {anime.year && (
-                <div className="flex items-center gap-1 text-slate-400">
+                <Link href={`/year/${anime.year}`} className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors">
                   <Calendar className="w-3 h-3 text-slate-400" />
                   <span>{anime.year}</span>
-                </div>
+                </Link>
               )}
               {(anime.duration || anime.totalEpisodes) && (
                 <div className="flex items-center gap-1 text-slate-400">

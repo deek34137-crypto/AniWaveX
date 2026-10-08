@@ -6,6 +6,17 @@ import MangaCard from "@/components/manga/MangaCard";
 import SearchInput from "./SearchInput";
 import Link from "next/link";
 import { Sparkles, TrendingUp, Film, BookOpen, Layers } from "lucide-react";
+import { generateSearchMetadata } from "@/lib/seo/metadata";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; type?: string }>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  return generateSearchMetadata(params.q, params.type);
+}
 
 export default async function SearchPage({
   searchParams,

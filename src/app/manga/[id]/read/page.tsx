@@ -1,6 +1,31 @@
 import MangaReaderClient from "@/components/manga/MangaReaderClient";
 import { getMangaDetails, getMangaChapters } from "@/lib/manga/service";
 import { notFound } from "next/navigation";
+import { getAbsoluteUrl } from "@/lib/seo/site-config";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ chapterId?: string; ch?: string; page?: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const sParams = await searchParams;
+  const chNum = sParams.ch || "1";
+
+  return {
+    title: `Reading Chapter ${chNum} — AniWaveX`,
+    robots: {
+      index: false,
+      follow: true,
+    },
+    alternates: {
+      canonical: getAbsoluteUrl(`/manga/${id}`),
+    },
+  };
+}
 
 export default async function MangaReaderPage({
   params,

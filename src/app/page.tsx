@@ -5,6 +5,25 @@ import JumpBackInRow from "@/components/JumpBackInRow";
 import TodayAiringRow from "@/components/TodayAiringRow";
 import { getTrendingAnime, getTopRatedAnime, getGenreAnime } from "@/lib/api";
 import { getUnifiedAiringSchedule } from "@/lib/schedule";
+import { JsonLd, createItemListSchema } from "@/lib/seo/jsonld";
+import { SITE_CONFIG, getAbsoluteUrl } from "@/lib/seo/site-config";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "AniWaveX — Watch Anime Online & Discover Latest Series",
+  description: SITE_CONFIG.description,
+  alternates: {
+    canonical: getAbsoluteUrl("/"),
+  },
+  openGraph: {
+    title: "AniWaveX — Watch Anime Online & Discover Latest Series",
+    description: SITE_CONFIG.description,
+    url: getAbsoluteUrl("/"),
+    siteName: SITE_CONFIG.name,
+    images: [{ url: SITE_CONFIG.ogImage, width: 1200, height: 630, alt: "AniWaveX Anime Discovery" }],
+    type: "website",
+  },
+};
 
 export default async function Home() {
   const [trending, topRated, romance, comedy, isekai, airingSchedule] = await Promise.all([
@@ -21,8 +40,15 @@ export default async function Home() {
   // The rest for the trending row
   const trendingRow = trending.slice(5);
 
+  const featuredItemList = trending.slice(0, 10).map((a: any) => ({
+    name: a.title,
+    path: `/anime/${a.slug}`,
+    image: a.posterImage || a.backgroundImage,
+  }));
+
   return (
     <main className="min-h-screen bg-slate-950 pb-32">
+      <JsonLd schema={createItemListSchema("Popular & Trending Anime Series", featuredItemList)} />
       <Navbar />
       <div className="page-top-spacer"></div>
 
@@ -40,7 +66,7 @@ export default async function Home() {
           <AnimeRow
             title="Best of Romance"
             items={romance}
-            viewAllHref="/catalog?genre=romance&sort=popularity"
+            viewAllHref="/genre/romance"
           />
         )}
 
@@ -48,7 +74,7 @@ export default async function Home() {
           <AnimeRow
             title="Top Comedy"
             items={comedy}
-            viewAllHref="/catalog?genre=comedy&sort=popularity"
+            viewAllHref="/genre/comedy"
           />
         )}
 
@@ -56,11 +82,10 @@ export default async function Home() {
           <AnimeRow
             title="Best Isekai"
             items={isekai}
-            viewAllHref="/catalog?genre=isekai&sort=popularity"
+            viewAllHref="/genre/isekai"
           />
         )}
       </div>
     </main>
   );
 }
-

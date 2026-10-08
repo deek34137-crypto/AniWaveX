@@ -21,6 +21,7 @@ export default async function Navbar() {
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-4 lg:gap-6 tv:gap-8 ml-6 tv:ml-10">
             <Link href="/" prefetch={true} className="text-sm tv:text-base font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2.5 py-1.5">Home</Link>
+            <Link href="/anime" prefetch={true} className="text-sm tv:text-base font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2.5 py-1.5">Anime</Link>
             <Link href="/catalog" prefetch={true} className="text-sm tv:text-base font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2.5 py-1.5">Catalog</Link>
             <Link href="/manga" prefetch={true} className="text-sm tv:text-base font-semibold text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1 font-bold focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2.5 py-1.5">Manga</Link>
             <Link href="/airing" prefetch={true} className="text-sm tv:text-base font-semibold text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none rounded-lg px-2.5 py-1.5">Schedule</Link>

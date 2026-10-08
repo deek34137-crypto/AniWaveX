@@ -1,45 +1,30 @@
 import { Suspense } from "react";
-import { getAnimeData, getRecommendedAnime } from "@/lib/api";
+import { getAnimeData, getRecommendedAnime, GENRE_MAP } from "@/lib/api";
 import AnimePageClient from "./AnimePageClient";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Metadata } from "next";
+import Navbar from "@/components/Navbar";
+import { generateAnimeMetadata } from "@/lib/seo/metadata";
+import { JsonLd, createAnimeSeriesSchema, createBreadcrumbSchema } from "@/lib/seo/jsonld";
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
   const p = await params;
   const data = await getAnimeData(p.slug);
-  
-  if (!data) return { title: 'Anime Not Found | AniWaveX' };
-  
-  const title = `${data.title} - Watch on AniWaveX`;
-  const description = data.description?.slice(0, 160) || `Watch ${data.title} in high quality on AniWaveX.`;
-  const imageUrl = data.posterImage || data.backgroundImage || "https://media.kitsu.io/anime/poster_images/1/large.jpg";
 
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      images: [
-        {
-          url: imageUrl,
-          width: 800,
-          height: 1200, // typical anime poster aspect ratio
-        },
-      ],
-      type: 'video.movie',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: [imageUrl],
-    }
-  };
+  if (!data) {
+    return {
+      title: "Anime Not Found | AniWaveX",
+      robots: { index: false, follow: true },
+    };
+  }
+
+  return generateAnimeMetadata(data);
 }
-
-import Navbar from "@/components/Navbar";
 
 export default async function AnimePage({
   params,
@@ -48,7 +33,7 @@ export default async function AnimePage({
 }) {
   const p = await params;
   const data = await getAnimeData(p.slug);
-  
+
   if (!data) {
     notFound();
   }
@@ -58,7 +43,9 @@ export default async function AnimePage({
     getRecommendedAnime(data.slug, data.tags, data.title),
     createClient(),
   ]);
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   let initialBookmarked = false;
   let initialBookmarkStatus = null;
   let lastWatchedEpisode = null;
@@ -67,15 +54,25 @@ export default async function AnimePage({
 
   if (user) {
     const [bookmarkRes, historyRes] = await Promise.all([
-      supabase.from('bookmarks').select('id, status').eq('user_id', user.id).eq('anime_slug', data.slug).maybeSingle(),
-      supabase.from('watch_history').select('last_episode_watched, progress_seconds, total_seconds').eq('user_id', user.id).eq('anime_slug', data.slug).maybeSingle()
+      supabase
+        .from("bookmarks")
+        .select("id, status")
+        .eq("user_id", user.id)
+        .eq("anime_slug", data.slug)
+        .maybeSingle(),
+      supabase
+        .from("watch_history")
+        .select("last_episode_watched, progress_seconds, total_seconds")
+        .eq("user_id", user.id)
+        .eq("anime_slug", data.slug)
+        .maybeSingle(),
     ]);
 
     if (bookmarkRes.data) {
       initialBookmarked = true;
-      initialBookmarkStatus = bookmarkRes.data.status || 'watching';
+      initialBookmarkStatus = bookmarkRes.data.status || "watching";
     }
-    
+
     if (historyRes.data) {
       lastWatchedEpisode = historyRes.data.last_episode_watched;
       serverProgressSeconds = historyRes.data.progress_seconds;
@@ -83,18 +80,34 @@ export default async function AnimePage({
     }
   }
 
+  // Determine primary genre for breadcrumbs
+  const primaryGenre = (data.tags || []).find(
+    (t: string) => GENRE_MAP[t.toLowerCase()]
+  );
+  const primaryGenreSlug = primaryGenre ? primaryGenre.toLowerCase() : null;
+
+  const breadcrumbItems = [
+    { name: "Anime", path: "/anime" },
+    ...(primaryGenreSlug
+      ? [{ name: `${primaryGenre} Anime`, path: `/genre/${primaryGenreSlug}` }]
+      : []),
+    { name: data.title, path: `/anime/${data.slug}` },
+  ];
+
   return (
     <>
+      <JsonLd schema={createAnimeSeriesSchema(data)} />
+      <JsonLd schema={createBreadcrumbSchema(breadcrumbItems)} />
       <Navbar />
       <div className="page-top-spacer" />
       <Suspense fallback={null}>
-        <AnimePageClient 
-          data={data} 
+        <AnimePageClient
+          data={data}
           recommendations={recommendations}
-          initialBookmarked={initialBookmarked} 
+          initialBookmarked={initialBookmarked}
           initialBookmarkStatus={initialBookmarkStatus}
-          user={user} 
-          lastWatchedEpisode={lastWatchedEpisode} 
+          user={user}
+          lastWatchedEpisode={lastWatchedEpisode}
           serverProgressSeconds={serverProgressSeconds}
           serverTotalSeconds={serverTotalSeconds}
         />

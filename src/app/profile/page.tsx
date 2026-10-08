@@ -4,6 +4,10 @@ import AccountCenterClient from "./AccountCenterClient";
 import ProfileAuthClient from "./ProfileAuthClient";
 import { Suspense } from "react";
 import { UserStats } from "@/types/account";
+import { generatePrivateMetadata } from "@/lib/seo/metadata";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = generatePrivateMetadata("Account Center");
 
 export default async function ProfilePage({
   searchParams,

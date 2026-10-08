@@ -1,12 +1,26 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { createClient } from "@/lib/supabase/server";
 import CommunityTierListsClient from "./CommunityTierListsClient";
+import { getAbsoluteUrl, SITE_CONFIG } from "@/lib/seo/site-config";
 
 export const metadata: Metadata = {
-  title: "Community Anime Tier Lists - AniWaveX",
-  description: "Explore, upvote, and clone anime tier lists created by the AniWaveX community.",
+  title: "Community Anime Tier Lists & Rankings — AniWaveX",
+  description:
+    "Explore, upvote, and clone community-ranked anime tier lists created by fans on AniWaveX. Discover top rated franchises and rankings.",
+  alternates: {
+    canonical: getAbsoluteUrl("/tier-list/community"),
+  },
+  openGraph: {
+    title: "Community Anime Tier Lists — AniWaveX",
+    description: "Browse popular community-created anime tier lists and rankings.",
+    url: getAbsoluteUrl("/tier-list/community"),
+    siteName: SITE_CONFIG.name,
+    images: [{ url: SITE_CONFIG.ogImage, width: 1200, height: 630, alt: "Community Anime Tier Lists on AniWaveX" }],
+    type: "website",
+  },
 };
 
 export default async function CommunityTierListsPage() {
@@ -36,7 +50,13 @@ export default async function CommunityTierListsPage() {
     <main className="min-h-screen bg-slate-950 pb-32">
       <Navbar />
       <div className="page-top-spacer" />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
+        <Breadcrumbs
+          items={[
+            { name: "Tier Lists", path: "/tier-list" },
+            { name: "Community Rankings", path: "/tier-list/community" },
+          ]}
+        />
         <Suspense fallback={<div className="text-white py-12 text-center text-sm font-bold">Loading Community Feed...</div>}>
           <CommunityTierListsClient 
             initialLists={tierLists || []} 

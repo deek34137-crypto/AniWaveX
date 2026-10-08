@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:seo": "node scripts/seo-audit.mjs"
   },
   "dependencies": {
     "@capacitor/core": "^7.6.9",

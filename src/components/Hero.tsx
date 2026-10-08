@@ -1,6 +1,7 @@
 "use client";
 
 import { Play, Star, Calendar, Clock } from "lucide-react";
+import Link from "next/link";
 import { useAuth } from "@/providers/AuthProvider";
 import { WatchlistStatus } from "@/lib/watchlist";
 import AnimeImage from "@/components/AnimeImage";
@@ -37,7 +38,7 @@ export default function Hero({
           <div className="absolute inset-0 sm:hidden">
             <AnimeImage
               src={bgImage}
-              alt=""
+              alt={`${anime.title} ambient backdrop`}
               fill
               sizes="100vw"
               className="object-cover blur-2xl opacity-40 scale-110"
@@ -46,7 +47,7 @@ export default function Hero({
           {/* Main Sharp Hero Banner */}
           <AnimeImage
             src={bgImage}
-            alt={anime.title}
+            alt={`${anime.title} official visual banner`}
             fill
             priority
             sizes="100vw"
@@ -72,7 +73,7 @@ export default function Hero({
             <div className="w-24 aspect-[2/3] shrink-0 rounded-xl overflow-hidden shadow-2xl border border-white/20 relative group bg-slate-900 shadow-black/80">
               <AnimeImage 
                 src={anime.posterImage} 
-                alt={anime.title} 
+                alt={`${anime.title} poster visual`} 
                 fill
                 priority
                 sizes="96px"
@@ -89,14 +90,17 @@ export default function Hero({
                   </span>
                 )}
                 {anime.tags && anime.tags[0] && (
-                  <span className="px-2 py-0.5 bg-white/5 text-slate-300 text-[10px] font-medium rounded-md border border-white/5 truncate max-w-[120px]">
+                  <Link
+                    href={`/genre/${anime.tags[0].toLowerCase().replace(/\s+/g, '-')}`}
+                    className="px-2 py-0.5 bg-white/5 hover:bg-white/10 text-slate-300 text-[10px] font-medium rounded-md border border-white/5 truncate max-w-[120px] transition-colors"
+                  >
                     {anime.tags[0]}
-                  </span>
+                  </Link>
                 )}
               </div>
-              <h1 className="text-base sm:text-2xl font-black text-white tracking-tight drop-shadow-xl leading-snug line-clamp-2">
+              <p className="text-base sm:text-2xl font-black text-white tracking-tight drop-shadow-xl leading-snug line-clamp-2" aria-hidden="true">
                 {anime.title}
-              </h1>
+              </p>
               <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-300">
                 {anime.rating && anime.rating !== "N/A" && (
                   <div className="flex items-center gap-1 text-yellow-400">
@@ -105,10 +109,10 @@ export default function Hero({
                   </div>
                 )}
                 {anime.year && (
-                  <div className="flex items-center gap-1 text-slate-400">
+                  <Link href={`/year/${anime.year}`} className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors">
                     <Calendar className="w-3 h-3 text-slate-400" />
                     <span>{anime.year}</span>
-                  </div>
+                  </Link>
                 )}
                 <span className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] border border-white/10 font-bold">HD</span>
               </div>
@@ -121,7 +125,7 @@ export default function Hero({
           <div className="hidden md:block w-64 aspect-[2/3] shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative group bg-slate-900">
             <AnimeImage 
               src={anime.posterImage} 
-              alt={anime.title} 
+              alt={`${anime.title} key visual poster`} 
               fill
               sizes="256px"
               className="object-cover transform transition-transform duration-500 group-hover:scale-105"
@@ -140,14 +144,18 @@ export default function Hero({
             )}
             {anime.tags && anime.tags.length > 0 ? (
               anime.tags.slice(0, 5).map((tag: string) => (
-                <span key={tag} className="px-2.5 py-0.5 bg-white/5 text-slate-300 text-[11px] sm:text-xs font-medium rounded-md border border-white/5">
+                <Link 
+                  key={tag} 
+                  href={`/genre/${tag.toLowerCase().replace(/\s+/g, '-')}`}
+                  className="px-2.5 py-0.5 bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white text-[11px] sm:text-xs font-medium rounded-md border border-white/5 hover:border-cyan-500/30 transition-colors"
+                >
                   {tag}
-                </span>
+                </Link>
               ))
             ) : null}
           </div>
 
-          {/* Main Title (Shown on desktop, or on mobile only if no poster) */}
+          {/* Main Title (Semantic H1 for page SEO) */}
           <h1 className={`text-2xl sm:text-4xl md:text-6xl font-black text-white tracking-tight drop-shadow-xl leading-tight line-clamp-2 ${anime.posterImage ? 'hidden md:block' : 'block'}`}>
             {anime.title}
           </h1>
@@ -158,10 +166,12 @@ export default function Hero({
               <Star className="w-4 h-4 fill-current" />
               <span className="text-sm sm:text-base font-bold">{anime.rating}</span>
             </div>
-            <div className="flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-              <span>{anime.year}</span>
-            </div>
+            {anime.year && (
+              <Link href={`/year/${anime.year}`} className="flex items-center gap-1 text-slate-300 hover:text-white transition-colors">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <span>{anime.year}</span>
+              </Link>
+            )}
             <div className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span>{anime.duration || '24m'}</span>
