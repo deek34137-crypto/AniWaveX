@@ -73,6 +73,7 @@ interface InPageVideoPlayerProps {
   anilistId?: number | null;
   animeId?: string | number;
   initialProgressSeconds?: number | null;
+  targetSeekSeconds?: number | null;
 }
 
 export function getStoredEpisodeProgress(
@@ -122,6 +123,20 @@ export function getStoredEpisodeProgress(
   return 0;
 }
 
+export function cleanServerLabel(quality: string): string {
+  if (!quality) return "Server";
+  return quality
+    .replace(/hianime/gi, "HD-2")
+    .replace(/justanime/gi, "HD-1")
+    .replace(/kickassanime|kaa/gi, "Server 2")
+    .replace(/reanime/gi, "Ultra HD")
+    .replace(/anikoto|megacloud/gi, "Server 1")
+    .replace(/toonstream/gi, "Server Hindi")
+    .replace(/vidmoly/gi, "Server Stream")
+    .replace(/gogoanime/gi, "Server Fast")
+    .trim();
+}
+
 export default function InPageVideoPlayer({ 
   episode, 
   episodes, 
@@ -134,7 +149,8 @@ export default function InPageVideoPlayer({
   user: initialUser, 
   anilistId, 
   animeId,
-  initialProgressSeconds
+  initialProgressSeconds,
+  targetSeekSeconds
 }: InPageVideoPlayerProps) {
   const { user: authUser, supabase } = useAuth();
   const [activeTab, setActiveTab] = useState<"sub" | "dub" | "hindi">("sub");
@@ -146,6 +162,9 @@ export default function InPageVideoPlayer({
   const [selectedServerIndex, setSelectedServerIndex] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [initialTime, setInitialTime] = useState<number>(() => {
+    if (typeof targetSeekSeconds === "number" && targetSeekSeconds > 0) {
+      return Math.floor(targetSeekSeconds);
+    }
     return getStoredEpisodeProgress(animeSlug, episode?.id, initialProgressSeconds);
   });
   const [currentUser, setCurrentUser] = useState<any>(authUser || initialUser);
@@ -209,6 +228,15 @@ export default function InPageVideoPlayer({
     setCurrentUser(liveUser);
     currentUserRef.current = liveUser;
   }, [authUser, initialUser]);
+
+  useEffect(() => {
+    if (targetSeekSeconds && targetSeekSeconds > 0) {
+      const mins = Math.floor(targetSeekSeconds / 60);
+      const secs = Math.floor(targetSeekSeconds % 60);
+      const formatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+      showToast(`Jumped to screenshot scene at ${formatted} ⏱️`);
+    }
+  }, [targetSeekSeconds, showToast]);
 
 
   // Track duration separately so it can be saved to Supabase
@@ -710,13 +738,14 @@ export default function InPageVideoPlayer({
     try {
       // Gather provider names to exclude based on failed servers
       const excludedNames: string[] = [];
-      activeSources?.forEach((src, idx) => {
+      activeSources?.forEach((src: any, idx) => {
         if (failedServersRef.current.has(idx)) {
-          const lower = src.quality.toLowerCase();
-          if (lower.includes('reanime')) excludedNames.push('reanime');
-          if (lower.includes('megacloud') || lower.includes('anikoto')) excludedNames.push('anikoto', 'local-anikoto');
-          if (lower.includes('justanime')) excludedNames.push('justanime');
-          if (lower.includes('kickassanime') || lower.includes('kaa')) excludedNames.push('kaa');
+          const lower = `${src.provider || ''} ${src.quality || ''}`.toLowerCase();
+          if (lower.includes('reanime') || lower.includes('ultra hd')) excludedNames.push('reanime');
+          if (lower.includes('megacloud') || lower.includes('anikoto') || lower.includes('server cloud') || lower.includes('server 1')) excludedNames.push('anikoto', 'local-anikoto');
+          if (lower.includes('justanime') || lower.includes('hd-1')) excludedNames.push('justanime');
+          if (lower.includes('kickassanime') || lower.includes('kaa') || lower.includes('server 2')) excludedNames.push('kaa');
+          if (lower.includes('hianime') || lower.includes('hd-2')) excludedNames.push('hianime');
           if (lower.includes('animegg')) excludedNames.push('animegg');
           if (lower.includes('anibd')) excludedNames.push('anibd');
         }
@@ -1302,7 +1331,7 @@ export default function InPageVideoPlayer({
                           e.stopPropagation();
                           handleSelectServer(idx);
                         }}
-                        title={latency !== undefined ? `Server: ${source.quality} • ${latBadge.text}` : `Server: ${source.quality}`}
+                        title={latency !== undefined ? `Server: ${cleanServerLabel(source.quality)} • ${latBadge.text}` : `Server: ${cleanServerLabel(source.quality)}`}
                         className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer select-none ${
                           validServerIndex === idx 
                             ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400' 
@@ -1310,7 +1339,7 @@ export default function InPageVideoPlayer({
                         }`}
                       >
                         <Server className="w-3 h-3 opacity-70 shrink-0" />
-                        <span>{source.quality}</span>
+                        <span>{cleanServerLabel(source.quality)}</span>
                         {latency !== undefined && (
                           <span
                             className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -1536,7 +1565,7 @@ export default function InPageVideoPlayer({
                             : 'bg-slate-800 border-white/10 text-slate-300 hover:bg-slate-700 hover:text-white'
                         }`}
                       >
-                        {source.quality}
+                        {cleanServerLabel(source.quality)}
                       </button>
                     ))
                   )}

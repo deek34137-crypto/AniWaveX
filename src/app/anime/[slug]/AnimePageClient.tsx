@@ -8,6 +8,22 @@ import Recommendations from "@/components/Recommendations";
 import InPageVideoPlayer from "@/components/InPageVideoPlayer";
 import { useAuth } from "@/providers/AuthProvider";
 
+function parseTimestamp(raw?: string | null): number | null {
+  if (!raw) return null;
+  const str = raw.trim();
+  if (str.includes(":")) {
+    const parts = str.split(":").map(Number);
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return Math.floor(parts[0] * 60 + parts[1]);
+    }
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      return Math.floor(parts[0] * 3600 + parts[1] * 60 + parts[2]);
+    }
+  }
+  const num = parseFloat(str);
+  return !isNaN(num) && num > 0 ? Math.floor(num) : null;
+}
+
 export default function AnimePageClient({ 
   data, 
   recommendations,
@@ -32,13 +48,17 @@ export default function AnimePageClient({
   const { user: authUser } = useAuth();
   const currentUser = authUser || initialUser;
   const searchParams = useSearchParams();
+  const [targetSeekSeconds, setTargetSeekSeconds] = useState<number | null>(() => {
+    return parseTimestamp(searchParams.get("t") || searchParams.get("time"));
+  });
 
-  // On mount: handle ?ep= param (from Continue Watching) or resolve best episode (local + server)
+  // On mount: handle ?ep= param (from Continue Watching / Screenshot Search) or resolve best episode (local + server)
   useEffect(() => {
     if (!data) return;
 
     const epParam = searchParams.get("ep");
     const playParam = searchParams.get("play");
+    const timeParam = searchParams.get("t") || searchParams.get("time");
 
     // Helper to auto-play if ?play=1 is requested
     const triggerAutoPlayIfRequested = (targetEpId?: number | null) => {
@@ -165,15 +185,20 @@ export default function AnimePageClient({
             episode={activeEpisode} 
             episodes={data.episodes}
             initialProgressSeconds={activeEpisode?.id === serverLastWatched ? serverProgressSeconds : null}
+            targetSeekSeconds={targetSeekSeconds}
             onEpisodeChange={(ep) => {
               setActiveEpisode(ep);
+              setTargetSeekSeconds(null);
               if (ep?.id) setLastWatchedEpisode(ep.id);
               // Only scroll to top if not in fullscreen mode
               if (typeof document !== 'undefined' && !document.fullscreenElement) {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }
             }}
-            onClose={() => setActiveEpisode(null)}
+            onClose={() => {
+              setActiveEpisode(null);
+              setTargetSeekSeconds(null);
+            }}
             animeSlug={data.slug}
             animeTitle={data.title}
             animeType={data.type}

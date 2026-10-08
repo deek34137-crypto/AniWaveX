@@ -126,14 +126,16 @@ function extractWorkerSources(
 
   const langTag = audio === 'hindi' ? 'Hindi Dub' : (audio === 'dub' ? 'Eng Dub' : 'Sub');
   const providerLabel = provider === 'justanime'
-    ? 'JustAnime'
+    ? 'HD-1'
     : provider === 'hianime'
-    ? 'HiAnime' 
+    ? 'HD-2' 
     : provider === 'anikoto' 
-    ? 'MegaCloud' 
+    ? 'Server 1' 
     : provider === 'kaa' 
-    ? 'KickAssAnime' 
-    : provider.toUpperCase();
+    ? 'Server 2' 
+    : provider === 'reanime'
+    ? 'Ultra HD'
+    : 'Server HD';
 
   // 1. Process all streams from data.streams array
   if (Array.isArray(data.streams)) {
@@ -147,6 +149,7 @@ function extractWorkerSources(
           url: createSignedProxyUrl(s.url, 86400, ref),
           quality: `${serverName} [${langTag}]`,
           isM3U8: true,
+          provider,
         });
 
         // Collect subtitles attached to this stream
@@ -163,6 +166,7 @@ function extractWorkerSources(
           url: s.url,
           quality: `${serverName} [${langTag}]`,
           isM3U8: false,
+          provider,
         });
       }
     }
@@ -178,6 +182,7 @@ function extractWorkerSources(
         url: proxyUrl,
         quality: `${providerLabel} [${langTag}]`,
         isM3U8: true,
+        provider,
       });
     }
   }
@@ -394,7 +399,7 @@ async function fetchHindiWorkerStream(
 
           sources.push({
             url: resolvedUrl,
-            quality: s.quality || `${s.server || 'ToonStream'} [Hindi Dub]`,
+            quality: s.quality || `${s.server ? `Server Hindi (${s.server})` : 'Server Hindi'} [Hindi Dub]`,
             isM3U8,
             isHindi: true,
           });
@@ -409,7 +414,7 @@ async function fetchHindiWorkerStream(
 
           sources.push({
             url: resolvedUrl,
-            quality: "ToonStream [Hindi Dub]",
+            quality: "Server Hindi [Hindi Dub]",
             isM3U8,
             isHindi: true,
           });
@@ -553,9 +558,9 @@ async function fetchLocalHindiStream(
         if (serverUrl && serverUrl.startsWith("http") && !isDeadOrBlockedDomain(serverUrl)) {
           const isM3U8 = serverUrl.includes(".m3u8");
           sources.push({
-            server: `${serverName || "ToonStream"} (Hindi Dub)`,
+            server: "Server Hindi (Hindi Dub)",
             url: serverUrl,
-            quality: `${serverName || "ToonStream"} [Hindi Dub]`,
+            quality: "Server Hindi [Hindi Dub]",
             isM3U8,
             isHindi: true,
           });
@@ -590,9 +595,9 @@ async function fetchLocalHindiStream(
               const m3u8Match = vmText.match(/https?:\/\/[^"'\s]+\.m3u8[^"'\s]*/i);
               if (m3u8Match) {
                 sources.unshift({
-                  server: "VidMoly (Hindi HLS)",
+                  server: "Server Stream (Hindi HLS)",
                   url: m3u8Match[0],
-                  quality: "VidMoly [Hindi Dub]",
+                  quality: "Server Stream [Hindi Dub]",
                   isM3U8: true,
                   isHindi: true,
                 });
@@ -602,7 +607,7 @@ async function fetchLocalHindiStream(
           } catch {}
         }
 
-        const label = ifr.includes("ruby") ? "Ruby" : ifr.includes("wish") ? "Streamwish" : ifr.includes("abyss") ? "AbyssPlayer" : ifr.includes("cloudy") ? "Cloudy" : "External Embed";
+        const label = ifr.includes("ruby") ? "Server Ruby" : ifr.includes("wish") ? "Server Fast" : ifr.includes("abyss") ? "Server HD" : ifr.includes("cloudy") ? "Server Cloud" : "Server Backup";
         sources.push({
           server: `${label} (Hindi Dub)`,
           url: ifr,
@@ -759,8 +764,9 @@ async function multiProviderProbeEngine(
           if (anikotoRes.stream_url) {
             sources.push({
               url: createSignedProxyUrl(anikotoRes.stream_url, 86400, "https://flixcloud.cc/"),
-              quality: forceSub ? "MegaCloud (HD-1) [Japanese / Sub Fallback]" : "MegaCloud (HD-1)",
+              quality: forceSub ? "Server Cloud (HD-1) [Japanese / Sub Fallback]" : "Server Cloud (HD-1)",
               isM3U8: true,
+              provider: "anikoto",
             });
           }
 
@@ -770,9 +776,10 @@ async function multiProviderProbeEngine(
               .map((s: any) => ({
                 url: s.url,
                 quality: s.server 
-                  ? (forceSub ? `MegaCloud (${s.server}) [Japanese / Sub Fallback]` : `MegaCloud (${s.server})`)
-                  : (forceSub ? "MegaCloud Embed [Japanese / Sub Fallback]" : "MegaCloud Embed"),
-                isM3U8: false
+                  ? (forceSub ? `Server Cloud (${s.server}) [Japanese / Sub Fallback]` : `Server Cloud (${s.server})`)
+                  : (forceSub ? "Server Cloud Embed [Japanese / Sub Fallback]" : "Server Cloud Embed"),
+                isM3U8: false,
+                provider: "anikoto",
               }));
 
             sources.push(...embedSources);
@@ -896,8 +903,9 @@ async function resolveStreamRaw(
         if (anikotoRes && anikotoRes.stream_url) {
           const sources = [{
             url: createSignedProxyUrl(anikotoRes.stream_url, 86400, "https://flixcloud.cc/"),
-            quality: "MegaCloud (HD-1)",
+            quality: "Server Cloud (HD-1)",
             isM3U8: true,
+            provider: "anikoto",
           }];
           return formatStreamResponse(sources, anikotoRes.subtitles || [], audio);
         }

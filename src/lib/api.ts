@@ -252,6 +252,26 @@ export const getAnimeData = cache(async (slug: string) => {
           json = { data: [idJson.data], included: idJson.included || [] };
         }
       }
+
+      // If numeric lookup on Kitsu returned no data, check if it is an AniList ID
+      if (!json.data || json.data.length === 0) {
+        try {
+          const mappedKitsuId = await resolveKitsuIdFromAnilistId(slug);
+          if (mappedKitsuId) {
+            const mappedRes = await fetch(`https://kitsu.io/api/edge/anime/${encodeURIComponent(mappedKitsuId)}?include=categories,episodes`, {
+              headers,
+              signal: AbortSignal.timeout(8000),
+              next: { revalidate: 86400 }
+            });
+            if (mappedRes.ok) {
+              const mappedJson = await mappedRes.json();
+              if (mappedJson.data) {
+                json = { data: [mappedJson.data], included: mappedJson.included || [] };
+              }
+            }
+          }
+        } catch {}
+      }
     }
 
     // 2. Fetch live metadata from Kitsu by exact slug

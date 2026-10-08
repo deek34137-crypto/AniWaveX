@@ -1,12 +1,12 @@
 /**
- * Trace.moe Screenshot Search API Client
- * - Uploads video frames / anime screenshots directly to https://api.trace.moe/search
- * - Deduplicates hits by AniList ID
- * - Enriches anime metadata using AniList GraphQL endpoint
+ * Screenshot Search Client
+ * - Uploads video frames / anime screenshots
+ * - Resolves matching episode and timestamp
+ * - Generates custom internal AniWaveX links directly to the scene on our site
  */
 
 export interface TraceMoeResult {
-  anilist: number;
+  anilist: number | { id: number; title?: any };
   filename: string;
   episode: number | string | null;
   from: number; // in seconds
@@ -18,41 +18,90 @@ export interface TraceMoeResult {
 
 export interface TraceMoeAnimeMatch {
   anilistId: number;
+  slug: string;
   title: string;
   romajiTitle?: string;
   nativeTitle?: string;
   coverImage: string;
   bannerImage?: string;
   episode: number | string | null;
+  fromSeconds: number;
+  toSeconds: number;
   timestamp: string; // e.g. "12:45"
   similarityPercent: number; // e.g. 96
   previewVideo?: string;
   previewImage?: string;
+  internalPlayUrl: string;
 }
 
 function formatTimestamp(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  if (hrs > 0) {
+    return `${hrs}:${mins < 10 ? "0" : ""}${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  }
+  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
+function generateSlug(title: string): string {
+  if (!title) return "anime";
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/**
+ * Searches Anime by screenshot image.
+ * Uses internal /api/search/image route for server-side Kitsu mapping, with client-side fallback.
+ */
 export async function searchAnimeByImage(file: File): Promise<TraceMoeAnimeMatch[]> {
   const formData = new FormData();
-  formData.append('image', file);
+  formData.append("image", file);
 
-  const res = await fetch('https://api.trace.moe/search?anilistInfo', {
-    method: 'POST',
-    body: formData,
-  });
+  // 1. Try internal API route (handles Kitsu slug resolution & server deduplication)
+  try {
+    const res = await fetch("/api/search/image", {
+      method: "POST",
+      body: formData,
+    });
 
-  if (!res.ok) {
-    if (res.status === 429) {
-      throw new Error('Trace.moe search rate limit exceeded (10 requests/minute). Please wait a moment and try again.');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.matches)) {
+        return data.matches;
+      }
+    } else {
+      const errJson = await res.json().catch(() => null);
+      if (errJson?.error) {
+        throw new Error(errJson.error);
+      }
     }
-    throw new Error(`Trace.moe image search failed with status ${res.status}`);
+  } catch (err: any) {
+    if (err.message && err.message.includes("rate limit")) {
+      throw err;
+    }
+    console.warn("[TraceMoe Client] Internal route failed, falling back to direct provider:", err?.message);
   }
 
-  const data = await res.json();
+  // 2. Direct client-side engine fallback
+  const directForm = new FormData();
+  directForm.append("image", file);
+
+  const directRes = await fetch("https://api.trace.moe/search?anilistInfo", {
+    method: "POST",
+    body: directForm,
+  });
+
+  if (!directRes.ok) {
+    if (directRes.status === 429) {
+      throw new Error("Screenshot search rate limit exceeded. Please wait a moment and try again.");
+    }
+    throw new Error(`Screenshot search failed with status ${directRes.status}`);
+  }
+
+  const data = await directRes.json();
   const rawResults: TraceMoeResult[] = data.result || [];
 
   if (!rawResults.length) {
@@ -62,10 +111,12 @@ export async function searchAnimeByImage(file: File): Promise<TraceMoeAnimeMatch
   // Deduplicate by AniList ID to keep the highest similarity match for each anime
   const bestMatches = new Map<number, TraceMoeResult>();
   for (const r of rawResults) {
-    if (!r.anilist) continue;
-    const existing = bestMatches.get(r.anilist);
+    const anilistId = typeof r.anilist === "object" ? (r.anilist as any)?.id : r.anilist;
+    if (!anilistId || typeof anilistId !== "number") continue;
+
+    const existing = bestMatches.get(anilistId);
     if (!existing || r.similarity > existing.similarity) {
-      bestMatches.set(r.anilist, r);
+      bestMatches.set(anilistId, r);
     }
   }
 
@@ -96,9 +147,9 @@ export async function searchAnimeByImage(file: File): Promise<TraceMoeAnimeMatch
 
   let mediaMap = new Map<number, any>();
   try {
-    const gqlRes = await fetch('https://graphql.anilist.co', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    const gqlRes = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ query, variables: { ids: uniqueIds } }),
     });
     if (gqlRes.ok) {
@@ -109,28 +160,40 @@ export async function searchAnimeByImage(file: File): Promise<TraceMoeAnimeMatch
       }
     }
   } catch (err) {
-    console.warn('[TraceMoe] AniList batch fetch failed:', err);
+    console.warn("[TraceMoe Client] AniList batch fetch failed:", err);
   }
 
-  // Build finalized matches sorted by similarity
+  // Build finalized matches with custom internal AniWaveX play links
   const matches: TraceMoeAnimeMatch[] = [];
   for (const [id, r] of bestMatches.entries()) {
     const meta = mediaMap.get(id);
-    const title = meta?.title?.english || meta?.title?.romaji || meta?.title?.native || r.filename || 'Unknown Anime';
-    const cover = meta?.coverImage?.extraLarge || meta?.coverImage?.large || meta?.coverImage?.medium || r.image || '';
+    const title = meta?.title?.english || meta?.title?.romaji || meta?.title?.native || r.filename || "Unknown Anime";
+    const cover = meta?.coverImage?.extraLarge || meta?.coverImage?.large || meta?.coverImage?.medium || r.image || "";
+
+    const episodeNum = typeof r.episode === "number" ? r.episode : parseInt(String(r.episode || "1"), 10) || 1;
+    const fromSeconds = Math.max(0, Math.floor(r.from || 0));
+    const toSeconds = Math.max(fromSeconds, Math.floor(r.to || fromSeconds));
+
+    // Custom internal link: leads to this anime episode and exact timestamp on our website
+    const slug = generateSlug(title) || String(id);
+    const internalPlayUrl = `/anime/${encodeURIComponent(slug)}?ep=${episodeNum}&play=1&t=${fromSeconds}`;
 
     matches.push({
       anilistId: id,
+      slug,
       title,
       romajiTitle: meta?.title?.romaji,
       nativeTitle: meta?.title?.native,
       coverImage: cover,
       bannerImage: meta?.bannerImage,
-      episode: r.episode,
-      timestamp: formatTimestamp(r.from),
+      episode: episodeNum,
+      fromSeconds,
+      toSeconds,
+      timestamp: formatTimestamp(r.from || 0),
       similarityPercent: Math.round(r.similarity * 100),
       previewVideo: r.video,
       previewImage: r.image,
+      internalPlayUrl,
     });
   }
 

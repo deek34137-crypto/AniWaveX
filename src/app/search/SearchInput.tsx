@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X, Dices, Clock, Trash2 } from "lucide-react";
+import { Search, X, Dices, Clock, Trash2, Camera } from "lucide-react";
+import ImageSearchModal from "@/components/ImageSearchModal";
 import {
   getSearchHistory,
   saveSearchQuery,
@@ -32,6 +33,8 @@ export default function SearchInput({ initialQuery = "" }: { initialQuery?: stri
   const [term, setTerm] = useState(initialQuery);
   const [history, setHistory] = useState<string[]>([]);
   const [isSurprising, setIsSurprising] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [pastedFile, setPastedFile] = useState<File | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -46,6 +49,33 @@ export default function SearchInput({ initialQuery = "" }: { initialQuery?: stri
       window.removeEventListener("search-history-updated", handleUpdate);
     };
   }, []);
+
+  // Global paste handler on the search page (Ctrl + V with an image)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (isImageModalOpen) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            setPastedFile(file);
+            setIsImageModalOpen(true);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => {
+      window.removeEventListener("paste", handlePaste);
+    };
+  }, [isImageModalOpen]);
 
   const handleSearch = (q: string) => {
     const trimmed = q.trim();
@@ -103,35 +133,65 @@ export default function SearchInput({ initialQuery = "" }: { initialQuery?: stri
 
   return (
     <div className="w-full mb-8">
-      <form onSubmit={handleSubmit} className="relative w-full max-w-2xl mx-auto mb-4">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-        <input
-          type="text"
-          value={term}
-          onChange={(e) => setTerm(e.target.value)}
-          placeholder="Search by anime title, character, or genre..."
-          className="w-full pl-12 pr-12 py-3.5 bg-slate-900/90 border border-slate-700/60 rounded-2xl text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base shadow-lg transition-all"
-        />
-        {term ? (
-          <button
-            type="button"
-            onClick={handleClear}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleSurpriseMe}
-            disabled={isSurprising}
-            title="Surprise Me — pick a random anime"
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-purple-400 rounded-full hover:bg-purple-500/10 transition-colors"
-          >
-            <Dices className={`w-4 h-4 ${isSurprising ? "animate-spin" : ""}`} />
-          </button>
-        )}
+      <form onSubmit={handleSubmit} className="flex items-center gap-2 sm:gap-2.5 w-full max-w-2xl mx-auto mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            placeholder="Search anime title, genre, or paste screenshot..."
+            className="w-full pl-12 pr-12 py-3.5 bg-slate-900/90 border border-slate-700/60 rounded-2xl text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base shadow-lg transition-all"
+          />
+          {term ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              title="Clear search"
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSurpriseMe}
+              disabled={isSurprising}
+              title="Surprise Me — pick a random anime"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-purple-400 rounded-full hover:bg-purple-500/10 transition-colors"
+            >
+              <Dices className={`w-4 h-4 ${isSurprising ? "animate-spin" : ""}`} />
+            </button>
+          )}
+        </div>
+
+        {/* Camera Reverse Screenshot Search Button */}
+        <button
+          type="button"
+          onClick={() => {
+            setPastedFile(null);
+            setIsImageModalOpen(true);
+          }}
+          title="Search anime by screenshot or paste image (Ctrl+V)"
+          aria-label="Search anime by screenshot"
+          className="h-[52px] px-3.5 sm:px-4 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 rounded-2xl text-slate-400 hover:text-cyan-400 shadow-lg transition-all flex items-center gap-2 shrink-0 active:scale-95 group focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+        >
+          <Camera className="w-5 h-5 group-hover:scale-110 text-cyan-400 sm:text-slate-400 group-hover:text-cyan-400 transition-transform" />
+          <span className="hidden md:inline text-xs font-semibold text-slate-300 group-hover:text-cyan-300 transition-colors">
+            Reverse Image
+          </span>
+        </button>
       </form>
+
+      {/* Image Search Modal */}
+      <ImageSearchModal
+        isOpen={isImageModalOpen}
+        initialFile={pastedFile}
+        onClose={() => {
+          setIsImageModalOpen(false);
+          setPastedFile(null);
+        }}
+      />
 
       {/* Recent Searches Section */}
       {history.length > 0 && (
