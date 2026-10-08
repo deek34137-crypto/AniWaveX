@@ -86,6 +86,7 @@ export default async function AnimePage({
   return (
     <>
       <Navbar />
+      <div className="page-top-spacer" />
       <Suspense fallback={null}>
         <AnimePageClient 
           data={data} 

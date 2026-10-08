@@ -6,6 +6,7 @@ import Hero from "@/components/Hero";
 import EpisodesGrid from "@/components/EpisodesGrid";
 import Recommendations from "@/components/Recommendations";
 import InPageVideoPlayer from "@/components/InPageVideoPlayer";
+import AnimeWatchMetaBar from "@/components/AnimeWatchMetaBar";
 import { useAuth } from "@/providers/AuthProvider";
 
 function parseTimestamp(raw?: string | null): number | null {
@@ -193,36 +194,46 @@ export default function AnimePageClient({
   if (!data) return <div className="text-white p-10">Loading...</div>;
 
   return (
-    <main className="min-h-screen bg-slate-950 pb-32" style={{ paddingTop: "var(--navbar-total, 3.5rem)" }}>
+    <main className="min-h-screen bg-slate-950 pb-32">
       <div className="tv-safe-container space-y-6 tv:space-y-10">
         
         {activeEpisode ? (
-          <InPageVideoPlayer 
-            episode={activeEpisode} 
-            episodes={data.episodes}
-            initialProgressSeconds={activeEpisode?.id === serverLastWatched ? serverProgressSeconds : null}
-            targetSeekSeconds={targetSeekSeconds}
-            onEpisodeChange={(ep) => {
-              setActiveEpisode(ep);
-              setTargetSeekSeconds(null);
-              if (ep?.id) setLastWatchedEpisode(ep.id);
-              // Only scroll to top if not in fullscreen mode
-              if (typeof document !== 'undefined' && !document.fullscreenElement) {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }
-            }}
-            onClose={() => {
-              setActiveEpisode(null);
-              setTargetSeekSeconds(null);
-            }}
-            animeSlug={data.slug}
-            animeTitle={data.title}
-            animeType={data.type}
-            animePosterImage={data.posterImage}
-            user={currentUser}
-            anilistId={data.anilistId}
-            animeId={data.animeId || data.id}
-          />
+          <div className="space-y-4">
+            <InPageVideoPlayer 
+              episode={activeEpisode} 
+              episodes={data.episodes}
+              initialProgressSeconds={activeEpisode?.id === serverLastWatched ? serverProgressSeconds : null}
+              targetSeekSeconds={targetSeekSeconds}
+              onEpisodeChange={(ep) => {
+                setActiveEpisode(ep);
+                setTargetSeekSeconds(null);
+                if (ep?.id) setLastWatchedEpisode(ep.id);
+                // Only scroll to top if not in fullscreen mode
+                if (typeof document !== 'undefined' && !document.fullscreenElement) {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              }}
+              onClose={() => {
+                setActiveEpisode(null);
+                setTargetSeekSeconds(null);
+              }}
+              animeSlug={data.slug}
+              animeTitle={data.title}
+              animeType={data.type}
+              animePosterImage={data.posterImage}
+              user={currentUser}
+              anilistId={data.anilistId}
+              animeId={data.animeId || data.id}
+            />
+
+            <AnimeWatchMetaBar
+              anime={data}
+              initialBookmarked={initialBookmarked}
+              initialBookmarkStatus={initialBookmarkStatus}
+              user={currentUser}
+              lastWatchedEpisode={lastWatchedEpisode}
+            />
+          </div>
         ) : (
           <Hero 
             anime={data}
