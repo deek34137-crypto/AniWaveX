@@ -113,6 +113,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/schedule",
+        destination: "/airing",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

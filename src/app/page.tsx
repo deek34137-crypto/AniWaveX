@@ -3,15 +3,18 @@ import HeroSlider from "@/components/HeroSlider";
 import AnimeRow from "@/components/AnimeRow";
 import ContinueWatchingRow from "@/components/ContinueWatchingRow";
 import ContinueReadingRow from "@/components/manga/ContinueReadingRow";
+import TodayAiringRow from "@/components/TodayAiringRow";
 import { getTrendingAnime, getTopRatedAnime, getGenreAnime } from "@/lib/api";
+import { getUnifiedAiringSchedule } from "@/lib/schedule";
 
 export default async function Home() {
-  const [trending, topRated, romance, comedy, isekai] = await Promise.all([
+  const [trending, topRated, romance, comedy, isekai, airingSchedule] = await Promise.all([
     getTrendingAnime(),
     getTopRatedAnime(),
     getGenreAnime("romance", 12),
     getGenreAnime("comedy", 12),
     getGenreAnime("isekai", 12),
+    getUnifiedAiringSchedule().catch(() => []),
   ]);
 
   // Use top 5 trending anime for the hero slider
@@ -29,6 +32,8 @@ export default async function Home() {
         
         <ContinueWatchingRow />
         <ContinueReadingRow />
+
+        <TodayAiringRow initialSchedule={airingSchedule} />
 
         <AnimeRow title="Trending Now" items={trendingRow} viewAllHref="/catalog?sort=popularity" />
         <AnimeRow title="Highest Rated" items={topRated} viewAllHref="/catalog?sort=rating" />
