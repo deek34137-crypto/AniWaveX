@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity, FastForward, Play } from "lucide-react";
+import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity, FastForward, Play, List, Search } from "lucide-react";
 import NativePlayer from "./NativePlayer";
 import SyncHudToast from "./player/SyncHudToast";
 import { useAuth } from "@/providers/AuthProvider";
@@ -179,6 +179,21 @@ export default function InPageVideoPlayer({
   const [liveSyncResult, setLiveSyncResult] = useState<LiveSyncResult | null>(null);
   const completionSyncedEpisodeRef = useRef<number | null>(null);
   const hasInitialSeekSettledRef = useRef<boolean>(true);
+
+  // In-Player Slide-Over Episode Drawer State
+  const [isEpisodeDrawerOpen, setIsEpisodeDrawerOpen] = useState(false);
+  const [drawerSearchQuery, setDrawerSearchQuery] = useState("");
+
+  const filteredDrawerEpisodes = useMemo(() => {
+    if (!episodes || episodes.length === 0) return [];
+    if (!drawerSearchQuery.trim()) return episodes;
+    const q = drawerSearchQuery.trim().toLowerCase();
+    return episodes.filter((ep: any) => {
+      const idMatch = String(ep.id).includes(q);
+      const titleMatch = (ep.title || "").toLowerCase().includes(q);
+      return idMatch || titleMatch;
+    });
+  }, [episodes, drawerSearchQuery]);
 
   // AniSkip & Next Episode Endscreen State
   const [skipIntervals, setSkipIntervals] = useState<SkipInterval[]>([]);
@@ -1159,6 +1174,17 @@ export default function InPageVideoPlayer({
             handlePrev();
           }
           break;
+        case 'e':
+        case 'E':
+          e.preventDefault();
+          setIsEpisodeDrawerOpen((prev) => !prev);
+          break;
+        case 'Escape':
+          if (isEpisodeDrawerOpen) {
+            e.preventDefault();
+            setIsEpisodeDrawerOpen(false);
+          }
+          break;
         case '?':
           setShowShortcuts((prev) => !prev);
           break;
@@ -1169,7 +1195,7 @@ export default function InPageVideoPlayer({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasNext, hasPrev, handleNext, handlePrev, handleNextSource, handlePrevSource, toggleFullscreen, showShortcuts]);
+  }, [hasNext, hasPrev, handleNext, handlePrev, handleNextSource, handlePrevSource, toggleFullscreen, showShortcuts, isEpisodeDrawerOpen]);
 
   if (!episode) return null;
 
@@ -1515,6 +1541,19 @@ export default function InPageVideoPlayer({
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 )}
+                {episodes && episodes.length > 0 && (
+                  <button
+                    onClick={() => setIsEpisodeDrawerOpen((prev) => !prev)}
+                    className={`px-2.5 py-1.5 rounded-lg text-white text-xs font-semibold backdrop-blur-md border shadow-xl flex items-center gap-1.5 transition-transform active:scale-95 ${
+                      isEpisodeDrawerOpen ? "bg-blue-600 border-blue-400" : "bg-black/80 hover:bg-slate-800 border-white/15"
+                    }`}
+                    title="Quick Episode List (E)"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span>Episodes</span>
+                    <span className="font-mono text-[10px] bg-white/20 text-white px-1 py-0.5 rounded">E</span>
+                  </button>
+                )}
                 <button
                   onClick={toggleFullscreen}
                   className="p-1.5 rounded-lg bg-black/80 hover:bg-slate-800 text-white backdrop-blur-md border border-white/15 shadow-xl transition-transform active:scale-95"
@@ -1523,6 +1562,100 @@ export default function InPageVideoPlayer({
                   {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </button>
               </div>
+            )}
+
+            {/* In-Player Slide-Over Episode Drawer (Accessible in Fullscreen & TV) */}
+            {isEpisodeDrawerOpen && (
+              <>
+                <div 
+                  onClick={() => setIsEpisodeDrawerOpen(false)}
+                  className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-200 pointer-events-auto"
+                />
+                <div
+                  role="dialog"
+                  aria-label="Episodes list"
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-0 right-0 bottom-0 z-50 w-72 sm:w-80 md:w-96 bg-slate-950/95 backdrop-blur-2xl border-l border-white/15 shadow-2xl flex flex-col pointer-events-auto animate-in slide-in-from-right duration-300"
+                >
+                  <div className="p-3.5 sm:p-4 border-b border-white/10 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                      <List className="w-4 h-4 text-blue-400" />
+                      <h3 className="text-sm font-bold text-white">Episodes</h3>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300 font-mono font-semibold">
+                        {episodes?.length || 0}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEpisodeDrawerOpen(false)}
+                      className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+                      aria-label="Close episode drawer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {episodes && episodes.length > 12 && (
+                    <div className="p-2.5 border-b border-white/5 shrink-0">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Search / jump to episode..."
+                          value={drawerSearchQuery}
+                          onChange={(e) => setDrawerSearchQuery(e.target.value)}
+                          className="w-full bg-slate-900 border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin scrollbar-thumb-slate-800">
+                    {filteredDrawerEpisodes.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-400">
+                        No episodes found matching &quot;{drawerSearchQuery}&quot;
+                      </div>
+                    ) : (
+                      filteredDrawerEpisodes.map((ep: any) => {
+                        const isCurrent = Number(ep.id) === Number(episode?.id);
+                        return (
+                          <button
+                            key={ep.id}
+                            type="button"
+                            onClick={() => {
+                              if (onEpisodeChange) onEpisodeChange(ep);
+                              setIsEpisodeDrawerOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left border transition-all active:scale-[0.98] cursor-pointer ${
+                              isCurrent
+                                ? "bg-blue-600/25 border-blue-500/50 text-white font-bold shadow-md ring-1 ring-blue-500/30"
+                                : "bg-slate-900/60 hover:bg-slate-800/80 border-white/5 hover:border-white/15 text-slate-300 hover:text-white"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className={`text-[11px] font-mono font-black px-1.5 py-0.5 rounded ${
+                                isCurrent ? "bg-blue-600 text-white" : "bg-white/10 text-slate-300"
+                              }`}>
+                                {ep.id}
+                              </span>
+                              <span className="text-xs truncate font-medium">
+                                {ep.title || `Episode ${ep.id}`}
+                              </span>
+                            </div>
+
+                            {isCurrent ? (
+                              <span className="flex items-center gap-1 text-[10px] text-blue-400 font-bold uppercase tracking-wider shrink-0 ml-2">
+                                <Play className="w-2.5 h-2.5 fill-current" />
+                                Playing
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Loading Overlay (keeps player mounted underneath during episode transitions to maintain fullscreen) */}
@@ -1732,6 +1865,21 @@ export default function InPageVideoPlayer({
                 <span>Next Ep</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
+              {episodes && episodes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsEpisodeDrawerOpen((prev) => !prev)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 whitespace-nowrap active:scale-95 cursor-pointer ${
+                    isEpisodeDrawerOpen
+                      ? "bg-blue-600 border-blue-500 text-white shadow-md"
+                      : "bg-slate-800 hover:bg-slate-700 text-white border border-white/10"
+                  }`}
+                  title="Toggle Quick Episode Drawer (E)"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Episodes ({episodes.length})</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1805,6 +1953,7 @@ export default function InPageVideoPlayer({
           <div className="mt-4 p-4 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-slate-300 grid grid-cols-2 sm:grid-cols-4 gap-3 animate-in fade-in">
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">Space</kbd> / <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white">K</kbd> Play / Pause</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">F</kbd> Fullscreen</div>
+            <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">E</kbd> Episode Drawer</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">N</kbd> Next Ep (All Providers)</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">P</kbd> Previous Ep</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">M</kbd> Mute / Unmute</div>

@@ -17,7 +17,8 @@ import {
   Layers,
   X,
   Loader2,
-  ArrowRight
+  ArrowRight,
+  BookOpen
 } from "lucide-react";
 import Image from "next/image";
 
@@ -31,10 +32,21 @@ interface SearchItem {
   status?: string;
 }
 
+interface MangaSearchItem {
+  id: string;
+  slug?: string;
+  title: string;
+  posterImage: string;
+  rating?: string;
+  type?: string;
+  status?: string;
+}
+
 export default function CommandPalette() {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchItem[]>([]);
+  const [animeResults, setAnimeResults] = useState<SearchItem[]>([]);
+  const [mangaResults, setMangaResults] = useState<MangaSearchItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +66,13 @@ export default function CommandPalette() {
       category: "Navigation",
       icon: Compass,
       action: () => router.push("/catalog"),
+    },
+    {
+      id: "nav-manga",
+      label: "Read Manga & Comics",
+      category: "Navigation",
+      icon: BookOpen,
+      action: () => router.push("/manga"),
     },
     {
       id: "nav-schedule",
@@ -157,7 +176,8 @@ export default function CommandPalette() {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
       setQuery("");
-      setResults([]);
+      setAnimeResults([]);
+      setMangaResults([]);
       setSelectedIndex(0);
       document.body.style.overflow = "hidden";
     } else {
@@ -169,13 +189,14 @@ export default function CommandPalette() {
     };
   }, [isOpen]);
 
-  // Live search debounced query
+  // Live dual search debounced query (Anime + Manga)
   useEffect(() => {
-    // Reset selection to top on every new query (bug #17)
     setSelectedIndex(0);
 
-    if (!query.trim()) {
-      setResults([]);
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setAnimeResults([]);
+      setMangaResults([]);
       setIsSearching(false);
       return;
     }
@@ -185,15 +206,29 @@ export default function CommandPalette() {
 
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}&limit=8`, {
-          signal: controller.signal,
-        });
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setResults(data);
+        const encoded = encodeURIComponent(trimmed);
+        const [animeRes, mangaRes] = await Promise.all([
+          fetch(`/api/search?q=${encoded}&limit=6`, { signal: controller.signal })
+            .then((r) => (r.ok ? r.json() : []))
+            .catch(() => []),
+          fetch(`/api/manga/browse?q=${encoded}&limit=6`, { signal: controller.signal })
+            .then((r) => (r.ok ? r.json() : { success: false, data: [] }))
+            .catch(() => ({ success: false, data: [] })),
+        ]);
+
+        if (Array.isArray(animeRes)) {
+          setAnimeResults(animeRes);
+        } else {
+          setAnimeResults([]);
+        }
+
+        if (mangaRes?.success && Array.isArray(mangaRes?.data)) {
+          setMangaResults(mangaRes.data);
+        } else {
+          setMangaResults([]);
         }
       } catch (err: any) {
-        if (err.name !== "AbortError") console.error("Palette search error:", err);
+        if (err.name !== "AbortError") console.error("Palette dual search error:", err);
       } finally {
         setIsSearching(false);
       }
@@ -207,17 +242,54 @@ export default function CommandPalette() {
 
   // Combined selectable items list
   const combinedItems = useMemo(() => {
-    if (query.trim() && results.length > 0) {
-      return results.map((r) => ({
-        id: `anime-${r.id}`,
-        label: r.title,
-        category: "Anime Results",
-        data: r,
+    const hasMediaResults = animeResults.length > 0 || mangaResults.length > 0;
+
+    if (query.trim() && hasMediaResults) {
+      const items: any[] = [];
+
+      // Anime Results
+      animeResults.forEach((r) => {
+        items.push({
+          id: `anime-${r.id}`,
+          label: r.title,
+          category: "Anime",
+          mediaType: "anime",
+          data: r,
+          action: () => {
+            setIsOpen(false);
+            router.push(`/anime/${r.slug}`);
+          },
+        });
+      });
+
+      // Manga Results
+      mangaResults.forEach((m) => {
+        items.push({
+          id: `manga-${m.id}`,
+          label: m.title,
+          category: "Manga",
+          mediaType: "manga",
+          data: m,
+          action: () => {
+            setIsOpen(false);
+            router.push(`/manga/${m.id}`);
+          },
+        });
+      });
+
+      // Search all fallback option
+      items.push({
+        id: "search-full",
+        label: `Search all results for "${query.trim()}"`,
+        category: "Catalog Search",
+        icon: Search,
         action: () => {
           setIsOpen(false);
-          router.push(`/anime/${r.slug}`);
+          router.push(`/search?q=${encodeURIComponent(query.trim())}`);
         },
-      }));
+      });
+
+      return items;
     }
 
     if (query.trim()) {
@@ -239,7 +311,7 @@ export default function CommandPalette() {
     }
 
     return staticActions;
-  }, [query, results, staticActions, router]);
+  }, [query, animeResults, mangaResults, staticActions, router]);
 
   // Keyboard navigation for arrow keys and Enter
   const handleKeyNavigation = (e: React.KeyboardEvent) => {
@@ -278,7 +350,7 @@ export default function CommandPalette() {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search anime, genres, shortcuts..."
+            placeholder="Search anime, manga, shortcuts..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -307,13 +379,14 @@ export default function CommandPalette() {
         <div className="max-h-[60vh] overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-800 flex flex-col gap-1">
           {combinedItems.length === 0 ? (
             <div className="p-10 text-center text-sm text-slate-400">
-              No results found for "{query}". Press <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300 font-mono">Enter</kbd> to search catalog.
+              No results found for &quot;{query}&quot;. Press <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300 font-mono">Enter</kbd> to search catalog.
             </div>
           ) : (
             combinedItems.map((item, idx) => {
               const isSelected = idx === selectedIndex;
-              const animeData = (item as any).data;
+              const itemData = (item as any).data;
               const Icon = (item as any).icon || Command;
+              const mediaType = (item as any).mediaType;
 
               return (
                 <div
@@ -329,11 +402,11 @@ export default function CommandPalette() {
                       : "text-slate-300 hover:bg-slate-800/60 border border-transparent"
                   }`}
                 >
-                  {animeData && animeData.posterImage ? (
+                  {itemData && itemData.posterImage ? (
                     <div className="relative w-10 h-14 rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-white/10">
                       <Image
-                        src={animeData.posterImage}
-                        alt={animeData.title}
+                        src={itemData.posterImage}
+                        alt={itemData.title}
                         fill
                         sizes="40px"
                         className="object-cover"
@@ -360,14 +433,34 @@ export default function CommandPalette() {
                       >
                         {item.label}
                       </h4>
-                      {animeData?.rating && (
-                        <div className="flex items-center gap-0.5 text-[10px] text-yellow-400 font-bold bg-black/60 px-1.5 py-0.5 rounded">
+
+                      {/* Media Badges */}
+                      {mediaType === "anime" && (
+                        <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 shrink-0">
+                          Anime
+                        </span>
+                      )}
+                      {mediaType === "manga" && (
+                        <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shrink-0">
+                          Manga
+                        </span>
+                      )}
+
+                      {itemData?.rating && (
+                        <div className="flex items-center gap-0.5 text-[10px] text-yellow-400 font-bold bg-black/60 px-1.5 py-0.5 rounded shrink-0">
                           <Star className="w-2.5 h-2.5 fill-current" />
-                          {animeData.rating}
+                          {itemData.rating}
                         </div>
                       )}
                     </div>
-                    <span className="text-xs text-slate-400">{item.category}</span>
+
+                    <span className="text-xs text-slate-400">
+                      {mediaType === "anime"
+                        ? itemData.year ? `Anime • ${itemData.year}` : "Anime Series"
+                        : mediaType === "manga"
+                        ? itemData.type ? `Manga • ${itemData.type.toUpperCase()}` : "Manga / Comic"
+                        : item.category}
+                    </span>
                   </div>
 
                   <ArrowRight

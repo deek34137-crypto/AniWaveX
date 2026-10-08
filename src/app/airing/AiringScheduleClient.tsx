@@ -12,6 +12,7 @@ import {
   Globe,
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
+import CalendarReminderButton from "@/components/airing/CalendarReminderButton";
 import type { AiringAnimeScheduleItem } from "@/lib/schedule";
 
 export type TimezoneMode = "local" | "jst";
@@ -231,15 +232,25 @@ const AiringAnimeCard = memo(function AiringAnimeCard({
             EP {anime.nextEpisodeNumber}
           </span>
 
-          {/* Rating */}
-          {anime.rating && anime.rating !== "N/A" && (
-            <div className="flex items-center gap-1 bg-black/75 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/10 shadow-sm">
-              <Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />
-              <span className="text-[11px] font-bold text-white">
-                {anime.rating}
-              </span>
-            </div>
-          )}
+          {/* Rating & Calendar Reminder */}
+          <div className="flex items-center gap-1.5">
+            {anime.rating && anime.rating !== "N/A" && (
+              <div className="flex items-center gap-1 bg-black/75 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/10 shadow-sm">
+                <Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />
+                <span className="text-[11px] font-bold text-white">
+                  {anime.rating}
+                </span>
+              </div>
+            )}
+            {!isLive && anime.airingAt && (
+              <CalendarReminderButton
+                title={anime.title}
+                episodeNumber={anime.nextEpisodeNumber}
+                airingAt={anime.airingAt}
+                slug={anime.slug}
+              />
+            )}
+          </div>
         </div>
 
         {/* Play hover */}
