@@ -167,7 +167,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
       </button>
 
       {/* Pagination Dots with Animated Progress Line */}
-      <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-md border border-white/10 shadow-xl">
+      <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 sm:gap-2.5">
         {animeList.map((_, idx) => {
           const isActive = idx === currentIndex;
           return (
@@ -178,7 +178,7 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
               className={`transition-all duration-300 rounded-full focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none relative overflow-hidden cursor-pointer ${
                 isActive
                   ? "w-8 sm:w-14 h-1.5 sm:h-2 bg-white/20 shadow-inner"
-                  : "w-1.5 sm:w-2 h-1.5 sm:h-2 bg-white/40 hover:bg-white/80"
+                  : "w-1.5 sm:w-2 h-1.5 sm:h-2 bg-white/30 hover:bg-white/70"
               }`}
             >
               {isActive && (
