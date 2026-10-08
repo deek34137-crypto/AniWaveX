@@ -68,6 +68,9 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  verification: {
+    yandex: "8f91affb0ff31302",
+  },
 };
 
 export default function RootLayout({
