@@ -78,7 +78,7 @@ export default function AnimeCard({
         <Link 
           href={`/anime/${anime.slug}`} 
           prefetch={true}
-          className="block w-full h-full relative cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:rounded-2xl"
+          className="block w-full h-full relative cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:rounded-2xl"
           aria-label={`View ${anime.title}`}
         >
           {/* Cover Poster Image */}
@@ -111,26 +111,26 @@ export default function AnimeCard({
 
           {/* Center Play Overlay Icon (Fade in on hover or remote focus) */}
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300 pointer-events-none">
-            <div className="w-12 h-12 bg-blue-600/90 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover:scale-100 group-focus-within:scale-100 transition-transform duration-300">
-              <Play className="w-5 h-5 fill-current ml-0.5" />
+            <div className="w-12 h-12 tv:w-16 tv:h-16 bg-blue-600/90 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover:scale-100 group-focus-within:scale-100 transition-transform duration-300">
+              <Play className="w-5 h-5 tv:w-7 tv:h-7 fill-current ml-0.5" />
             </div>
           </div>
 
           {/* Bottom Title & Details Overlay */}
-          <div className="absolute bottom-0 left-0 right-0 p-3.5 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
+          <div className="absolute bottom-0 left-0 right-0 p-3.5 tv:p-5 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
             <div className="flex items-start justify-between gap-1.5 mb-1">
               <h3
-                className="text-white font-bold text-sm line-clamp-1 leading-snug drop-shadow-md group-hover:text-blue-400 group-focus-visible:text-blue-400 transition-colors"
+                className="text-white font-bold text-sm tv:text-base line-clamp-1 leading-snug drop-shadow-md group-hover:text-blue-400 group-focus-visible:text-blue-400 transition-colors"
                 title={anime.title}
               >
                 {anime.title}
               </h3>
             </div>
 
-            <div className="flex items-center justify-between text-xs font-medium text-slate-300">
+            <div className="flex items-center justify-between text-xs tv:text-sm font-medium text-slate-300">
               <span className="text-slate-400">{anime.year || "Unknown"}</span>
               {anime.tags && anime.tags.length > 0 && (
-                <span className="text-blue-400 text-[11px] font-semibold truncate max-w-[120px]">
+                <span className="text-blue-400 text-[11px] tv:text-xs font-semibold truncate max-w-[120px] tv:max-w-[160px]">
                   {anime.tags[0]}
                 </span>
               )}

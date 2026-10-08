@@ -11,10 +11,10 @@ export default async function MangaHomePage() {
       <Navbar />
       <div className="page-top-spacer"></div>
 
-      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12 pt-6 space-y-8">
+      <div className="tv-safe-container pt-6 space-y-8">
         {/* Manga Hero Banner */}
-        <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-blue-900/60 via-purple-900/40 to-slate-900 border border-white/10 p-6 sm:p-12 shadow-2xl">
-          <div className="max-w-2xl space-y-4 z-10 relative">
+        <div className="relative rounded-3xl tv:rounded-[2rem] overflow-hidden bg-gradient-to-r from-blue-900/60 via-purple-900/40 to-slate-900 border border-white/10 p-6 sm:p-12 tv:p-16 shadow-2xl">
+          <div className="max-w-2xl tv:max-w-4xl space-y-4 z-10 relative">
             <span className="px-3.5 py-1 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
               <Sparkles className="w-3.5 h-3.5" />
               Manga &amp; Comics Discovery

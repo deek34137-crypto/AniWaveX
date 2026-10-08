@@ -158,7 +158,7 @@ export default function AnimePageClient({
 
   return (
     <main className="min-h-screen bg-slate-950 pb-32" style={{ paddingTop: "var(--navbar-total, 3.5rem)" }}>
-      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12">
+      <div className="tv-safe-container space-y-6 tv:space-y-10">
         
         {activeEpisode ? (
           <InPageVideoPlayer 

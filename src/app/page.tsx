@@ -24,7 +24,7 @@ export default async function Home() {
       <Navbar />
       <div className="page-top-spacer"></div>
 
-      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-10 2xl:px-12 space-y-2">
+      <div className="tv-safe-container space-y-4 tv:space-y-8">
         <HeroSlider animeList={heroAnimeList} />
         
         <ContinueWatchingRow />

@@ -318,7 +318,10 @@ export default function ContinueWatchingRow() {
       </div>
 
       {/* Horizontal Carousel with Vertical Rectangle Cards */}
-      <div className="flex overflow-x-auto gap-4 pb-4 px-1 snap-x snap-mandatory hide-scrollbar">
+      <div 
+        data-tv-rail="true"
+        className="tv-horizontal-rail flex overflow-x-auto gap-4 tv:gap-6 pb-4 px-1 snap-x snap-mandatory hide-scrollbar scroll-smooth"
+      >
         {items.map((item) => {
           const totalSec = item.totalSeconds || 0;
           const progSec = item.progressSeconds || 0;
@@ -330,19 +333,19 @@ export default function ContinueWatchingRow() {
           return (
             <div
               key={item.animeSlug}
-              className="snap-start shrink-0 w-[155px] sm:w-[185px] md:w-[210px] lg:w-[230px] xl:w-[250px] 2xl:w-[270px] group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 group-focus-within:border-blue-500/80 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] hover:scale-[1.02] group-focus-within:scale-[1.02]"
+              className="snap-start shrink-0 w-[155px] sm:w-[185px] md:w-[210px] lg:w-[230px] xl:w-[250px] 2xl:w-[270px] tv:w-[290px] group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 group-focus-within:border-cyan-400 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] hover:scale-[1.02] group-focus-within:scale-[1.03]"
             >
               {/* Media & Title Link */}
               <Link
                 href={`/anime/${item.animeSlug}${item.episodeId ? `?ep=${item.episodeId}` : ""}`}
                 prefetch={true}
-                className="block relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:rounded-2xl"
+                className="block relative aspect-[2/3] w-full overflow-hidden bg-slate-950 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:rounded-2xl"
                 aria-label={`Continue watching ${item.animeTitle} Episode ${item.episodeId}`}
               >
                 <AnimeImage
                   src={item.posterImage}
                   alt={item.animeTitle}
-                  sizes="(max-width: 640px) 155px, (max-width: 1024px) 185px, (max-width: 1280px) 230px, 270px"
+                  sizes="(max-width: 640px) 155px, (max-width: 1024px) 185px, (max-width: 1280px) 230px, (max-width: 1920px) 270px, 290px"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
 

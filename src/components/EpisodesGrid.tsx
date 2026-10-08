@@ -279,7 +279,7 @@ export default function EpisodesGrid({
           )}
         </div>
       ) : (
-        <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4" : "flex flex-col gap-3"}>
+        <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 tv:grid-cols-6 gap-4 tv:gap-5" : "flex flex-col gap-3 tv:gap-4"}>
           {displayedEpisodes.map((episode) => {
             const isActive = episode.id === activeEpisodeId;
             const progressPct = episodeProgressMap[episode.id] || 0;

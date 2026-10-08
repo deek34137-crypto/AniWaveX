@@ -214,7 +214,7 @@ export default function Hero({
   const bgImage = anime.backgroundImage || anime.posterImage;
 
   return (
-    <div className="relative -mx-4 sm:mx-0 w-[calc(100%+2rem)] sm:w-full min-h-[380px] sm:min-h-[500px] md:min-h-[620px] flex items-end overflow-hidden pt-6 sm:pt-24 md:pt-32 pb-6 md:pb-16">
+    <div className="relative -mx-4 sm:mx-0 w-[calc(100%+2rem)] sm:w-full min-h-[380px] sm:min-h-[480px] md:min-h-[560px] tv:min-h-[640px] flex items-end overflow-hidden pt-6 sm:pt-16 md:pt-20 tv:pt-24 pb-6 md:pb-12 tv:pb-16 rounded-3xl tv:rounded-[2rem] border border-white/5 shadow-2xl">
       {/* Background Image Container with Ambient Glow for Mobile Fitting */}
       {bgImage ? (
         <div className="absolute inset-0 overflow-hidden">
@@ -249,7 +249,7 @@ export default function Hero({
       <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-slate-950/70 to-transparent pointer-events-none md:hidden" />
 
       {/* Content Container */}
-      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 z-10 flex flex-col md:flex-row gap-4 sm:gap-6 md:gap-10 items-end">
+      <div className="relative w-full max-w-7xl tv:max-w-none mx-auto px-4 sm:px-6 tv:px-12 z-10 flex flex-col md:flex-row gap-4 sm:gap-6 md:gap-10 tv:gap-14 items-end">
         
         {/* Small Anime Poster Card (Mobile View Only) */}
         {anime.posterImage ? (

@@ -62,9 +62,9 @@ export default async function CatalogPage(props: {
         <CatalogFilters />
       </Suspense>
 
-      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12 pt-8">
+      <div className="tv-safe-container pt-8">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-white">{pageHeading}</h1>
+          <h1 className="text-3xl tv:text-4xl font-bold text-white">{pageHeading}</h1>
           <p className="text-slate-400 font-medium">{totalCount.toLocaleString()} results found</p>
         </div>
 

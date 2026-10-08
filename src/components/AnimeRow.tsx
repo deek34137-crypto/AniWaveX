@@ -40,42 +40,43 @@ export default function AnimeRow({ title, items, viewAllHref }: AnimeRowProps) {
       </div>
 
       <div className="relative">
-        {/* Desktop Left Scroll Button */}
+        {/* Desktop / TV Left Scroll Button */}
         <button
           type="button"
           onClick={() => scroll("left")}
-          className="hidden md:flex absolute -left-3 lg:-left-5 top-1/2 -translate-y-1/2 z-30 w-11 h-11 items-center justify-center rounded-full bg-slate-950/90 hover:bg-blue-600 border border-white/20 text-white shadow-2xl opacity-0 group-hover/row:opacity-100 transition-all duration-200 focus-visible:opacity-100 focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:outline-none hover:scale-110 active:scale-95"
+          className="hidden md:flex absolute -left-3 lg:-left-5 tv:-left-7 top-1/2 -translate-y-1/2 z-30 w-11 h-11 tv:w-14 tv:h-14 items-center justify-center rounded-full bg-slate-950/90 hover:bg-blue-600 border border-white/20 text-white shadow-2xl opacity-0 group-hover/row:opacity-100 transition-all duration-200 focus-visible:opacity-100 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none hover:scale-110 active:scale-95"
           aria-label={`Scroll ${title} left`}
         >
-          <ChevronLeft className="w-6 h-6" />
+          <ChevronLeft className="w-6 h-6 tv:w-8 tv:h-8" />
         </button>
 
-        {/* Horizontal scroll container with responsive card sizes */}
+        {/* Horizontal scroll container with responsive card sizes & TV horizontal rail */}
         <div
           ref={scrollContainerRef}
-          className="flex overflow-x-auto gap-3.5 sm:gap-5 pb-4 px-2 snap-x snap-mandatory hide-scrollbar scroll-smooth"
+          data-tv-rail="true"
+          className="tv-horizontal-rail flex overflow-x-auto gap-3.5 sm:gap-5 tv:gap-6 pb-4 px-2 snap-x snap-mandatory hide-scrollbar scroll-smooth"
         >
           {items.map((anime) => (
             <div
               key={anime.id}
-              className="snap-start shrink-0 w-[140px] sm:w-[175px] md:w-[200px] lg:w-[230px] xl:w-[250px] 2xl:w-[280px]"
+              className="snap-start shrink-0 w-[140px] sm:w-[175px] md:w-[200px] lg:w-[230px] xl:w-[250px] 2xl:w-[270px] tv:w-[290px]"
             >
               <AnimeCard
                 anime={anime}
-                sizes="(max-width: 640px) 140px, (max-width: 768px) 175px, (max-width: 1024px) 200px, (max-width: 1280px) 230px, (max-width: 1536px) 250px, 280px"
+                sizes="(max-width: 640px) 140px, (max-width: 768px) 175px, (max-width: 1024px) 200px, (max-width: 1280px) 230px, (max-width: 1920px) 270px, 290px"
               />
             </div>
           ))}
         </div>
 
-        {/* Desktop Right Scroll Button */}
+        {/* Desktop / TV Right Scroll Button */}
         <button
           type="button"
           onClick={() => scroll("right")}
-          className="hidden md:flex absolute -right-3 lg:-right-5 top-1/2 -translate-y-1/2 z-30 w-11 h-11 items-center justify-center rounded-full bg-slate-950/90 hover:bg-blue-600 border border-white/20 text-white shadow-2xl opacity-0 group-hover/row:opacity-100 transition-all duration-200 focus-visible:opacity-100 focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:outline-none hover:scale-110 active:scale-95"
+          className="hidden md:flex absolute -right-3 lg:-right-5 tv:-right-7 top-1/2 -translate-y-1/2 z-30 w-11 h-11 tv:w-14 tv:h-14 items-center justify-center rounded-full bg-slate-950/90 hover:bg-blue-600 border border-white/20 text-white shadow-2xl opacity-0 group-hover/row:opacity-100 transition-all duration-200 focus-visible:opacity-100 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none hover:scale-110 active:scale-95"
           aria-label={`Scroll ${title} right`}
         >
-          <ChevronRight className="w-6 h-6" />
+          <ChevronRight className="w-6 h-6 tv:w-8 tv:h-8" />
         </button>
       </div>
     </div>

@@ -193,7 +193,7 @@ export default function AccountCenterClient({
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 pb-16">
+    <div className="tv-safe-container pb-16">
       {/* ── OAuth Success Notification Banner ── */}
       {oauthSuccessMsg && (
         <div className="mb-5 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs sm:text-sm font-semibold flex items-center justify-between shadow-lg animate-in fade-in">

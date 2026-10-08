@@ -42,7 +42,7 @@ export default async function SearchPage({
       <Navbar />
       <div className="page-top-spacer"></div>
 
-      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12 pt-4 space-y-6">
+      <div className="tv-safe-container pt-4 space-y-6 tv:space-y-8">
         {/* In-page interactive search input */}
         <SearchInput initialQuery={query} />
 

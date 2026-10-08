@@ -187,8 +187,8 @@ export default function MangaCatalogClient({
 
         {/* Loading Skeleton */}
         {isLoading && mangaList.length === 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 sm:gap-6">
-            {Array.from({ length: 16 }).map((_, i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 tv:grid-cols-7 gap-3 sm:gap-6 tv:gap-7">
+            {Array.from({ length: 14 }).map((_, i) => (
               <div
                 key={i}
                 className="aspect-[3/4] rounded-2xl bg-slate-900/60 border border-white/5 animate-pulse"
@@ -197,7 +197,7 @@ export default function MangaCatalogClient({
           </div>
         ) : mangaList.length > 0 ? (
           <div
-            className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 sm:gap-6 transition-opacity duration-200 ${
+            className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 tv:grid-cols-7 gap-3 sm:gap-6 tv:gap-7 transition-opacity duration-200 ${
               isLoading ? "opacity-60" : "opacity-100"
             }`}
           >

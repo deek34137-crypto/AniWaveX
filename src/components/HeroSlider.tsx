@@ -68,7 +68,8 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="relative w-full h-[52vh] sm:h-[65vh] md:h-[72vh] 2xl:h-[76vh] min-h-[380px] sm:min-h-[500px] 2xl:min-h-[620px] overflow-hidden rounded-2xl md:rounded-3xl mt-2 sm:mt-6 group shadow-2xl"
+      data-tv-priority="high"
+      className="relative w-full h-[52vh] sm:h-[62vh] md:h-[68vh] tv:h-[70vh] min-h-[380px] sm:min-h-[480px] tv:min-h-[580px] tv:max-h-[780px] overflow-hidden rounded-2xl md:rounded-3xl tv:rounded-[2rem] mt-2 sm:mt-6 group shadow-2xl"
     >
       {animeList.map((anime, index) => {
         const isActive = index === currentIndex;
@@ -103,31 +104,31 @@ export default function HeroSlider({ animeList }: HeroSliderProps) {
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
 
             {/* Content — extra bottom padding on mobile to clear bottom nav */}
-            <div className="absolute bottom-0 left-0 w-full max-w-5xl p-4 pb-14 sm:p-8 sm:pb-8 md:p-14 lg:p-16 flex flex-col justify-end h-full">
-              <h1 className={`text-2xl sm:text-4xl md:text-5xl lg:text-6xl 2xl:text-7xl font-black text-white tracking-tight mb-2 sm:mb-4 drop-shadow-2xl transition-all duration-700 delay-300 transform line-clamp-2 ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+            <div className="absolute bottom-0 left-0 w-full max-w-5xl tv:max-w-6xl p-4 pb-14 sm:p-8 sm:pb-8 md:p-12 lg:p-14 tv:p-16 flex flex-col justify-end h-full">
+              <h1 className={`text-2xl sm:text-4xl md:text-5xl lg:text-6xl tv:text-7xl font-black text-white tracking-tight mb-2 sm:mb-4 tv:mb-6 drop-shadow-2xl transition-all duration-700 delay-300 transform line-clamp-2 ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 {anime.title}
               </h1>
               
-              <p className={`text-slate-300 text-xs sm:text-base md:text-lg lg:text-xl line-clamp-2 sm:line-clamp-3 mb-4 sm:mb-8 max-w-3xl drop-shadow-md transition-all duration-700 delay-500 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+              <p className={`text-slate-300 text-xs sm:text-base md:text-lg lg:text-xl tv:text-2xl line-clamp-2 sm:line-clamp-3 mb-4 sm:mb-8 tv:mb-10 max-w-3xl tv:max-w-4xl drop-shadow-md leading-relaxed transition-all duration-700 delay-500 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 {anime.description}
               </p>
 
-              <div className={`flex flex-row items-center gap-2.5 sm:gap-4 transition-all duration-700 delay-700 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+              <div className={`flex flex-row items-center gap-2.5 sm:gap-4 tv:gap-6 transition-all duration-700 delay-700 transform ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 <Link 
                   href={`/anime/${anime.slug}?play=1`}
                   prefetch={true}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-105 active:scale-95 focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:outline-none"
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 tv:px-10 tv:py-5 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base tv:text-lg font-bold rounded-xl tv:rounded-2xl shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-105 active:scale-95 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
                 >
-                  <Play className="w-4 h-4 fill-current" />
+                  <Play className="w-4 h-4 tv:w-5 tv:h-5 fill-current" />
                   Watch Now
                 </Link>
                 
                 <Link 
                   href={`/anime/${anime.slug}`}
                   prefetch={true}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 bg-slate-500/40 hover:bg-slate-500/60 text-white text-xs sm:text-base font-semibold rounded-xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:outline-none"
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 sm:px-8 sm:py-4 tv:px-10 tv:py-5 bg-slate-500/40 hover:bg-slate-500/60 text-white text-xs sm:text-base tv:text-lg font-semibold rounded-xl tv:rounded-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
                 >
-                  <Info className="w-4 h-4" />
+                  <Info className="w-4 h-4 tv:w-5 tv:h-5" />
                   More Info
                 </Link>
               </div>

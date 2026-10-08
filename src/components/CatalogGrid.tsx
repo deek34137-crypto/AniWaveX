@@ -11,12 +11,12 @@ export default function CatalogGrid({ animeList }: { animeList: any[] }) {
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4 sm:gap-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 tv:grid-cols-7 gap-4 sm:gap-6 tv:gap-7">
       {animeList.map((anime) => (
         <AnimeCard
           key={anime.id}
           anime={anime}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1536px) 20vw, 12.5vw"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1536px) 20vw, (max-width: 1920px) 16vw, 14vw"
         />
       ))}
     </div>

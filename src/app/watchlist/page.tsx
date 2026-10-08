@@ -21,7 +21,7 @@ export default async function WatchlistPage() {
     <main className="min-h-screen bg-slate-950 pb-32">
       <Navbar />
       <div className="page-top-spacer" />
-      <div className="max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12 pt-4 sm:pt-6">
+      <div className="tv-safe-container pt-4 sm:pt-6">
         <WatchlistGrid initialItems={bookmarks} />
       </div>
     </main>
