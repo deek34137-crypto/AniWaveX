@@ -4,13 +4,12 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import Link from "next/link";
 import {
   Play,
-  PlayCircle,
+  Zap,
   BookOpen,
   X,
   Bookmark,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import { useAuth } from "@/providers/AuthProvider";
@@ -496,8 +495,8 @@ export default function JumpBackInRow() {
       {/* Section Header: Title + Filter Pills + Clear Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 px-2">
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-cyan-500/30 text-cyan-400">
-            <PlayCircle className="w-4 h-4" />
+          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500/20 to-yellow-500/20 border border-amber-500/30 text-amber-400 shadow-sm shadow-amber-500/10">
+            <Zap className="w-4 h-4 fill-current" />
           </div>
           <div>
             <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white tracking-tight flex items-center gap-2">
