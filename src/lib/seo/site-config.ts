@@ -13,7 +13,7 @@ export const SITE_CONFIG = {
     process.env.NEXT_PUBLIC_SITE_URL ||
     (process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : "https://aniwavex.com"),
+      : "https://www.aniwavex.bond"),
   ogImage: "https://media.kitsu.io/anime/poster_images/1/large.jpg",
   twitterHandle: "@aniwavex",
   locale: "en_US",
