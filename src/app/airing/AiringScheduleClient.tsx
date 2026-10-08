@@ -9,9 +9,91 @@ import {
   Sparkles,
   Search,
   Radio,
+  Globe,
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import type { AiringAnimeScheduleItem } from "@/lib/schedule";
+
+export type TimezoneMode = "local" | "jst";
+
+const JST_TIMEZONE = "Asia/Tokyo";
+
+const WEEKDAYS_MAP: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+function getLocalTimezoneAbbr(): string {
+  try {
+    const parts = new Intl.DateTimeFormat([], { timeZoneName: "short" }).formatToParts(new Date());
+    const tzPart = parts.find((p) => p.type === "timeZoneName")?.value;
+    if (tzPart) return tzPart;
+    const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return resolved.split("/").pop()?.replace(/_/g, " ") || "Local";
+  } catch {
+    return "Local";
+  }
+}
+
+function computeDayOfWeek(epochSeconds: number, mode: TimezoneMode): number {
+  if (!epochSeconds) return 0;
+  const date = new Date(epochSeconds * 1000);
+  if (mode === "jst") {
+    try {
+      const weekdayStr = new Intl.DateTimeFormat("en-US", {
+        timeZone: JST_TIMEZONE,
+        weekday: "short",
+      }).format(date);
+      return WEEKDAYS_MAP[weekdayStr] ?? date.getUTCDay();
+    } catch {
+      return date.getUTCDay();
+    }
+  }
+  return date.getDay();
+}
+
+function computeTodayDayId(mode: TimezoneMode): string {
+  const now = new Date();
+  if (mode === "jst") {
+    try {
+      const weekdayStr = new Intl.DateTimeFormat("en-US", {
+        timeZone: JST_TIMEZONE,
+        weekday: "short",
+      }).format(now);
+      return (WEEKDAYS_MAP[weekdayStr] ?? now.getUTCDay()).toString();
+    } catch {
+      return now.getUTCDay().toString();
+    }
+  }
+  return now.getDay().toString();
+}
+
+function computeAirTimeDisplay(epochSeconds: number, mode: TimezoneMode): string {
+  if (!epochSeconds) return "--:--";
+  const date = new Date(epochSeconds * 1000);
+  const options: Intl.DateTimeFormatOptions = {
+    hour: "2-digit",
+    minute: "2-digit",
+  };
+  if (mode === "jst") {
+    options.timeZone = JST_TIMEZONE;
+  }
+  try {
+    return new Intl.DateTimeFormat([], options).format(date);
+  } catch {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+}
+
+export type LocalizedAiringAnimeItem = AiringAnimeScheduleItem & {
+  effectiveDay: number;
+  effectiveAirTime: string;
+};
 
 const DAYS_OF_WEEK = [
   { id: "all", label: "All", full: "All Airing" },
@@ -102,10 +184,10 @@ const AiringAnimeCard = memo(function AiringAnimeCard({
   anime,
   todayId,
 }: {
-  anime: AiringAnimeScheduleItem;
+  anime: LocalizedAiringAnimeItem;
   todayId: string;
 }) {
-  const isToday = anime.dayOfWeek.toString() === todayId;
+  const isToday = anime.effectiveDay.toString() === todayId;
   const [isLive, setIsLive] = useState(() => Boolean(anime.airingAt && anime.timeUntilAiring === 0));
 
   useEffect(() => {
@@ -174,7 +256,7 @@ const AiringAnimeCard = memo(function AiringAnimeCard({
             {/* Air time */}
             <span className="flex items-center gap-1 text-[10px] font-bold text-blue-300">
               <Clock className="w-3 h-3 shrink-0" />
-              {anime.airTimeStr}
+              {anime.effectiveAirTime}
             </span>
 
             {/* Isolated Countdown badge */}
@@ -204,7 +286,7 @@ const AiringAnimeCard = memo(function AiringAnimeCard({
               <span className="text-slate-500">
                 {
                   DAYS_OF_WEEK.find(
-                    (d) => d.id === anime.dayOfWeek.toString()
+                    (d) => d.id === anime.effectiveDay.toString()
                   )?.label
                 }
               </span>
@@ -245,9 +327,45 @@ export default function AiringScheduleClient({
     }
   }, [animeList]);
 
-  // Use UTC day to match the UTC-based dayOfWeek stored in schedule data
-  const todayId = new Date().getUTCDay().toString();
+  const [hasMounted, setHasMounted] = useState(false);
+  const [timezoneMode, setTimezoneMode] = useState<TimezoneMode>("local");
+  const [localTzName, setLocalTzName] = useState<string>("Local");
+
+  useEffect(() => {
+    setHasMounted(true);
+    setLocalTzName(getLocalTimezoneAbbr());
+    try {
+      const stored = localStorage.getItem("aniwavex_schedule_tz");
+      if (stored === "jst" || stored === "local") {
+        setTimezoneMode(stored);
+      }
+    } catch {}
+  }, []);
+
+  const handleToggleTimezone = () => {
+    const nextMode = timezoneMode === "local" ? "jst" : "local";
+    setTimezoneMode(nextMode);
+    try {
+      localStorage.setItem("aniwavex_schedule_tz", nextMode);
+    } catch {}
+  };
+
+  // Compute today's day of week matching active timezone (Local or JST)
+  const todayId = useMemo(() => {
+    if (!hasMounted) return new Date().getUTCDay().toString();
+    return computeTodayDayId(timezoneMode);
+  }, [hasMounted, timezoneMode]);
+
   const [selectedDay, setSelectedDay] = useState<string>(todayId);
+  const userInteractedDayRef = useRef(false);
+
+  // Sync selectedDay to todayId initially once mounted if user hasn't manually chosen a specific day tab
+  useEffect(() => {
+    if (!userInteractedDayRef.current) {
+      setSelectedDay(todayId);
+    }
+  }, [todayId]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("all");
   const [tabsSticky, setTabsSticky] = useState(false);
@@ -256,6 +374,23 @@ export default function AiringScheduleClient({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const todayTabRef = useRef<HTMLButtonElement>(null);
   const tabsScrollRef = useRef<HTMLDivElement>(null);
+
+  // Map schedule items to the user's active timezone (effective air time and weekday)
+  const localizedItems: LocalizedAiringAnimeItem[] = useMemo(() => {
+    return items.map((item) => {
+      const effectiveDay = hasMounted
+        ? computeDayOfWeek(item.airingAt, timezoneMode)
+        : item.dayOfWeek;
+      const effectiveAirTime = hasMounted
+        ? computeAirTimeDisplay(item.airingAt, timezoneMode)
+        : item.airTimeStr;
+      return {
+        ...item,
+        effectiveDay,
+        effectiveAirTime,
+      };
+    });
+  }, [items, timezoneMode, hasMounted]);
 
   // IntersectionObserver: make tabs sticky when sentinel scrolls out of view
   useEffect(() => {
@@ -286,10 +421,10 @@ export default function AiringScheduleClient({
     return Array.from(set).sort();
   }, [items]);
 
-  // Filtered list
+  // Filtered list using localized effectiveDay
   const filteredAnime = useMemo(() => {
-    return items.filter((anime) => {
-      if (selectedDay !== "all" && anime.dayOfWeek.toString() !== selectedDay)
+    return localizedItems.filter((anime) => {
+      if (selectedDay !== "all" && anime.effectiveDay.toString() !== selectedDay)
         return false;
       if (selectedGenre !== "all" && !anime.genres?.includes(selectedGenre))
         return false;
@@ -305,17 +440,17 @@ export default function AiringScheduleClient({
       }
       return true;
     });
-  }, [items, selectedDay, selectedGenre, searchQuery]);
+  }, [localizedItems, selectedDay, selectedGenre, searchQuery]);
 
-  // Count per day for badge numbers
+  // Count per day for badge numbers using localized effectiveDay
   const countByDay = useMemo(() => {
-    const map: Record<string, number> = { all: items.length };
-    items.forEach((a) => {
-      const k = a.dayOfWeek.toString();
+    const map: Record<string, number> = { all: localizedItems.length };
+    localizedItems.forEach((a) => {
+      const k = a.effectiveDay.toString();
       map[k] = (map[k] || 0) + 1;
     });
     return map;
-  }, [items]);
+  }, [localizedItems]);
 
   // ── Shared Tab Strip ────────────────────────────────────────────────────────
   const renderTabStrip = useCallback(
@@ -334,7 +469,10 @@ export default function AiringScheduleClient({
             <button
               key={day.id}
               ref={isToday && !compact ? todayTabRef : undefined}
-              onClick={() => setSelectedDay(day.id)}
+              onClick={() => {
+                userInteractedDayRef.current = true;
+                setSelectedDay(day.id);
+              }}
               className={`relative flex items-center gap-1.5 shrink-0 rounded-xl font-bold transition-all duration-200
                 ${compact ? "px-3 py-1.5 text-xs" : "px-4 py-2.5 text-xs sm:text-sm"}
                 ${
@@ -384,10 +522,34 @@ export default function AiringScheduleClient({
       {/* ── Header Banner ── */}
       <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-blue-900/50 via-indigo-900/30 to-slate-900 border border-blue-500/20 p-8 sm:p-12 shadow-2xl">
         <div className="relative z-10 max-w-3xl">
-          <div className="flex items-center gap-2 text-blue-400 font-bold text-xs uppercase tracking-widest mb-3">
-            <Sparkles className="w-4 h-4" />
-            Japanese Simulcast &amp; Broadcast Schedule
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 text-blue-400 font-bold text-xs uppercase tracking-widest">
+              <Sparkles className="w-4 h-4" />
+              Japanese Simulcast &amp; Broadcast Schedule
+            </div>
+
+            {/* Timezone pill with optional switch to toggle JST */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/80 border border-white/15 backdrop-blur-md shadow-sm text-xs">
+              <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span className="text-slate-400 font-medium">Timezone:</span>
+              <span className="font-bold text-white">
+                {timezoneMode === "jst" ? "JST (UTC+9)" : `Local (${localTzName})`}
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleTimezone}
+                className="ml-1 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold uppercase transition-all bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 hover:text-white border border-blue-500/40 cursor-pointer active:scale-95"
+                title={
+                  timezoneMode === "local"
+                    ? "Switch to Japan Standard Time (JST)"
+                    : "Switch to your browser local timezone"
+                }
+              >
+                {timezoneMode === "local" ? "Switch to JST" : "Switch to Local"}
+              </button>
+            </div>
           </div>
+
           <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4 leading-tight">
             Weekly Airing Anime
           </h1>
@@ -447,16 +609,26 @@ export default function AiringScheduleClient({
         }`}
       >
         <div className="bg-slate-950/95 backdrop-blur-xl border-b border-white/10 shadow-2xl px-4 py-2.5">
-          <div className="max-w-7xl mx-auto flex items-center gap-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
             {/* Mini logo */}
             <span className="text-blue-400 font-black text-sm shrink-0 hidden sm:block">
               Schedule
             </span>
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden min-w-0">
               {renderTabStrip(true)}
             </div>
+            {/* Compact Timezone toggle in sticky bar */}
+            <button
+              type="button"
+              onClick={handleToggleTimezone}
+              className="inline-flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-xl bg-slate-900 border border-white/10 hover:border-blue-500/40 text-[11px] font-bold text-slate-300 hover:text-white transition-all shadow-sm active:scale-95 cursor-pointer"
+              title="Toggle Timezone (Local / JST)"
+            >
+              <Globe className="w-3 h-3 text-blue-400 shrink-0" />
+              <span>{timezoneMode === "jst" ? "JST" : localTzName}</span>
+            </button>
             {/* Result count */}
-            <span className="text-slate-500 text-xs shrink-0 hidden sm:block">
+            <span className="text-slate-500 text-xs shrink-0 hidden md:block">
               {filteredAnime.length} anime
             </span>
           </div>

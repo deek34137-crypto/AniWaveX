@@ -1455,7 +1455,7 @@ export default function InPageVideoPlayer({
             }}
             className={`group transition-all duration-300 ${
               isFloatingPiP
-                ? "fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] md:bottom-6 right-4 sm:right-6 z-50 w-72 sm:w-96 aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-[0_15px_50px_rgba(0,0,0,0.9)] border border-white/20 animate-in slide-in-from-bottom-5"
+                ? "fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] md:bottom-6 right-4 sm:right-6 z-50 w-72 sm:w-96 aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-[0_15px_50px_rgba(0,0,0,0.9)] border border-white/20 animate-in slide-in-from-bottom-5"
                 : "relative w-full h-full bg-black rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-white/10 flex items-center justify-center [&:fullscreen]:w-screen [&:fullscreen]:h-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0 [&:fullscreen]:max-w-none"
             }`}
           >

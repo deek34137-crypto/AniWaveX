@@ -52,6 +52,22 @@ export default function AnimePageClient({
     return parseTimestamp(searchParams.get("t") || searchParams.get("time"));
   });
 
+  // Notify MobileBottomNav when an episode is actively playing on this anime page
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("aniwavex-player-state", {
+        detail: { active: Boolean(activeEpisode) },
+      })
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent("aniwavex-player-state", {
+          detail: { active: false },
+        })
+      );
+    };
+  }, [activeEpisode]);
+
   // On mount: handle ?ep= param (from Continue Watching / Screenshot Search) or resolve best episode (local + server)
   useEffect(() => {
     if (!data) return;
