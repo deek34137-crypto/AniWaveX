@@ -23,6 +23,7 @@ import {
   Columns,
   ScrollText,
   Cloud,
+  Palette,
 } from "lucide-react";
 import { MangaChapter } from "@/lib/manga/types";
 import {
@@ -45,6 +46,59 @@ interface ReaderPageProps {
 
 type ReaderWidth = "standard" | "fit-screen" | "wide" | "full";
 export type ReadingMode = "webtoon" | "paged-rtl" | "paged-ltr";
+export type ReadingTone = "dark" | "oled" | "sepia";
+
+export interface ReadingToneConfig {
+  id: ReadingTone;
+  label: string;
+  bodyBg: string;
+  headerBg: string;
+  textColor: string;
+  subtextColor: string;
+  border: string;
+  buttonBg: string;
+  imageBorder: string;
+  floatingPillBg: string;
+}
+
+export const READING_TONES: Record<ReadingTone, ReadingToneConfig> = {
+  dark: {
+    id: "dark",
+    label: "Dark (Default)",
+    bodyBg: "bg-black text-slate-100",
+    headerBg: "bg-slate-950/95 border-white/10 text-white",
+    textColor: "text-white",
+    subtextColor: "text-slate-400",
+    border: "border-white/10",
+    buttonBg: "bg-slate-900 hover:bg-slate-800 border-white/15 text-slate-200",
+    imageBorder: "border-white/10 bg-slate-950",
+    floatingPillBg: "bg-black/75 text-slate-300 border-white/10",
+  },
+  oled: {
+    id: "oled",
+    label: "OLED Pure Black",
+    bodyBg: "bg-black text-white",
+    headerBg: "bg-black/95 border-neutral-900 text-white",
+    textColor: "text-white",
+    subtextColor: "text-neutral-400",
+    border: "border-neutral-900",
+    buttonBg: "bg-neutral-950 hover:bg-neutral-900 border-neutral-800 text-white",
+    imageBorder: "border-neutral-900 bg-black",
+    floatingPillBg: "bg-black/90 text-neutral-300 border-neutral-800",
+  },
+  sepia: {
+    id: "sepia",
+    label: "Warm Sepia",
+    bodyBg: "bg-[#f4ecd8] text-[#2c251a]",
+    headerBg: "bg-[#eae0c8]/95 border-[#d8cbaf] text-[#2c251a]",
+    textColor: "text-[#2c251a]",
+    subtextColor: "text-[#6b5d4d]",
+    border: "border-[#d8cbaf]",
+    buttonBg: "bg-[#eae0c8] hover:bg-[#dfd4bc] border-[#d8cbaf] text-[#2c251a]",
+    imageBorder: "border-[#d8cbaf] bg-[#eae0c8]",
+    floatingPillBg: "bg-[#eae0c8]/95 text-[#2c251a] border-[#d8cbaf]",
+  },
+};
 
 const WIDTH_LABELS: Record<ReaderWidth, string> = {
   standard: "Standard (768px)",
@@ -90,6 +144,13 @@ export default function MangaReaderClient({
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [offlineBlobs, setOfflineBlobs] = useState<Record<number, string>>({});
 
+  // Reading Tone & Mobile Chrome Visibility State
+  const [readingTone, setReadingTone] = useState<ReadingTone>("dark");
+  const [isToneMenuOpen, setIsToneMenuOpen] = useState(false);
+  const [isChromeVisible, setIsChromeVisible] = useState(true);
+  const toneMenuRef = useRef<HTMLDivElement | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
   // Cloud Sync Status Indicator
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<number | null>(null);
@@ -105,7 +166,7 @@ export default function MangaReaderClient({
     setActiveChapterNum(chapterNumber);
   }, [chapterId, chapterNumber]);
 
-  // Restore saved width and reading mode preference from localStorage
+  // Restore saved width, reading mode, and tone preferences from localStorage
   useEffect(() => {
     try {
       const savedWidth = localStorage.getItem("aniwavex_manga_reader_width") as ReaderWidth;
@@ -116,8 +177,79 @@ export default function MangaReaderClient({
       if (savedMode && ["webtoon", "paged-rtl", "paged-ltr"].includes(savedMode)) {
         setReadingMode(savedMode);
       }
+      const savedTone = localStorage.getItem("aniwavex_manga_reading_tone") as ReadingTone;
+      if (savedTone && ["dark", "oled", "sepia"].includes(savedTone)) {
+        setReadingTone(savedTone);
+      }
     } catch {}
   }, []);
+
+  // Close tone menu on click outside
+  useEffect(() => {
+    if (!isToneMenuOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (toneMenuRef.current && !toneMenuRef.current.contains(e.target as Node)) {
+        setIsToneMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [isToneMenuOpen]);
+
+  // Gesture tap-center detection to toggle top/bottom chrome
+  const handleReaderTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartPosRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now(),
+      };
+    }
+  };
+
+  const handleReaderTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartPosRef.current || e.changedTouches.length === 0) return;
+
+    const diffX = Math.abs(e.changedTouches[0].clientX - touchStartPosRef.current.x);
+    const diffY = Math.abs(e.changedTouches[0].clientY - touchStartPosRef.current.y);
+    const duration = Date.now() - touchStartPosRef.current.time;
+    touchStartPosRef.current = null;
+
+    // Must be a quick, deliberate tap with minimal travel (< 15px, < 350ms)
+    if (diffX < 15 && diffY < 15 && duration < 350) {
+      const tapX = e.changedTouches[0].clientX;
+      const screenWidth = window.innerWidth;
+
+      // In Webtoon mode: tapping the middle third horizontally toggles UI
+      if (readingMode === "webtoon") {
+        if (tapX >= screenWidth * 0.25 && tapX <= screenWidth * 0.75) {
+          setIsChromeVisible((prev) => !prev);
+        }
+      } else {
+        // In Paged mode: center 40% toggles UI (outer 30% are next/prev page turn areas)
+        if (tapX >= screenWidth * 0.3 && tapX <= screenWidth * 0.7) {
+          setIsChromeVisible((prev) => !prev);
+        }
+      }
+    }
+  };
+
+  const handleReaderClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, input, [role='button'], .no-toggle-ui")) return;
+
+    const clickX = e.clientX;
+    const screenWidth = window.innerWidth;
+    if (readingMode === "webtoon") {
+      if (clickX >= screenWidth * 0.25 && clickX <= screenWidth * 0.75) {
+        setIsChromeVisible((prev) => !prev);
+      }
+    } else {
+      if (clickX >= screenWidth * 0.3 && clickX <= screenWidth * 0.7) {
+        setIsChromeVisible((prev) => !prev);
+      }
+    }
+  };
 
   // Check if current chapter is saved offline in IndexedDB
   useEffect(() => {
@@ -650,16 +782,26 @@ export default function MangaReaderClient({
     }
   }, [isChapterListOpen]);
 
+  const currentToneConfig = READING_TONES[readingTone] || READING_TONES.dark;
+
   return (
-    <div className="min-h-screen bg-black text-slate-100 flex flex-col select-none">
-      {/* Sticky Reader Header (Desktop + TV Friendly) */}
-      <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-white/10 px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between shadow-2xl">
+    <div className={`min-h-screen ${currentToneConfig.bodyBg} flex flex-col select-none transition-colors duration-200`}>
+      {/* Sticky Reader Header (Desktop + TV Friendly, auto-collapses on tap) */}
+      <header
+        className={`sticky top-0 z-40 px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between shadow-2xl backdrop-blur-xl border-b transition-all duration-300 ease-in-out ${
+          currentToneConfig.headerBg
+        } ${
+          isChromeVisible
+            ? "translate-y-0 opacity-100 pointer-events-auto"
+            : "-translate-y-full opacity-0 pointer-events-none"
+        }`}
+      >
         {/* Left: Back to Manga & Title */}
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
             type="button"
             onClick={handleBackToOverview}
-            className="p-2 sm:p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-200 hover:text-white transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none focus-visible:scale-105 shrink-0"
+            className={`p-2 sm:p-2.5 rounded-xl border transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none focus-visible:scale-105 shrink-0 ${currentToneConfig.buttonBg}`}
             title="Back to Manga Overview (Esc / Backspace)"
             aria-label="Back to Manga Overview"
           >
@@ -672,12 +814,12 @@ export default function MangaReaderClient({
                 {mangaTitle}
               </span>
               <span className="text-slate-500 hidden xs:inline">•</span>
-              <h1 className="text-sm sm:text-base font-bold text-white truncate max-w-[160px] sm:max-w-md">
+              <h1 className="text-sm sm:text-base font-bold truncate max-w-[160px] sm:max-w-md">
                 {currentChapterObj?.title || `Chapter ${activeChapterNum ?? activeChapterId}`}
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <p className="text-[11px] sm:text-xs text-slate-400 font-mono">
+              <p className={`text-[11px] sm:text-xs font-mono ${currentToneConfig.subtextColor}`}>
                 Page {currentVisiblePage} of {pages.length || "?"}
               </p>
               {isSyncingCloud && (
@@ -705,8 +847,8 @@ export default function MangaReaderClient({
             disabled={!prevChapter}
             className={`p-2 sm:px-3 sm:py-2 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none ${
               prevChapter
-                ? "bg-slate-900 hover:bg-slate-800 border-white/15 text-slate-200 hover:text-white cursor-pointer"
-                : "bg-slate-950 border-white/5 text-slate-600 cursor-not-allowed"
+                ? `${currentToneConfig.buttonBg} cursor-pointer`
+                : "opacity-40 border-transparent cursor-not-allowed"
             }`}
             title={prevChapter ? `Previous: Ch. ${prevChapter.chapterNumber} (Left Arrow)` : "No previous chapter"}
             aria-label="Previous Chapter"
@@ -723,13 +865,13 @@ export default function MangaReaderClient({
                 setModalSearch("");
                 setIsChapterListOpen(true);
               }}
-              className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 text-cyan-400 hover:text-cyan-300 text-xs font-bold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
+              className={`px-2.5 sm:px-3.5 py-2 rounded-xl border border-cyan-500/30 text-cyan-400 hover:text-cyan-300 text-xs font-bold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer ${currentToneConfig.buttonBg}`}
               title="Select Chapter from List"
               aria-label="Select Chapter"
             >
               <BookOpen className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Chapters</span>
-              <span className="text-[10px] text-slate-400 font-mono">({chapters.length})</span>
+              <span className="text-[10px] opacity-70 font-mono">({chapters.length})</span>
             </button>
           )}
 
@@ -741,7 +883,7 @@ export default function MangaReaderClient({
             className={`p-2 sm:px-3 sm:py-2 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none ${
               nextChapter
                 ? "bg-cyan-600/20 hover:bg-cyan-600/30 border-cyan-500/40 text-cyan-300 hover:text-white cursor-pointer shadow-md shadow-cyan-500/10"
-                : "bg-slate-950 border-white/5 text-slate-600 cursor-not-allowed"
+                : "opacity-40 border-transparent cursor-not-allowed"
             }`}
             title={nextChapter ? `Next: Ch. ${nextChapter.chapterNumber} (Right Arrow)` : "No next chapter"}
             aria-label="Next Chapter"
@@ -750,11 +892,11 @@ export default function MangaReaderClient({
             <ChevronRight className="w-4 h-4" />
           </button>
 
-          {/* Reading Mode Switcher Button (Webtoon / Manga RTL / Comic LTR) */}
+          {/* Reading Mode Switcher Button */}
           <button
             type="button"
             onClick={cycleReadingMode}
-            className="flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-300 hover:text-white transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
+            className={`flex items-center gap-1 px-2.5 py-2 rounded-xl border transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer ${currentToneConfig.buttonBg}`}
             title={`Reading Mode: ${MODE_LABELS[readingMode]} (Click to cycle)`}
             aria-label="Cycle reading mode"
           >
@@ -767,6 +909,75 @@ export default function MangaReaderClient({
               {readingMode === "webtoon" ? "Webtoon" : readingMode === "paged-rtl" ? "Manga (RTL)" : "Comic (LTR)"}
             </span>
           </button>
+
+          {/* Reading Tone Selector (Dark, OLED Black, Warm Sepia) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsToneMenuOpen((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer ${currentToneConfig.buttonBg}`}
+              title={`Reading Tone: ${currentToneConfig.label}`}
+              aria-label="Toggle Reading Tone"
+            >
+              <Palette className="w-4 h-4 text-cyan-400" />
+              <span className="text-[11px] font-mono capitalize hidden 2xl:inline">
+                {readingTone === "dark" ? "Dark" : readingTone === "oled" ? "OLED" : "Sepia"}
+              </span>
+            </button>
+
+            {isToneMenuOpen && (
+              <div
+                ref={toneMenuRef}
+                className={`absolute right-0 top-full mt-2 w-48 rounded-2xl p-1.5 shadow-2xl border backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 ${
+                  readingTone === "sepia"
+                    ? "bg-[#eae0c8] border-[#d8cbaf] text-[#2c251a]"
+                    : "bg-slate-900/95 border-white/15 text-slate-200"
+                }`}
+              >
+                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider opacity-60 border-b border-black/10 dark:border-white/10 mb-1">
+                  Reading Tone
+                </div>
+                {(["dark", "oled", "sepia"] as ReadingTone[]).map((tKey) => {
+                  const conf = READING_TONES[tKey];
+                  const isSelected = readingTone === tKey;
+                  return (
+                    <button
+                      key={tKey}
+                      type="button"
+                      onClick={() => {
+                        setReadingTone(tKey);
+                        setIsToneMenuOpen(false);
+                        try {
+                          localStorage.setItem("aniwavex_manga_reading_tone", tKey);
+                        } catch {}
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                        isSelected
+                          ? "bg-cyan-500/20 text-cyan-400 font-bold"
+                          : readingTone === "sepia"
+                          ? "hover:bg-black/5 text-[#2c251a]"
+                          : "hover:bg-white/10 text-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-3.5 h-3.5 rounded-full border ${
+                            tKey === "dark"
+                              ? "bg-slate-900 border-slate-700"
+                              : tKey === "oled"
+                              ? "bg-black border-neutral-800"
+                              : "bg-[#f4ecd8] border-[#d8cbaf]"
+                          }`}
+                        />
+                        <span>{conf.label}</span>
+                      </div>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Offline Download Button */}
           {pages.length > 0 && (
@@ -839,8 +1050,13 @@ export default function MangaReaderClient({
         </div>
       </header>
 
-      {/* Reader Container (Vertical Continuous Webtoon Flow) */}
-      <main className={`flex-1 w-full mx-auto px-2 sm:px-4 py-4 sm:py-8 flex flex-col items-center gap-3 transition-all duration-300 ${getWidthClass()}`}>
+      {/* Reader Container (Vertical Continuous Webtoon Flow or Paged View) */}
+      <main
+        onClick={handleReaderClick}
+        onTouchStart={handleReaderTouchStart}
+        onTouchEnd={handleReaderTouchEnd}
+        className={`flex-1 w-full mx-auto px-2 sm:px-4 py-4 sm:py-8 flex flex-col items-center gap-3 transition-all duration-300 ${getWidthClass()}`}
+      >
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-36 text-slate-400 gap-4 animate-in fade-in">
             <Loader2 className="w-10 h-10 animate-spin text-cyan-400" />
@@ -899,14 +1115,14 @@ export default function MangaReaderClient({
               <div
                 key={p.pageNumber}
                 data-page={p.pageNumber}
-                className="relative w-full bg-slate-950 rounded-xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center min-h-[300px]"
+                className={`relative w-full rounded-xl overflow-hidden shadow-2xl flex items-center justify-center min-h-[300px] border transition-colors ${currentToneConfig.imageBorder}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={srcUrl}
                   alt={`Page ${p.pageNumber}`}
                   loading={index < 3 ? "eager" : "lazy"}
-                  className={getImageClass()}
+                  className={`${getImageClass()} ${readingTone === "sepia" ? "sepia-[0.08]" : ""}`}
                   onError={() => handleImageError(p.pageNumber)}
                 />
 
@@ -928,7 +1144,7 @@ export default function MangaReaderClient({
                 )}
 
                 {/* Page number badge */}
-                <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-md bg-black/75 backdrop-blur-md text-[11px] text-slate-300 font-mono border border-white/10 pointer-events-none">
+                <div className={`absolute bottom-3 right-3 px-2.5 py-1 rounded-md backdrop-blur-md text-[11px] font-mono border pointer-events-none transition-colors ${currentToneConfig.floatingPillBg}`}>
                   {p.pageNumber} / {pages.length}
                 </div>
               </div>
@@ -965,12 +1181,12 @@ export default function MangaReaderClient({
           return (
             <div className="relative w-full flex flex-col items-center select-none">
               {/* Main Paged Frame */}
-              <div className="relative w-full bg-slate-950 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center min-h-[60vh] max-h-[90vh]">
+              <div className={`relative w-full rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center min-h-[60vh] max-h-[90vh] border transition-colors ${currentToneConfig.imageBorder}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={srcUrl}
                   alt={`Page ${p.pageNumber}`}
-                  className="max-h-[85vh] 2xl:max-h-[88vh] w-auto max-w-full object-contain mx-auto"
+                  className={`max-h-[85vh] 2xl:max-h-[88vh] w-auto max-w-full object-contain mx-auto ${readingTone === "sepia" ? "sepia-[0.08]" : ""}`}
                   onError={() => handleImageError(p.pageNumber)}
                 />
 
@@ -994,7 +1210,7 @@ export default function MangaReaderClient({
                 </button>
 
                 {/* Page number badge */}
-                <div className="absolute bottom-3 right-3 px-3 py-1 rounded-md bg-black/80 backdrop-blur-md text-xs text-slate-300 font-mono border border-white/10 pointer-events-none z-30">
+                <div className={`absolute bottom-3 right-3 px-3 py-1 rounded-md backdrop-blur-md text-xs font-mono border pointer-events-none z-30 transition-colors ${currentToneConfig.floatingPillBg}`}>
                   {p.pageNumber} / {pages.length}
                 </div>
               </div>
@@ -1004,17 +1220,17 @@ export default function MangaReaderClient({
                 <button
                   type="button"
                   onClick={isRTL ? handleNextPage : handlePrevPage}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                  className={`px-4 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors ${currentToneConfig.buttonBg}`}
                 >
                   <ChevronLeft className="w-4 h-4" />
                   <span>{isRTL ? "Next Page" : "Prev Page"}</span>
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-slate-400">
+                  <span className={`text-xs font-mono ${currentToneConfig.subtextColor}`}>
                     {p.pageNumber} / {pages.length}
                   </span>
-                  <span className="text-[10px] text-slate-500 font-mono">
+                  <span className={`text-[10px] font-mono opacity-60 ${currentToneConfig.subtextColor}`}>
                     ({isRTL ? "RTL Manga" : "LTR Comic"})
                   </span>
                 </div>
@@ -1022,7 +1238,7 @@ export default function MangaReaderClient({
                 <button
                   type="button"
                   onClick={isRTL ? handlePrevPage : handleNextPage}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                  className={`px-4 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors ${currentToneConfig.buttonBg}`}
                 >
                   <span>{isRTL ? "Prev Page" : "Next Page"}</span>
                   <ChevronRight className="w-4 h-4" />
@@ -1033,9 +1249,28 @@ export default function MangaReaderClient({
         })()}
       </main>
 
+      {/* Floating Bottom Page Indicator Pill when chrome is hidden */}
+      {!isChromeVisible && !isLoading && pages.length > 0 && (
+        <div
+          onClick={() => setIsChromeVisible(true)}
+          className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-full backdrop-blur-md shadow-xl text-xs font-mono font-semibold border cursor-pointer animate-in fade-in transition-all active:scale-95 ${currentToneConfig.floatingPillBg}`}
+          title="Tap center or click to show reader controls"
+        >
+          Page {currentVisiblePage} / {pages.length} • Tap for Menu
+        </div>
+      )}
+
       {/* End of Chapter Section — Obvious Continuous Flow (Phase 5, 6, 7) */}
       {!isLoading && !error && pages.length > 0 && (
-        <section className="w-full border-t border-white/10 bg-slate-950/95 backdrop-blur-2xl py-12 px-4 text-center mt-4 shadow-2xl">
+        <section
+          className={`w-full border-t backdrop-blur-2xl py-12 px-4 text-center mt-4 shadow-2xl transition-colors ${
+            readingTone === "sepia"
+              ? "bg-[#eae0c8]/95 border-[#d8cbaf] text-[#2c251a]"
+              : readingTone === "oled"
+              ? "bg-black border-neutral-900 text-white"
+              : "bg-slate-950/95 border-white/10 text-white"
+          }`}
+        >
           <div className="max-w-xl mx-auto space-y-6">
             {nextChapter ? (
               <>
@@ -1044,10 +1279,10 @@ export default function MangaReaderClient({
                     <Check className="w-3.5 h-3.5 text-cyan-400" />
                     Completed Chapter {activeChapterNum ?? activeChapterId}
                   </div>
-                  <h2 className="text-xl sm:text-3xl font-black text-white tracking-tight">
+                  <h2 className="text-xl sm:text-3xl font-black tracking-tight">
                     Up Next: {nextChapter.title || `Chapter ${nextChapter.chapterNumber}`}
                   </h2>
-                  <p className="text-xs sm:text-sm text-slate-400">
+                  <p className={`text-xs sm:text-sm ${currentToneConfig.subtextColor}`}>
                     Continue reading seamlessly without returning to the overview.
                   </p>
                 </div>
@@ -1071,7 +1306,7 @@ export default function MangaReaderClient({
                     <button
                       type="button"
                       onClick={() => navigateToChapter(prevChapter)}
-                      className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+                      className={`px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none ${currentToneConfig.buttonBg}`}
                     >
                       <ChevronLeft className="w-4 h-4" />
                       Prev Ch. {prevChapter.chapterNumber}
@@ -1081,7 +1316,7 @@ export default function MangaReaderClient({
                   <button
                     type="button"
                     onClick={handleBackToOverview}
-                    className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+                    className={`px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none ${currentToneConfig.buttonBg}`}
                   >
                     <ArrowLeft className="w-4 h-4 text-cyan-400" />
                     Back to Manga
@@ -1095,10 +1330,10 @@ export default function MangaReaderClient({
                     <Sparkles className="w-3.5 h-3.5" />
                     You&apos;re All Caught Up!
                   </div>
-                  <h2 className="text-xl sm:text-3xl font-black text-white tracking-tight">
+                  <h2 className="text-xl sm:text-3xl font-black tracking-tight">
                     Final Chapter Reached
                   </h2>
-                  <p className="text-xs sm:text-sm text-slate-400 max-w-sm mx-auto leading-relaxed">
+                  <p className={`text-xs sm:text-sm max-w-sm mx-auto leading-relaxed ${currentToneConfig.subtextColor}`}>
                     You have finished the latest available chapter of {mangaTitle}. Check back later for new releases!
                   </p>
                 </div>
@@ -1117,7 +1352,7 @@ export default function MangaReaderClient({
                     <button
                       type="button"
                       onClick={() => navigateToChapter(prevChapter)}
-                      className="px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none"
+                      className={`px-4 py-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none ${currentToneConfig.buttonBg}`}
                     >
                       <ChevronLeft className="w-4 h-4" />
                       Prev Ch. {prevChapter.chapterNumber}
