@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AnimeMapping } from '@/types/sync';
+import { BoundedLRU } from '@/lib/lru-cache';
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -12,8 +13,8 @@ const KITSU_HEADERS = {
   'Content-Type': 'application/vnd.api+json',
 };
 
-// In-memory LRU cache to avoid excessive DB reads
-const mappingMemoryCache = new Map<string, { mapping: AnimeMapping | null; expiresAt: number }>();
+// Bounded LRU cache to avoid excessive DB reads and unbounded memory usage
+const mappingMemoryCache = new BoundedLRU<AnimeMapping | null>(1000);
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /**
@@ -29,8 +30,8 @@ export async function resolveAnimeMapping(
 
   // 1. Check in-memory cache
   const cached = mappingMemoryCache.get(animeSlug);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.mapping;
+  if (cached !== null) {
+    return cached;
   }
 
   try {
@@ -42,7 +43,7 @@ export async function resolveAnimeMapping(
       .maybeSingle();
 
     if (dbMapping && (dbMapping.anilist_id || dbMapping.mal_id)) {
-      mappingMemoryCache.set(animeSlug, { mapping: dbMapping, expiresAt: Date.now() + CACHE_TTL_MS });
+      mappingMemoryCache.set(animeSlug, dbMapping, CACHE_TTL_MS);
       return dbMapping;
     }
 
@@ -179,7 +180,7 @@ export async function resolveAnimeMapping(
       );
     }
 
-    mappingMemoryCache.set(animeSlug, { mapping, expiresAt: Date.now() + CACHE_TTL_MS });
+    mappingMemoryCache.set(animeSlug, mapping, CACHE_TTL_MS);
     return mapping;
   } catch (error) {
     console.error(`[AnimeMapping] Error resolving mapping for ${animeSlug}:`, error);

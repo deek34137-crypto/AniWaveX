@@ -29,24 +29,31 @@ const ALLOWED_DOMAIN_PATTERNS = [
   /smoothpre\.(com|net)/i,
   /abyss(player)?\.(com|to)/i,
   /workers\.dev/i,
-  /m3u8/i,
-  /cdn/i,
-  /stream/i,
-  /storage/i,
-  /video/i,
+  /akamaized\.net/i,
+  /b-cdn\.net/i,
+  /bunnycdn\.com/i,
+  /cloudfront\.net/i,
+  /atomic4cdn\.top/i,
+  /flixcloud\.cc/i,
 ];
 
 function isPrivateIpOrHost(hostname) {
   if (!hostname) return true;
-  const lower = hostname.toLowerCase();
+  const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (
     lower === 'localhost' ||
     lower.endsWith('.local') ||
     lower.endsWith('.internal') ||
+    lower === '0.0.0.0' ||
+    lower === '::' ||
+    lower === '::1' ||
     lower.startsWith('127.') ||
     lower.startsWith('10.') ||
     lower.startsWith('192.168.') ||
-    lower.startsWith('169.254.')
+    lower.startsWith('169.254.') ||
+    lower.startsWith('fc') ||
+    lower.startsWith('fd') ||
+    lower.startsWith('fe80:')
   ) {
     return true;
   }
@@ -65,8 +72,8 @@ export function isAllowedProxyUrl(targetUrl) {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
     if (isPrivateIpOrHost(parsed.hostname)) return false;
 
-    // Check against patterns
-    return ALLOWED_DOMAIN_PATTERNS.some((pattern) => pattern.test(parsed.hostname) || pattern.test(parsed.pathname));
+    // Check hostname against allowed media and CDN domain patterns
+    return ALLOWED_DOMAIN_PATTERNS.some((pattern) => pattern.test(parsed.hostname));
   } catch {
     return false;
   }
@@ -144,13 +151,23 @@ export async function handleProxyRequest(request, fallbackBase = 'https://toonst
 
         let processed = line;
 
-        // If Hindi audio track exists and isn't marked default, promote it
-        if (!hasHindiDefault && !hindiPromoted && processed.includes('#EXT-X-MEDIA:TYPE=AUDIO')) {
-          if (/LANGUAGE="hin"/i.test(processed) || /NAME="Hindi"/i.test(processed)) {
-            processed = processed
-              .replace(/DEFAULT=NO/g, 'DEFAULT=YES')
-              .replace(/AUTOSELECT=NO/g, 'AUTOSELECT=YES');
+        // If Hindi audio track exists, ensure it is promoted to DEFAULT=YES
+        if (processed.includes('#EXT-X-MEDIA:TYPE=AUDIO')) {
+          const isHindi = /LANGUAGE="hin"/i.test(processed) || /NAME="[^"]*hindi[^"]*"/i.test(processed);
+          if (isHindi) {
+            if (/DEFAULT=/i.test(processed)) {
+              processed = processed.replace(/DEFAULT=(NO|YES)/ig, 'DEFAULT=YES');
+            } else {
+              processed += ',DEFAULT=YES';
+            }
+            if (/AUTOSELECT=/i.test(processed)) {
+              processed = processed.replace(/AUTOSELECT=(NO|YES)/ig, 'AUTOSELECT=YES');
+            } else {
+              processed += ',AUTOSELECT=YES';
+            }
             hindiPromoted = true;
+          } else if (hasHindiDefault || hindiPromoted) {
+            processed = processed.replace(/DEFAULT=YES/ig, 'DEFAULT=NO');
           }
         }
 

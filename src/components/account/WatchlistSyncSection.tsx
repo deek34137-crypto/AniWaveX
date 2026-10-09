@@ -164,10 +164,11 @@ export default function WatchlistSyncSection({
     handleSyncEverything(resolutions);
   };
 
+  const [nowMs] = useState(() => Date.now());
   const formatLastSynced = (dateStr?: string | null) => {
     if (!dateStr) return "Never synced";
     const d = new Date(dateStr);
-    const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
+    const diffMin = Math.round((nowMs - d.getTime()) / 60000);
     if (diffMin < 1) return "Just now";
     if (diffMin < 60) return `${diffMin}m ago`;
     const diffHr = Math.round(diffMin / 60);

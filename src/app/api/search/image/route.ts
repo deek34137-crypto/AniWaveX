@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Batch query AniList GraphQL for cover art, banner, and canonical titles
-    let mediaMap = new Map<number, any>();
+    const mediaMap = new Map<number, any>();
     try {
       const aniListQuery = `
         query ($ids: [Int]) {

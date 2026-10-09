@@ -117,8 +117,7 @@ export async function GET(req: NextRequest) {
     (allowed) => hostname === allowed || hostname.endsWith(`.${allowed}`)
   );
 
-  // If not explicitly in known list, still permit standard public image hosts with a dot in hostname
-  if (!isExplicitlyAllowed && !hostname.includes(".")) {
+  if (!isExplicitlyAllowed) {
     return new NextResponse("Host not permitted in image proxy", { status: 403 });
   }
 
@@ -150,7 +149,23 @@ export async function GET(req: NextRequest) {
     }
 
     const contentType = upstreamRes.headers.get("content-type") || "image/jpeg";
+    // Security check: Only permit valid image MIME types
+    if (!contentType.toLowerCase().startsWith("image/")) {
+      return new NextResponse("Invalid upstream content type: only images allowed", {
+        status: 415,
+      });
+    }
+
+    const contentLength = upstreamRes.headers.get("content-length");
+    const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB limit
+    if (contentLength && parseInt(contentLength, 10) > MAX_IMAGE_BYTES) {
+      return new NextResponse("Image exceeds maximum size limit", { status: 413 });
+    }
+
     const imageBuffer = await upstreamRes.arrayBuffer();
+    if (imageBuffer.byteLength > MAX_IMAGE_BYTES) {
+      return new NextResponse("Image exceeds maximum size limit", { status: 413 });
+    }
 
     return new NextResponse(imageBuffer, {
       status: 200,

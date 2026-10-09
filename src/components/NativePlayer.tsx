@@ -26,6 +26,16 @@ function isValidVttSubtitle(url: string): boolean {
   return url.startsWith('/api/proxy') || url.startsWith('http://') || url.startsWith('https://');
 }
 
+function seekPlayer(playerInstance: MediaPlayerInstance | null, targetTime: number) {
+  if (!playerInstance || targetTime <= 0) return;
+  const cur = playerInstance.currentTime || 0;
+  if (Math.abs(cur - targetTime) > 2) {
+    try {
+      playerInstance.currentTime = targetTime;
+    } catch {}
+  }
+}
+
 export default function NativePlayer({ 
   url, 
   title, 
@@ -63,26 +73,16 @@ export default function NativePlayer({
   }, [url]);
 
   const applyInitialSeek = () => {
-    if (initialTime > 0 && player.current) {
-      const cur = player.current.currentTime || 0;
-      if (Math.abs(cur - initialTime) > 2) {
-        try {
-          player.current.currentTime = initialTime;
-        } catch {}
-      }
+    if (player.current && !hasAppliedInitialTimeRef.current) {
+      seekPlayer(player.current, initialTime);
       hasAppliedInitialTimeRef.current = true;
     }
   };
 
   useEffect(() => {
     if (player.current && initialTime > 0 && !hasAppliedInitialTimeRef.current) {
-      const cur = player.current.currentTime || 0;
-      if (Math.abs(cur - initialTime) > 2) {
-        try {
-          player.current.currentTime = initialTime;
-          hasAppliedInitialTimeRef.current = true;
-        } catch {}
-      }
+      seekPlayer(player.current, initialTime);
+      hasAppliedInitialTimeRef.current = true;
     }
   }, [url, initialTime, player]);
 

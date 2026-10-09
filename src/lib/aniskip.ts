@@ -4,6 +4,8 @@
  * powered by the public AniSkip API (https://api.aniskip.com).
  */
 
+import { BoundedLRU } from "@/lib/lru-cache";
+
 export interface SkipInterval {
   type: "op" | "ed" | "recap";
   label: string;
@@ -11,8 +13,10 @@ export interface SkipInterval {
   endTime: number;
 }
 
-// In-memory cache to prevent redundant API queries
-const skipCache = new Map<string, SkipInterval[]>();
+// Bounded LRU cache to prevent unbounded memory growth
+const skipCache = new BoundedLRU<SkipInterval[]>(1000);
+const CACHE_TTL_SUCCESS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL_EMPTY = 60 * 60 * 1000; // 1 hour for not found
 
 /**
  * Resolves MyAnimeList (MAL) ID from AniList ID or Kitsu ID via AniZip
@@ -86,8 +90,9 @@ export async function getEpisodeSkipTimes(options: {
 
   // 2. Check Cache
   const cacheKey = `${targetMalId}_${episodeNumber}`;
-  if (skipCache.has(cacheKey)) {
-    return skipCache.get(cacheKey) || [];
+  const cached = skipCache.get(cacheKey);
+  if (cached !== null) {
+    return cached;
   }
 
   try {
@@ -97,13 +102,13 @@ export async function getEpisodeSkipTimes(options: {
     });
 
     if (!res.ok) {
-      skipCache.set(cacheKey, []);
+      skipCache.set(cacheKey, [], CACHE_TTL_EMPTY);
       return [];
     }
 
     const data = await res.json();
     if (!data.found || !Array.isArray(data.results)) {
-      skipCache.set(cacheKey, []);
+      skipCache.set(cacheKey, [], CACHE_TTL_EMPTY);
       return [];
     }
 
@@ -128,7 +133,7 @@ export async function getEpisodeSkipTimes(options: {
       };
     }).filter((item: SkipInterval) => item.endTime > item.startTime);
 
-    skipCache.set(cacheKey, intervals);
+    skipCache.set(cacheKey, intervals, CACHE_TTL_SUCCESS);
     return intervals;
   } catch (err) {
     console.warn("[AniSkip] Error fetching skip times:", err);

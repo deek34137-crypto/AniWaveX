@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AccountTab, UserStats } from "@/types/account";
 import ProfileOverviewSection from "@/components/account/ProfileOverviewSection";
@@ -72,6 +72,26 @@ export default function AccountCenterClient({
   const [oauthSuccessMsg, setOauthSuccessMsg] = useState<string | null>(null);
 
   // Sync tab with URL
+  const refreshConnections = useCallback(async () => {
+    try {
+      const res = await fetch("/api/account/connections");
+      const data = await res.json();
+      if (res.ok && data.connections) {
+        setConnections(data.connections);
+      }
+    } catch {}
+  }, []);
+
+  const refreshSyncHistory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/account/sync/history");
+      const data = await res.json();
+      if (res.ok && data.history) {
+        setSyncHistory(data.history);
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (tabParam && ["overview", "edit", "connected", "sync", "security", "appearance", "notifications", "privacy", "data", "danger"].includes(tabParam)) {
       setActiveTab(tabParam as AccountTab);
@@ -89,27 +109,7 @@ export default function AccountCenterClient({
       setActiveTab("connected");
       refreshConnections();
     }
-  }, [connectedParam]);
-
-  const refreshConnections = async () => {
-    try {
-      const res = await fetch("/api/account/connections");
-      const data = await res.json();
-      if (res.ok && data.connections) {
-        setConnections(data.connections);
-      }
-    } catch {}
-  };
-
-  const refreshSyncHistory = async () => {
-    try {
-      const res = await fetch("/api/account/sync/history");
-      const data = await res.json();
-      if (res.ok && data.history) {
-        setSyncHistory(data.history);
-      }
-    } catch {}
-  };
+  }, [connectedParam, refreshConnections]);
 
   const handleTabChange = (newTab: AccountTab) => {
     setActiveTab(newTab);

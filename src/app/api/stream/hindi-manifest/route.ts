@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     let fixedManifest = text.replace(
       /#EXT-X-MEDIA:TYPE=AUDIO,([^\n]+)/g,
       (line, attributes) => {
-        let isHindi = /LANGUAGE="hin"/i.test(attributes) || /NAME="[^"]*hindi[^"]*"/i.test(attributes);
+        const isHindi = /LANGUAGE="hin"/i.test(attributes) || /NAME="[^"]*hindi[^"]*"/i.test(attributes);
 
         // Rewrite relative URI inside the audio tag
         let updated = attributes.replace(/URI="([^"]+)"/, (match: string, uri: string) => {
@@ -64,8 +64,16 @@ export async function GET(request: NextRequest) {
 
         // Set Hindi as default audio track so player plays Hindi automatically
         if (isHindi) {
-          updated = updated.replace(/DEFAULT=(NO|YES)/i, "DEFAULT=YES");
-          updated = updated.replace(/AUTOSELECT=(NO|YES)/i, "AUTOSELECT=YES");
+          if (/DEFAULT=(NO|YES)/i.test(updated)) {
+            updated = updated.replace(/DEFAULT=(NO|YES)/i, "DEFAULT=YES");
+          } else {
+            updated += ',DEFAULT=YES';
+          }
+          if (/AUTOSELECT=(NO|YES)/i.test(updated)) {
+            updated = updated.replace(/AUTOSELECT=(NO|YES)/i, "AUTOSELECT=YES");
+          } else {
+            updated += ',AUTOSELECT=YES';
+          }
         } else {
           updated = updated.replace(/DEFAULT=YES/i, "DEFAULT=NO");
         }

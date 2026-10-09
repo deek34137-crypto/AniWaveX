@@ -141,6 +141,7 @@ export default function TodayAiringRow({ initialSchedule = [] }: TodayAiringRowP
   const [schedule, setSchedule] = useState<AiringAnimeScheduleItem[]>(initialSchedule);
   const [hasMounted, setHasMounted] = useState(false);
   const [tzMode, setTzMode] = useState<TimezoneMode>("local");
+  const [nowSeconds] = useState(() => Math.floor(Date.now() / 1000));
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Client-side timezone preference check & fallback fetch if initialSchedule is empty
@@ -255,7 +256,7 @@ export default function TodayAiringRow({ initialSchedule = [] }: TodayAiringRowP
           className="tv-horizontal-rail flex overflow-x-auto gap-3.5 sm:gap-5 tv:gap-6 pb-4 px-2 snap-x snap-mandatory hide-scrollbar scroll-smooth"
         >
           {displayItems.map((anime) => {
-            const isLive = anime.airingAt <= Math.floor(Date.now() / 1000);
+            const isLive = anime.airingAt <= nowSeconds;
 
             return (
               <div

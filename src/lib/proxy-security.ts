@@ -3,7 +3,9 @@
  * Prevents open proxy relay abuse and SSRF through cryptographically signed short-lived tokens.
  */
 
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual, randomBytes } from "crypto";
+
+let serverRuntimeSecret: string | null = null;
 
 function getProxySecret(): string {
   const configured = 
@@ -13,14 +15,11 @@ function getProxySecret(): string {
 
   if (configured) return configured;
 
-  // Derive a deterministic fallback secret from the project's Supabase key so that
-  // signatures remain valid across distributed serverless lambda instances and cold starts
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (anonKey) {
-    return createHmac("sha256", "aniwavex_proxy_signature_salt_v1").update(anonKey).digest("hex");
+  // Use a secure unguessable server runtime secret if none configured in environment
+  if (!serverRuntimeSecret) {
+    serverRuntimeSecret = randomBytes(32).toString("hex");
   }
-
-  return "aniwavex_dev_proxy_hmac_secret";
+  return serverRuntimeSecret;
 }
 
 const DEFAULT_EXPIRY_SECONDS = 24 * 60 * 60; // 24 hours

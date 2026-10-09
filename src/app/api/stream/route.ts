@@ -693,8 +693,9 @@ async function multiProviderProbeEngine(
       resolve(isPlayableStream(formatted) ? formatted : null);
     };
 
-    // Global hard ceiling timeout
-    const globalTimeout = setTimeout(finishAndResolve, 5000);
+    // Dynamic global hard ceiling timeout (allow extra headroom for Hindi-to-Sub fallback resolution)
+    const timeoutCeilingMs = audio === 'hindi' ? 6500 : 5000;
+    const globalTimeout = setTimeout(finishAndResolve, timeoutCeilingMs);
 
     const onProviderSuccess = (provider: string, result: ExtractedStreamResult, latencyMs = 0) => {
       if (isCompleted || completedProviders.has(provider)) return;
@@ -837,13 +838,13 @@ async function multiProviderProbeEngine(
         }
       })();
 
-      // t = 3500ms: If Hindi worker has no dub for this anime, load Japanese (sub) as fallback!
+      // t = 2200ms: If Hindi worker has no dub for this anime, load Japanese (sub) as fallback!
       setTimeout(() => {
         if (!isCompleted && gatheredResults.length === 0) {
           japFallbackProviders.forEach(p => tryProvider(p, 'sub', 2500));
           tryLocalAnikoto(true);
         }
-      }, 3500);
+      }, 2200);
     } else {
       const allTier1 = ['reanime', 'justanime', 'anikoto'];
       const allTier2 = ['kaa', 'animegg', 'animenosub'];

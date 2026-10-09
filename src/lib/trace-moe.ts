@@ -145,7 +145,7 @@ export async function searchAnimeByImage(file: File): Promise<TraceMoeAnimeMatch
     }
   `;
 
-  let mediaMap = new Map<number, any>();
+  const mediaMap = new Map<number, any>();
   try {
     const gqlRes = await fetch("https://graphql.anilist.co", {
       method: "POST",

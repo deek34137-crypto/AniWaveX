@@ -32,6 +32,12 @@
   ],
   "exclude": [
     "node_modules",
+    ".audit",
+    ".audit/**/*",
+    "Anivexa-API",
+    "Anivexa-API/**/*",
+    "hindi-stream-worker",
+    "hindi-stream-worker/**/*",
     "mobile",
     "mobile/**/*",
     "ReAnime-API",

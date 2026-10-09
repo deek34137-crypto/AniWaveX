@@ -753,7 +753,7 @@ export async function getMangaChapters(
   if (rawResults.length === 0) return [];
 
   // 3. Relevance filtering: compute match score against title, romaji, cleanTitle, and synonyms
-  let scoredResults = rawResults
+  const scoredResults = rawResults
     .map((r) => {
       const scorePrimary = titleScore(title, r.title, r.altTitles);
       const scoreRomaji = romajiTitle ? titleScore(romajiTitle, r.title, r.altTitles) : 0;

@@ -304,7 +304,7 @@ export async function scheduleBehaviorNotification(): Promise<void> {
 
   // Check learned preferred hour from history
   let targetHour = 19; // Default 7:00 PM
-  let targetMinute = Math.floor(Math.random() * 45); // e.g. 19:00 - 19:45
+  const targetMinute = Math.floor(Math.random() * 45); // e.g. 19:00 - 19:45
   try {
     const rawHours = localStorage.getItem(STORAGE_KEYS.ACTIVE_HOURS);
     if (rawHours) {
@@ -341,7 +341,7 @@ export async function scheduleBehaviorNotification(): Promise<void> {
   }
 
   // 4. Decision Tree: Choose ONE strongest reason
-  let chosenTitle = "AniWaveX 🌊";
+  const chosenTitle = "AniWaveX 🌊";
   let chosenBody = "";
 
   // Priority 1: Unfinished episode / Next episode waiting

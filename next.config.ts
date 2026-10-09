@@ -17,12 +17,15 @@ const nextConfig: NextConfig = {
     ],
   },
   images: {
-    unoptimized: true,
     qualities: [75, 85],
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.supabase.co",
+      },
       {
         protocol: "https",
         hostname: "**.kitsu.app",

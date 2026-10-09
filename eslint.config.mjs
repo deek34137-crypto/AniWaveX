@@ -21,8 +21,13 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     // Standalone worker and vendor modules
+    ".audit/**",
     "Anivexa-API/**",
     "ReAnime-API/**",
+    "hindi-stream-worker/**",
+    "workers/**",
+    "releases/**",
+    "mobile/**",
     "src/lib/providers/anikoto/**",
   ]),
 ]);

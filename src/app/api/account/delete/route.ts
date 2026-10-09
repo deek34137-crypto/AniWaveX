@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -34,10 +35,34 @@ export async function DELETE(req: NextRequest) {
     // 5. Delete sync history
     await supabase.from("sync_history").delete().eq("user_id", user.id);
 
-    // 6. Delete user profile
+    // 6. Delete user avatars in storage
+    try {
+      const { data: files } = await supabase.storage.from("avatars").list(user.id);
+      if (files && files.length > 0) {
+        await supabase.storage.from("avatars").remove(files.map((f) => `${user.id}/${f.name}`));
+      }
+    } catch (storageErr) {
+      console.warn("Could not delete user storage files:", storageErr);
+    }
+
+    // 7. Delete user profile
     await supabase.from("profiles").delete().eq("id", user.id);
 
-    // 7. Sign out session
+    // 8. Delete user from auth.users via service role key
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (serviceRoleKey && supabaseUrl) {
+      try {
+        const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        await adminClient.auth.admin.deleteUser(user.id);
+      } catch (authDeleteErr) {
+        console.warn("Failed to delete user from Supabase auth:", authDeleteErr);
+      }
+    }
+
+    // 9. Sign out session
     await supabase.auth.signOut({ scope: "global" });
 
     return NextResponse.json({

@@ -291,8 +291,29 @@ export default function MangaReaderClient({
     };
   }, [offlineBlobs]);
 
+  // Determine current chapter index, previous chapter, and next chapter
+  const currentIndex = useMemo(() => {
+    if (!chapters || chapters.length === 0) return -1;
+    const byId = chapters.findIndex((c) => c.id === activeChapterId);
+    if (byId !== -1) return byId;
+    return chapters.findIndex((c) => c.chapterNumber === activeChapterNum);
+  }, [chapters, activeChapterId, activeChapterNum]);
+
+  const currentChapterObj = currentIndex >= 0 ? chapters[currentIndex] : null;
+  const prevChapter = currentIndex > 0 ? chapters[currentIndex - 1] : null;
+  const nextChapter = currentIndex >= 0 && currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null;
+
+  // Fullscreen state listener
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
+
   // Download entire current chapter for 100% offline access
-  const handleDownloadChapterOffline = async () => {
+  const handleDownloadChapterOffline = useCallback(async () => {
     if (pages.length === 0 || isDownloading) return;
     setIsDownloading(true);
     setDownloadProgress(0);
@@ -342,7 +363,7 @@ export default function MangaReaderClient({
       setIsDownloading(false);
       setDownloadProgress(0);
     }
-  };
+  }, [pages, isDownloading, mangaId, activeChapterId, activeChapterNum, currentChapterObj, mangaTitle, posterImage]);
 
   const handleRemoveOfflineChapter = async () => {
     try {
@@ -353,27 +374,6 @@ export default function MangaReaderClient({
       console.error("[Offline Removal] Error:", err);
     }
   };
-
-  // Fullscreen state listener
-  useEffect(() => {
-    const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener("fullscreenchange", handleFsChange);
-    return () => document.removeEventListener("fullscreenchange", handleFsChange);
-  }, []);
-
-  // Determine current chapter index, previous chapter, and next chapter
-  const currentIndex = useMemo(() => {
-    if (!chapters || chapters.length === 0) return -1;
-    const byId = chapters.findIndex((c) => c.id === activeChapterId);
-    if (byId !== -1) return byId;
-    return chapters.findIndex((c) => c.chapterNumber === activeChapterNum);
-  }, [chapters, activeChapterId, activeChapterNum]);
-
-  const currentChapterObj = currentIndex >= 0 ? chapters[currentIndex] : null;
-  const prevChapter = currentIndex > 0 ? chapters[currentIndex - 1] : null;
-  const nextChapter = currentIndex >= 0 && currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null;
 
   // Fetch chapter pages
   const fetchPages = useCallback(async () => {
@@ -592,11 +592,14 @@ export default function MangaReaderClient({
     router.replace(`/manga/${mangaId}`);
   }, [router, mangaId]);
 
+  useEffect(() => {
+    hasRestoredPageRef.current = false;
+  }, [activeChapterId]);
+
   // Chapter-to-Chapter navigation uses router.replace to avoid history pollution
   const navigateToChapter = useCallback(
     (targetChapter: MangaChapter) => {
       setIsChapterListOpen(false);
-      hasRestoredPageRef.current = false;
       // Immediately transition client state to eliminate stale page flash
       setActiveChapterId(targetChapter.id);
       setActiveChapterNum(targetChapter.chapterNumber);
@@ -729,12 +732,22 @@ export default function MangaReaderClient({
     } catch {}
   };
 
-  // Retry individual broken image
-  const handleImageError = (pageNumber: number) => {
-    setFailedImages((prev) => ({
-      ...prev,
-      [pageNumber]: (prev[pageNumber] || 0) + 1,
-    }));
+  // Retry individual broken image (capped at MAX_IMAGE_RETRIES to prevent infinite reload loops)
+  const MAX_IMAGE_RETRIES = 3;
+  const handleImageError = (pageNumber: number, forceUserRetry = false) => {
+    setFailedImages((prev) => {
+      const current = prev[pageNumber] || 0;
+      if (forceUserRetry) {
+        return { ...prev, [pageNumber]: 1 };
+      }
+      if (current >= MAX_IMAGE_RETRIES) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [pageNumber]: current + 1,
+      };
+    });
   };
 
   const getWidthClass = () => {
@@ -1123,7 +1136,11 @@ export default function MangaReaderClient({
                   alt={`Page ${p.pageNumber}`}
                   loading={index < 3 ? "eager" : "lazy"}
                   className={`${getImageClass()} ${readingTone === "sepia" ? "sepia-[0.08]" : ""}`}
-                  onError={() => handleImageError(p.pageNumber)}
+                  onError={() => {
+                    if (retryCount < MAX_IMAGE_RETRIES) {
+                      handleImageError(p.pageNumber);
+                    }
+                  }}
                 />
 
                 {/* Individual Failed Image Overlay with Retry Button */}
@@ -1134,7 +1151,7 @@ export default function MangaReaderClient({
                     <p className="text-xs text-slate-400">Upstream image server temporarily timed out</p>
                     <button
                       type="button"
-                      onClick={() => handleImageError(p.pageNumber)}
+                      onClick={() => handleImageError(p.pageNumber, true)}
                       className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -1187,7 +1204,11 @@ export default function MangaReaderClient({
                   src={srcUrl}
                   alt={`Page ${p.pageNumber}`}
                   className={`max-h-[85vh] 2xl:max-h-[88vh] w-auto max-w-full object-contain mx-auto ${readingTone === "sepia" ? "sepia-[0.08]" : ""}`}
-                  onError={() => handleImageError(p.pageNumber)}
+                  onError={() => {
+                    if (retryCount < MAX_IMAGE_RETRIES) {
+                      handleImageError(p.pageNumber);
+                    }
+                  }}
                 />
 
                 {/* Tap Zones: Left (30%) & Right (30%) */}

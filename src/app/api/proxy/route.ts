@@ -208,36 +208,32 @@ function convertAssToVtt(assText: string, cacheKey?: string): string {
  */
 function isAllowedHost(hostname: string, isSigned = false): boolean {
   if (!hostname) return false;
-  const host = hostname.toLowerCase();
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
 
   // Reject local/private IPs, IPv6 loopbacks, and link-local metadata
   if (
     host === "localhost" ||
-    host === "127.0.0.1" ||
+    host === "0.0.0.0" ||
+    host === "::" ||
     host === "::1" ||
+    host.startsWith("127.") ||
     host.startsWith("10.") ||
     host.startsWith("192.168.") ||
-    host.startsWith("172.16.") ||
-    host.startsWith("172.17.") ||
-    host.startsWith("172.18.") ||
-    host.startsWith("172.19.") ||
-    host.startsWith("172.20.") ||
-    host.startsWith("172.21.") ||
-    host.startsWith("172.22.") ||
-    host.startsWith("172.23.") ||
-    host.startsWith("172.24.") ||
-    host.startsWith("172.25.") ||
-    host.startsWith("172.26.") ||
-    host.startsWith("172.27.") ||
-    host.startsWith("172.28.") ||
-    host.startsWith("172.29.") ||
-    host.startsWith("172.30.") ||
-    host.startsWith("172.31.") ||
     host.startsWith("169.254.") ||
+    host.startsWith("fc") ||
+    host.startsWith("fd") ||
+    host.startsWith("fe80:") ||
     host.endsWith(".internal") ||
     host.endsWith(".local")
   ) {
     return false;
+  }
+
+  // 172.16.0.0 to 172.31.255.255
+  const match172 = host.match(/^172\.(\d+)\./);
+  if (match172) {
+    const secondOctet = parseInt(match172[1], 10);
+    if (secondOctet >= 16 && secondOctet <= 31) return false;
   }
 
   // If request contains verified cryptographic HMAC signature, permit public media domains

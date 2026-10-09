@@ -101,7 +101,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // 5. Dynamic Anime title entries (Trending, Airing, Top-Rated & Top Catalog tiers)
-  let animeRoutes: MetadataRoute.Sitemap = [];
+  const animeRoutes: MetadataRoute.Sitemap = [];
   try {
     const catalogPagesToFetch = [1, 2, 3, 4, 5, 6, 7, 8];
     const [trending, topRated, airing, ...catalogBatches] = await Promise.all([
@@ -139,7 +139,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // 6. Dynamic Manga entries
-  let mangaRoutes: MetadataRoute.Sitemap = [];
+  const mangaRoutes: MetadataRoute.Sitemap = [];
   try {
     const trendingManga = await getTrendingMangaList(60).catch(() => []);
     const seenMangaIds = new Set<string>();

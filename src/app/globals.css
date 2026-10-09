@@ -51,6 +51,15 @@ body {
   border: 1px solid var(--color-card-border);
 }
 
+@keyframes skipProgressFill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    DYNAMIC THEME PROPAGATION (Dark, Light, and Special Themes)
    Applies selected theme colors to background, cards, borders, and buttons

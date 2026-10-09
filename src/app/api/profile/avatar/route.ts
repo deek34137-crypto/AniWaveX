@@ -4,6 +4,22 @@ import { createClient } from "@/lib/supabase/server";
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024; // 2MB
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+async function cleanupUserAvatarFiles(supabase: any, userId: string, excludePath?: string) {
+  try {
+    const { data: existingFiles } = await supabase.storage.from("avatars").list(userId);
+    if (existingFiles && existingFiles.length > 0) {
+      const oldFiles = existingFiles
+        .filter((f: any) => !excludePath || `${userId}/${f.name}` !== excludePath)
+        .map((f: any) => `${userId}/${f.name}`);
+      if (oldFiles.length > 0) {
+        await supabase.storage.from("avatars").remove(oldFiles);
+      }
+    }
+  } catch (err) {
+    console.warn("Could not clean up old avatars:", err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient();
@@ -20,6 +36,8 @@ export async function POST(req: NextRequest) {
     // Case 1: Switching to a preset avatar ID (e.g. avatar_01)
     if (presetId) {
       const cleanPreset = presetId.trim();
+      await cleanupUserAvatarFiles(supabase, user.id);
+
       await Promise.all([
         supabase.from("profiles").upsert({
           id: user.id,
@@ -78,6 +96,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Clean up older avatar files in this user's storage folder
+    await cleanupUserAvatarFiles(supabase, user.id, filePath);
+
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from("avatars")
@@ -112,6 +133,9 @@ export async function DELETE() {
     if (userError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // Clean up custom avatar files in storage
+    await cleanupUserAvatarFiles(supabase, user.id);
 
     // Reset avatar in database and user metadata
     await Promise.all([
