@@ -1,11 +1,14 @@
 import { cache } from "react";
 import { fetchAniListGraphQL } from "@/lib/schedule";
 import { getAnilistId } from "@/lib/providers/anikoto-wrapper";
+import { BoundedLRU } from "@/lib/lru-cache";
 import {
   resolveAnilistIdFromKitsu,
   resolveKitsuIdFromAnilistId,
   resolveKitsuSlugFromAnilist
 } from "@/lib/kitsu-mapper";
+
+const animeDataLRU = new BoundedLRU<any>(500);
 
 function extractCategories(anime: any, included?: any[]): string[] {
   if (!included || !Array.isArray(included) || included.length === 0) {
@@ -230,6 +233,10 @@ export async function fetchKitsuEpisodeRange(animeId: string, offset: number = 0
 }
 
 export const getAnimeData = cache(async (slug: string) => {
+  if (!slug) return null;
+  const cached = animeDataLRU.get(slug);
+  if (cached) return cached;
+
   const headers = {
     "Accept": "application/vnd.api+json",
     "Content-Type": "application/vnd.api+json",
@@ -243,7 +250,7 @@ export const getAnimeData = cache(async (slug: string) => {
     if (/^\d+$/.test(slug)) {
       const res = await fetch(`https://kitsu.io/api/edge/anime/${encodeURIComponent(slug)}?include=categories,episodes`, {
         headers,
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(6000),
         next: { revalidate: 86400 }
       });
       if (res.ok) {
@@ -436,13 +443,23 @@ export const getAnimeData = cache(async (slug: string) => {
       }
     }
 
-    return { 
+    const finalData = { 
       ...metadata, 
       animeId: anime.id,
       anilistId,
       totalEpisodes: totalCount,
       episodes 
     };
+
+    animeDataLRU.set(slug, finalData, 1000 * 60 * 60 * 2);
+    if (metadata.slug && metadata.slug !== slug) {
+      animeDataLRU.set(metadata.slug, finalData, 1000 * 60 * 60 * 2);
+    }
+    if (anime.id && String(anime.id) !== slug) {
+      animeDataLRU.set(String(anime.id), finalData, 1000 * 60 * 60 * 2);
+    }
+
+    return finalData;
   } catch (error) {
     console.error(`Failed to fetch anime data for slug "${slug}":`, error);
     return null;
@@ -637,15 +654,46 @@ export interface CatalogFilters {
 
 export const GENRE_MAP: Record<string, string> = {
   action: "action",
-  romance: "romance",
+  adventure: "adventure",
   comedy: "comedy",
+  drama: "drama",
   fantasy: "fantasy",
-  "sci-fi": "science-fiction",
   horror: "horror",
-  sports: "sports",
+  "sci-fi": "science-fiction",
+  "science-fiction": "science-fiction",
+  mystery: "mystery",
+  supernatural: "supernatural",
+  psychological: "psychological",
+  romance: "romance",
   "slice-of-life": "slice-of-life",
+  sports: "sports",
   isekai: "isekai",
-  drama: "drama"
+  mecha: "mecha",
+  music: "music",
+  thriller: "thriller",
+  "martial-arts": "martial-arts",
+  historical: "historical",
+  military: "military",
+  demons: "demons",
+  demon: "demons",
+  magic: "magic",
+  school: "school",
+  shounen: "shounen",
+  shoujo: "shoujo",
+  seinen: "seinen",
+  josei: "josei",
+  vampire: "vampire",
+  space: "space",
+  "super-power": "super-power",
+  parody: "parody",
+  kids: "kids",
+  mythology: "mythology",
+  cyberpunk: "cyberpunk",
+  police: "police",
+  game: "game",
+  ecchi: "ecchi",
+  harem: "harem",
+  "post-apocalyptic": "post-apocalyptic"
 };
 
 export const SORT_MAP: Record<string, string> = {
@@ -704,8 +752,10 @@ export async function getCatalogAnime(filters: CatalogFilters) {
   queryParams.append('page[offset]', ((page - 1) * limit).toString());
 
   // Validate and apply Genre
-  if (filters.genre && GENRE_MAP[filters.genre.toLowerCase()]) {
-    queryParams.append('filter[categories]', GENRE_MAP[filters.genre.toLowerCase()]);
+  if (filters.genre) {
+    const rawGenre = filters.genre.toLowerCase().trim();
+    const mappedCategory = GENRE_MAP[rawGenre] || rawGenre.replace(/\s+/g, '-');
+    queryParams.append('filter[categories]', mappedCategory);
   }
 
   // Validate and apply Year

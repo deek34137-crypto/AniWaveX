@@ -12,15 +12,32 @@ import type { Metadata } from "next";
 
 const GENRE_DESCRIPTIONS: Record<string, string> = {
   action: "Action anime features adrenaline-pumping battles, martial arts duels, supernatural conflicts, and heroic journeys.",
+  adventure: "Adventure anime follows daring journeys across uncharted lands, epic treasure quests, and unforgettable explorations.",
   romance: "Romance anime focuses on heartfelt emotional journeys, blossoming relationships, school crushes, and dramatic love stories.",
   comedy: "Comedy anime brings laughter with hilarious parody, absurd gags, slice-of-life misunderstandings, and witty banter.",
   fantasy: "Fantasy anime transports viewers to magical realms filled with swordcraft, mythical beasts, legendary quests, and mystical powers.",
   "sci-fi": "Sci-Fi anime explores futuristic cyberpunk worlds, space operas, time travel, advanced artificial intelligence, and dystopian societies.",
+  "science-fiction": "Sci-Fi anime explores futuristic cyberpunk worlds, space operas, time travel, advanced artificial intelligence, and dystopian societies.",
   horror: "Horror anime delivers psychological dread, haunting suspense, paranormal mysteries, and spine-chilling encounters.",
   sports: "Sports anime showcases intense tournament rivalries, team camaraderie, athletic discipline, and underdog triumphs.",
   "slice-of-life": "Slice of Life anime captures the beauty of daily life, touching friendships, school memories, and heartwarming moments.",
   isekai: "Isekai anime follows protagonists transported, reincarnated, or summoned into fantastical new worlds with unique cheat abilities.",
   drama: "Drama anime presents deeply moving stories exploring human struggles, complex interpersonal relationships, and impactful life lessons.",
+  mystery: "Mystery anime challenges viewers with intricate whodunits, mind-bending puzzles, detective investigations, and dark secrets.",
+  supernatural: "Supernatural anime delves into paranormal phenomena, spirits, occult rituals, curses, and otherworldly entities.",
+  psychological: "Psychological anime probes the human psyche through high-stakes mind games, moral dilemmas, and intense suspense.",
+  magic: "Magic anime showcases spellcasting duels, wizard academies, ancient runes, and grand mystical tournaments.",
+  mecha: "Mecha anime features giant mechanized robots, interstellar warfare, military tech, and tactical fleet skirmishes.",
+  thriller: "Thriller anime delivers gripping suspense, ticking-clock tension, relentless pursuits, and unexpected plot twists.",
+  "martial-arts": "Martial arts anime highlights intense hand-to-hand combat, ancient combat traditions, and relentless physical training.",
+  historical: "Historical anime brings feudal eras, legendary samurai battles, and past historical epochs to vivid life.",
+  military: "Military anime explores tactical battlefield warfare, squad loyalty, geopolitical conflict, and armored combat.",
+  shounen: "Shounen anime chronicles inspiring coming-of-age tales, fierce rivalries, personal growth, and unwavering determination.",
+  shoujo: "Shoujo anime centers on emotional depth, tender relationships, artistic beauty, and coming-of-age romance.",
+  seinen: "Seinen anime delivers mature, complex narratives geared toward adult audiences with deep philosophical themes.",
+  demons: "Demons anime explores dark confrontations with hellish creatures, cursed spirits, and underworld forces.",
+  vampire: "Vampire anime features blood-drinking immortals, gothic folklore, nocturnal hunters, and dark romances.",
+  "super-power": "Super power anime showcases extraordinary superhuman abilities, hero societies, and world-shaking battles.",
 };
 
 export async function generateMetadata({
@@ -29,8 +46,9 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const lowerSlug = slug.toLowerCase();
-  if (!GENRE_MAP[lowerSlug]) {
+  const lowerSlug = slug.toLowerCase().trim();
+  const isValidSlug = /^[a-z0-9-]+$/.test(lowerSlug);
+  if (!isValidSlug) {
     return { title: "Genre Not Found | AniWaveX" };
   }
   return generateGenreMetadata(lowerSlug);
@@ -45,9 +63,10 @@ export default async function GenrePage({
 }) {
   const { slug } = await params;
   const sParams = searchParams ? await searchParams : {};
-  const lowerSlug = slug.toLowerCase();
+  const lowerSlug = slug.toLowerCase().trim();
+  const isValidSlug = /^[a-z0-9-]+$/.test(lowerSlug);
 
-  if (!GENRE_MAP[lowerSlug]) {
+  if (!isValidSlug) {
     notFound();
   }
 

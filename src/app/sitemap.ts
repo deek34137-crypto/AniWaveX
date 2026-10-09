@@ -1,9 +1,19 @@
 import type { MetadataRoute } from "next";
 import { getAbsoluteUrl } from "@/lib/seo/site-config";
-import { getTrendingAnime, getTopRatedAnime, getAiringAnime, GENRE_MAP } from "@/lib/api";
+import {
+  getTrendingAnime,
+  getTopRatedAnime,
+  getAiringAnime,
+  getCatalogAnime,
+  GENRE_MAP
+} from "@/lib/api";
 import { getTrendingMangaList } from "@/lib/manga/service";
 
 export const revalidate = 86400; // Cache sitemap generation for 24 hours
+
+function isValidSlug(slug: any): slug is string {
+  return typeof slug === "string" && slug.trim().length >= 2 && /^[a-z0-9-]+$/i.test(slug.trim());
+}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const currentDate = new Date();
@@ -54,7 +64,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  // 2. Genre landing pages
+  // 2. Genre landing pages (Derived from expanded GENRE_MAP)
   const genreRoutes: MetadataRoute.Sitemap = Object.keys(GENRE_MAP).map((genre) => ({
     url: getAbsoluteUrl(`/genre/${genre}`),
     lastModified: currentDate,
@@ -62,10 +72,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  // 3. Dynamic Seasonal pages (spanning previous, current, and upcoming seasons)
+  // 3. Dynamic Seasonal pages (past 2 years through current year)
   const currentYear = currentDate.getFullYear();
   const seasons = ["winter", "spring", "summer", "fall"];
-  const seasonalYears = [currentYear - 1, currentYear, currentYear + 1];
+  const seasonalYears = [currentYear - 2, currentYear - 1, currentYear];
   const seasonRoutes: MetadataRoute.Sitemap = [];
 
   for (const year of seasonalYears) {
@@ -79,36 +89,42 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  // 4. Release Year pages
-  const yearRoutes: MetadataRoute.Sitemap = [
-    currentYear + 1,
-    currentYear,
-    currentYear - 1,
-    currentYear - 2,
-    currentYear - 3,
-    currentYear - 4,
-    currentYear - 5,
-  ].map((y) => ({
-    url: getAbsoluteUrl(`/year/${y}`),
-    lastModified: currentDate,
-    changeFrequency: "monthly",
-    priority: 0.7,
-  }));
+  // 4. Release Year pages (1995 to currentYear)
+  const yearRoutes: MetadataRoute.Sitemap = [];
+  for (let y = currentYear; y >= 1995; y--) {
+    yearRoutes.push({
+      url: getAbsoluteUrl(`/year/${y}`),
+      lastModified: currentDate,
+      changeFrequency: "monthly",
+      priority: y >= currentYear - 3 ? 0.8 : 0.65,
+    });
+  }
 
-  // 5. High-priority Anime title entries
+  // 5. Dynamic Anime title entries (Trending, Airing, Top-Rated & Top Catalog tiers)
   let animeRoutes: MetadataRoute.Sitemap = [];
   try {
-    const [trending, topRated, airing] = await Promise.all([
+    const catalogPagesToFetch = [1, 2, 3, 4, 5, 6, 7, 8];
+    const [trending, topRated, airing, ...catalogBatches] = await Promise.all([
       getTrendingAnime().catch(() => []),
       getTopRatedAnime().catch(() => []),
       getAiringAnime().catch(() => []),
+      ...catalogPagesToFetch.map((p) =>
+        getCatalogAnime({ page: p, sort: "popularity" })
+          .then((res) => res.data || [])
+          .catch(() => [])
+      ),
     ]);
 
     const seenSlugs = new Set<string>();
-    const combinedAnime = [...trending, ...airing, ...topRated];
+    const allAnimeItems = [
+      ...trending,
+      ...airing,
+      ...topRated,
+      ...catalogBatches.flat(),
+    ];
 
-    for (const item of combinedAnime) {
-      if (item?.slug && !seenSlugs.has(item.slug)) {
+    for (const item of allAnimeItems) {
+      if (item?.slug && isValidSlug(item.slug) && !seenSlugs.has(item.slug)) {
         seenSlugs.add(item.slug);
         animeRoutes.push({
           url: getAbsoluteUrl(`/anime/${item.slug}`),
@@ -122,17 +138,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.warn("Failed to populate dynamic anime in sitemap:", err);
   }
 
-  // 6. High-priority Manga entries
+  // 6. Dynamic Manga entries
   let mangaRoutes: MetadataRoute.Sitemap = [];
   try {
-    const trendingManga = await getTrendingMangaList(40).catch(() => []);
+    const trendingManga = await getTrendingMangaList(60).catch(() => []);
     const seenMangaIds = new Set<string>();
 
     for (const item of trendingManga) {
-      if (item?.id && !seenMangaIds.has(item.id)) {
-        seenMangaIds.add(item.id);
+      const cleanId = String(item?.id || "").trim();
+      if (cleanId && !seenMangaIds.has(cleanId)) {
+        seenMangaIds.add(cleanId);
         mangaRoutes.push({
-          url: getAbsoluteUrl(`/manga/${item.id}`),
+          url: getAbsoluteUrl(`/manga/${cleanId}`),
           lastModified: currentDate,
           changeFrequency: "weekly",
           priority: 0.8,

@@ -89,14 +89,18 @@ export default function Hero({
                     {anime.status}
                   </span>
                 )}
-                {anime.tags && anime.tags[0] && (
-                  <Link
-                    href={`/genre/${anime.tags[0].toLowerCase().replace(/\s+/g, '-')}`}
-                    className="px-2 py-0.5 bg-white/5 hover:bg-white/10 text-slate-300 text-[10px] font-medium rounded-md border border-white/5 truncate max-w-[120px] transition-colors"
-                  >
-                    {anime.tags[0]}
-                  </Link>
-                )}
+                {anime.tags && anime.tags[0] && (() => {
+                  const tagSlug = anime.tags[0].toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                  if (!tagSlug) return null;
+                  return (
+                    <Link
+                      href={`/genre/${tagSlug}`}
+                      className="px-2 py-0.5 bg-white/5 hover:bg-white/10 text-slate-300 text-[10px] font-medium rounded-md border border-white/5 truncate max-w-[120px] transition-colors"
+                    >
+                      {anime.tags[0]}
+                    </Link>
+                  );
+                })()}
               </div>
               <p className="text-base sm:text-2xl font-black text-white tracking-tight drop-shadow-xl leading-snug line-clamp-2" aria-hidden="true">
                 {anime.title}
@@ -108,12 +112,17 @@ export default function Hero({
                     <span>{anime.rating}</span>
                   </div>
                 )}
-                {anime.year && (
-                  <Link href={`/year/${anime.year}`} className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors">
+                {anime.year && /^\d{4}$/.test(String(anime.year).trim()) ? (
+                  <Link href={`/year/${String(anime.year).trim()}`} className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors">
                     <Calendar className="w-3 h-3 text-slate-400" />
                     <span>{anime.year}</span>
                   </Link>
-                )}
+                ) : anime.year && anime.year !== "Unknown" ? (
+                  <div className="flex items-center gap-1 text-slate-400">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    <span>{anime.year}</span>
+                  </div>
+                ) : null}
                 <span className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] border border-white/10 font-bold">HD</span>
               </div>
             </div>
@@ -143,15 +152,19 @@ export default function Hero({
               </span>
             )}
             {anime.tags && anime.tags.length > 0 ? (
-              anime.tags.slice(0, 5).map((tag: string) => (
-                <Link 
-                  key={tag} 
-                  href={`/genre/${tag.toLowerCase().replace(/\s+/g, '-')}`}
-                  className="px-2.5 py-0.5 bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white text-[11px] sm:text-xs font-medium rounded-md border border-white/5 hover:border-cyan-500/30 transition-colors"
-                >
-                  {tag}
-                </Link>
-              ))
+              anime.tags.slice(0, 5).map((tag: string) => {
+                const tagSlug = tag.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                if (!tagSlug) return null;
+                return (
+                  <Link 
+                    key={tag} 
+                    href={`/genre/${tagSlug}`}
+                    className="px-2.5 py-0.5 bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white text-[11px] sm:text-xs font-medium rounded-md border border-white/5 hover:border-cyan-500/30 transition-colors"
+                  >
+                    {tag}
+                  </Link>
+                );
+              })
             ) : null}
           </div>
 
@@ -166,12 +179,17 @@ export default function Hero({
               <Star className="w-4 h-4 fill-current" />
               <span className="text-sm sm:text-base font-bold">{anime.rating}</span>
             </div>
-            {anime.year && (
-              <Link href={`/year/${anime.year}`} className="flex items-center gap-1 text-slate-300 hover:text-white transition-colors">
+            {anime.year && /^\d{4}$/.test(String(anime.year).trim()) ? (
+              <Link href={`/year/${String(anime.year).trim()}`} className="flex items-center gap-1 text-slate-300 hover:text-white transition-colors">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
                 <span>{anime.year}</span>
               </Link>
-            )}
+            ) : anime.year && anime.year !== "Unknown" ? (
+              <div className="flex items-center gap-1 text-slate-300">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <span>{anime.year}</span>
+              </div>
+            ) : null}
             <div className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span>{anime.duration || '24m'}</span>

@@ -591,7 +591,7 @@ export default function JumpBackInRow() {
                   className="snap-start shrink-0 w-[150px] sm:w-[180px] md:w-[205px] lg:w-[225px] xl:w-[245px] 2xl:w-[265px] tv:w-[285px] group/card relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/60 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(59,130,246,0.25)] hover:scale-[1.02] flex flex-col focus-within:ring-4 focus-within:ring-cyan-400"
                 >
                   <Link
-                    href={`/anime/${item.id}`}
+                    href={`/anime/${item.animeSlug || item.id}`}
                     prefetch={true}
                     className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950 block focus:outline-none"
                   >
@@ -619,7 +619,7 @@ export default function JumpBackInRow() {
                             e.preventDefault();
                             e.stopPropagation();
                             toggleBookmark({
-                              slug: item.id,
+                              slug: item.animeSlug || item.id,
                               title: item.title,
                               posterImage: item.posterImage,
                             });
@@ -648,7 +648,7 @@ export default function JumpBackInRow() {
                     {/* Quick Play Hover Button */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
                       <Link
-                        href={`/anime/${item.id}?ep=${item.episodeId}`}
+                        href={`/anime/${item.animeSlug || item.id}?ep=${item.episodeId}`}
                         onClick={(e) => e.stopPropagation()}
                         className="pointer-events-auto w-11 h-11 bg-blue-600/90 hover:bg-blue-500 rounded-full flex items-center justify-center text-white backdrop-blur-sm shadow-xl transform scale-75 group-hover/card:scale-100 transition-all hover:scale-110 active:scale-95"
                         title={`Resume Episode ${item.episodeId}`}
