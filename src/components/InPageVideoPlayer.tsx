@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity, FastForward, Play, List, Search } from "lucide-react";
+import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity, FastForward, Play, List, Search, RectangleHorizontal } from "lucide-react";
 import NativePlayer from "./NativePlayer";
 import SyncHudToast from "./player/SyncHudToast";
 import { useAuth } from "@/providers/AuthProvider";
@@ -176,6 +176,14 @@ export default function InPageVideoPlayer({
   const [isScrolledPast, setIsScrolledPast] = useState(false);
   const [isMiniPlayerDismissed, setIsMiniPlayerDismissed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("aniwavex_theater_mode") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [liveSyncResult, setLiveSyncResult] = useState<LiveSyncResult | null>(null);
   const completionSyncedEpisodeRef = useRef<number | null>(null);
   const hasInitialSeekSettledRef = useRef<boolean>(true);
@@ -1054,6 +1062,17 @@ export default function InPageVideoPlayer({
     }
   }, [fallbackToIframe, isM3U8]);
 
+  const toggleTheaterMode = useCallback(() => {
+    setIsTheaterMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("aniwavex_theater_mode", String(next));
+      } catch {}
+      showToast(next ? "Theater Mode Enabled (T)" : "Theater Mode Disabled (T)");
+      return next;
+    });
+  }, [showToast]);
+
   // Listen for video ended events dispatched via postMessage from embed providers
   useEffect(() => {
     const handleWindowMessage = (event: MessageEvent) => {
@@ -1122,6 +1141,11 @@ export default function InPageVideoPlayer({
         case 'F':
           e.preventDefault();
           toggleFullscreen();
+          break;
+        case 't':
+        case 'T':
+          e.preventDefault();
+          toggleTheaterMode();
           break;
         case 'm':
         case 'M':
@@ -1192,7 +1216,7 @@ export default function InPageVideoPlayer({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasNext, hasPrev, handleNext, handlePrev, handleNextSource, handlePrevSource, toggleFullscreen, showShortcuts, isEpisodeDrawerOpen]);
+  }, [hasNext, hasPrev, handleNext, handlePrev, handleNextSource, handlePrevSource, toggleFullscreen, toggleTheaterMode, showShortcuts, isEpisodeDrawerOpen]);
 
   if (!episode) return null;
 
@@ -1287,10 +1311,17 @@ export default function InPageVideoPlayer({
   );
 
   return (
-    <div ref={playerRef} className="w-full flex flex-col gap-4 bg-slate-950 py-8 scroll-mt-20">
-      <div className="w-full max-w-5xl mx-auto">
+    <div 
+      ref={playerRef} 
+      className={`w-full flex flex-col gap-4 bg-slate-950 transition-all duration-300 scroll-mt-20 ${
+        isTheaterMode 
+          ? "w-[100vw] relative left-1/2 -translate-x-1/2 py-2 sm:py-4 bg-black/95 shadow-2xl" 
+          : "py-8"
+      }`}
+    >
+      <div className={`w-full transition-all duration-300 ${isTheaterMode ? "max-w-[1920px] mx-auto px-2 sm:px-6 lg:px-10" : "max-w-5xl mx-auto"}`}>
         {/* Header / Tabs */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-4 gap-4 max-w-full min-w-0">
+        <div className={`flex flex-col lg:flex-row items-start lg:items-center justify-between mb-4 gap-4 max-w-full min-w-0 ${isTheaterMode ? "max-w-7xl mx-auto" : ""}`}>
           <div className="flex items-center gap-3 shrink-0">
             {onClose && (
               <button
@@ -1434,7 +1465,11 @@ export default function InPageVideoPlayer({
         </div>
 
         {/* Video Player Container with Dynamic Ambient Cinema Glow */}
-        <div className="relative w-full aspect-video">
+        <div className={`relative w-full transition-all duration-300 ${
+          isTheaterMode 
+            ? "aspect-video max-h-[calc(100vh-140px)] max-w-[1920px] mx-auto flex items-center justify-center" 
+            : "aspect-video"
+        }`}>
           {/* Dynamic Ambient Cinema Glow */}
           {ambientMode && !isFloatingPiP && (
             <div 
@@ -1828,7 +1863,7 @@ export default function InPageVideoPlayer({
         </div>
 
         {/* Footer Navigation */}
-        <div className="flex flex-col sm:flex-row items-center sm:justify-between mt-3 gap-3">
+        <div className={`flex flex-col sm:flex-row items-center sm:justify-between mt-3 gap-3 ${isTheaterMode ? "max-w-7xl mx-auto" : ""}`}>
           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-start">
             {/* Episode Navigation */}
             <div className="flex items-center gap-1.5 shrink-0">
@@ -1891,6 +1926,22 @@ export default function InPageVideoPlayer({
               <span className="hidden sm:inline">Ambient Glow</span>
             </button>
 
+            {/* Theater Mode Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheaterMode}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                isTheaterMode
+                  ? "bg-blue-600/20 text-blue-400 border-blue-500/30 shadow-sm"
+                  : "bg-slate-900/50 hover:bg-slate-800/80 text-slate-400 hover:text-white border-white/5"
+              }`}
+              title={isTheaterMode ? "Exit Theater Mode (T)" : "Theater Mode (T)"}
+              aria-label={isTheaterMode ? "Exit Theater Mode" : "Theater Mode"}
+            >
+              <RectangleHorizontal className="w-4 h-4" />
+              <span className="hidden sm:inline">{isTheaterMode ? "Exit Theater" : "Theater Mode"}</span>
+            </button>
+
             {/* Fullscreen Toggle Button */}
             <button
               onClick={toggleFullscreen}
@@ -1945,6 +1996,7 @@ export default function InPageVideoPlayer({
         {showShortcuts && (
           <div className="mt-4 p-4 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-slate-300 grid grid-cols-2 sm:grid-cols-4 gap-3 animate-in fade-in">
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">Space</kbd> / <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white">K</kbd> Play / Pause</div>
+            <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">T</kbd> Theater Mode</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">F</kbd> Fullscreen</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">E</kbd> Episode Drawer</div>
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">N</kbd> Next Ep (All Providers)</div>

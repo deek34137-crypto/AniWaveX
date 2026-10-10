@@ -127,3 +127,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const mangaId = searchParams.get('mangaId');
+
+    if (!mangaId) {
+      return NextResponse.json({ error: 'Missing mangaId parameter' }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from('manga_reading_history')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('manga_id', mangaId);
+
+    if (error) {
+      console.error('[API /manga/progress DELETE] Error deleting history:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error('[API /manga/progress DELETE] Unexpected error:', err);
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}

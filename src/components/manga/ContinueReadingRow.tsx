@@ -19,7 +19,7 @@ export default function ContinueReadingRow() {
   const [items, setItems] = useState<MangaProgressItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadReadingHistory = useCallback(() => {
+  const loadReadingHistory = useCallback(async () => {
     try {
       const historyMap = new Map<string, MangaProgressItem>();
 
@@ -72,14 +72,57 @@ export default function ContinueReadingRow() {
         }
       }
 
-      const sortedList = Array.from(historyMap.values())
+      // Initial fast render from local cache
+      const initialSorted = Array.from(historyMap.values())
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, 12);
+      setItems(initialSorted);
+      setLoading(false);
 
-      setItems(sortedList);
+      // 3. Cloud Sync: Fetch cross-device reading history from Supabase
+      try {
+        const res = await fetch("/api/manga/progress");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.recentManga) && data.recentManga.length > 0) {
+            let hasNewCloudUpdates = false;
+
+            data.recentManga.forEach((entry: any) => {
+              if (entry && entry.manga_id && entry.chapter_id) {
+                const cloudTime = new Date(entry.updated_at).getTime() || 0;
+                const existing = historyMap.get(String(entry.manga_id));
+
+                if (!existing || cloudTime > existing.updatedAt) {
+                  hasNewCloudUpdates = true;
+                  historyMap.set(String(entry.manga_id), {
+                    mangaId: String(entry.manga_id),
+                    mangaTitle: entry.manga_title || existing?.mangaTitle || "Manga",
+                    posterImage: entry.poster_image || existing?.posterImage || undefined,
+                    chapterId: String(entry.chapter_id),
+                    chapterNumber: Number(entry.chapter_number) || 1,
+                    pageNumber: Number(entry.page_number) || 1,
+                    updatedAt: cloudTime,
+                  });
+                }
+              }
+            });
+
+            if (hasNewCloudUpdates) {
+              const mergedList = Array.from(historyMap.values())
+                .sort((a, b) => b.updatedAt - a.updatedAt);
+
+              setItems(mergedList.slice(0, 12));
+
+              // Persist merged cloud history into localStorage for future offline instant rendering
+              try {
+                localStorage.setItem("aniwavex_recent_manga", JSON.stringify(mergedList.slice(0, 20)));
+              } catch {}
+            }
+          }
+        }
+      } catch {}
     } catch {
       setItems([]);
-    } finally {
       setLoading(false);
     }
   }, []);
@@ -118,6 +161,13 @@ export default function ContinueReadingRow() {
           localStorage.setItem("aniwavex_recent_manga", JSON.stringify(list));
         }
       }
+    } catch {}
+
+    // 3. Remove from Supabase cloud database
+    try {
+      fetch(`/api/manga/progress?mangaId=${encodeURIComponent(mangaId)}`, {
+        method: "DELETE",
+      }).catch(() => {});
     } catch {}
   };
 

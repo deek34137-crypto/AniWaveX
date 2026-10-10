@@ -518,6 +518,31 @@ export default function MangaReaderClient({
           }
         }
       } catch {}
+
+      // Fallback: Check Supabase cloud progress if not found in local storage
+      if (!targetPage && !hasRestoredPageRef.current) {
+        fetch(`/api/manga/progress?mangaId=${encodeURIComponent(mangaId)}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.progress && !hasRestoredPageRef.current) {
+              const p = data.progress;
+              if (
+                (p.chapter_id === activeChapterId || Number(p.chapter_number) === activeChapterNum) &&
+                p.page_number > 1
+              ) {
+                hasRestoredPageRef.current = true;
+                setCurrentVisiblePage(p.page_number);
+                if (readingMode === "webtoon") {
+                  setTimeout(() => {
+                    const pageEl = document.querySelector(`[data-page="${p.page_number}"]`);
+                    if (pageEl) pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }, 300);
+                }
+              }
+            }
+          })
+          .catch(() => {});
+      }
     }
 
     if (targetPage && targetPage > 1 && !hasRestoredPageRef.current) {
