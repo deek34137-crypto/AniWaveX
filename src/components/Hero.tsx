@@ -1,11 +1,12 @@
 "use client";
 
-import { Play, Star, Calendar, Clock } from "lucide-react";
+import { Play, Star, Calendar, Clock, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/providers/AuthProvider";
 import { WatchlistStatus } from "@/lib/watchlist";
 import AnimeImage from "@/components/AnimeImage";
 import WatchlistDropdown from "@/components/WatchlistDropdown";
+import type { MangaAdaptation } from "@/lib/manga/types";
 
 interface HeroProps {
   anime: any;
@@ -14,6 +15,7 @@ interface HeroProps {
   user?: any;
   lastWatchedEpisode?: number | null;
   onPlayEpisode?: (ep: any) => void;
+  mangaAdaptation?: MangaAdaptation | null;
 }
 
 export default function Hero({ 
@@ -22,7 +24,8 @@ export default function Hero({
   initialBookmarkStatus = 'watching',
   user: initialUser, 
   lastWatchedEpisode, 
-  onPlayEpisode 
+  onPlayEpisode,
+  mangaAdaptation
 }: HeroProps) {
   const { user: authUser } = useAuth();
   const currentUser = authUser || initialUser;
@@ -202,14 +205,14 @@ export default function Hero({
             {anime.description}
           </p>
 
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:items-center sm:gap-4 mt-3 sm:mt-6 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-3 sm:mt-6 w-full sm:w-auto">
             {lastWatchedEpisode ? (
               <button 
                 onClick={() => {
                   const ep = anime.episodes?.find((e: any) => e.id === lastWatchedEpisode);
                   if (ep && onPlayEpisode) onPlayEpisode(ep);
                 }}
-                className="min-w-0 flex items-center justify-center gap-1.5 px-3 py-3 sm:px-8 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(37,99,235,0.4)] transition-all hover:scale-105 active:scale-95"
+                className="flex-1 sm:flex-initial min-w-0 flex items-center justify-center gap-1.5 px-4 py-3 sm:px-8 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(37,99,235,0.4)] transition-all hover:scale-105 active:scale-95 cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-current shrink-0" />
                 <span className="truncate">Continue Ep {lastWatchedEpisode}</span>
@@ -220,11 +223,23 @@ export default function Hero({
                   const ep = anime.episodes?.[0];
                   if (ep && onPlayEpisode) onPlayEpisode(ep);
                 }}
-                className="min-w-0 flex items-center justify-center gap-1.5 px-3 py-3 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95"
+                className="flex-1 sm:flex-initial min-w-0 flex items-center justify-center gap-1.5 px-4 py-3 sm:px-8 sm:py-4 bg-white hover:bg-slate-200 text-slate-900 text-xs sm:text-base font-bold rounded-xl shadow-[0_0_25px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95 cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-current shrink-0" />
                 <span className="truncate">Watch Ep {anime.episodes?.[0]?.id ?? 1}</span>
               </button>
+            )}
+
+            {/* Read Manga Adaptation Bridge Button */}
+            {mangaAdaptation && (
+              <Link
+                href={`/manga/${mangaAdaptation.id}`}
+                className="flex-1 sm:flex-initial min-w-0 flex items-center justify-center gap-2 px-4 py-3 sm:px-7 sm:py-4 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 hover:text-white border border-emerald-500/40 rounded-xl text-xs sm:text-base font-bold shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.35)] transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                title={`Read official manga adaptation for ${anime.title}`}
+              >
+                <BookOpen className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="truncate">Read Official Manga</span>
+              </Link>
             )}
             
             {/* Categorized Watchlist Dropdown */}

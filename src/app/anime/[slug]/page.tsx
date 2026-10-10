@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { getAnimeData, getRecommendedAnime, GENRE_MAP } from "@/lib/api";
+import { getMangaAdaptation } from "@/lib/manga/service";
 import AnimePageClient from "./AnimePageClient";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -38,10 +39,11 @@ export default async function AnimePage({
     notFound();
   }
 
-  // Parallelize recommendations and auth retrieval to eliminate waterfall
-  const [recommendations, supabase] = await Promise.all([
+  // Parallelize recommendations, auth retrieval, and manga adaptation resolution
+  const [recommendations, supabase, mangaAdaptation] = await Promise.all([
     getRecommendedAnime(data.slug, data.tags, data.title),
     createClient(),
+    getMangaAdaptation(data.title, data.anilistId).catch(() => null),
   ]);
   const {
     data: { user },
@@ -110,6 +112,7 @@ export default async function AnimePage({
           lastWatchedEpisode={lastWatchedEpisode}
           serverProgressSeconds={serverProgressSeconds}
           serverTotalSeconds={serverTotalSeconds}
+          mangaAdaptation={mangaAdaptation}
         />
       </Suspense>
     </>

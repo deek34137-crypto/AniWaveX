@@ -324,40 +324,6 @@ html[data-theme-mode="light"] .theme-card-btn p {
   color: var(--theme-foreground) !important;
 }
 
-/* Brutalist Concrete Special Theme */
-html[data-theme="brutalist-concrete"] nav:not([aria-label="Mobile Navigation"]) {
-  background-color: #ffffff !important;
-  border-bottom: 2px solid #18181b !important;
-  box-shadow: 0 3px 0px 0px #18181b !important;
-}
-
-html[data-theme="brutalist-concrete"] nav:not([aria-label="Mobile Navigation"]) a,
-html[data-theme="brutalist-concrete"] nav:not([aria-label="Mobile Navigation"]) .text-slate-300 {
-  color: #09090b !important;
-  font-weight: 800 !important;
-}
-
-html[data-theme="brutalist-concrete"] nav:not([aria-label="Mobile Navigation"]) input[type="text"] {
-  background-color: #f4f4f5 !important;
-  border: 2px solid #18181b !important;
-  color: #09090b !important;
-}
-
-html[data-theme="brutalist-concrete"] main .rounded-2xl,
-html[data-theme="brutalist-concrete"] main .rounded-3xl,
-html[data-theme="brutalist-concrete"] .theme-card-btn {
-  border-width: 2px !important;
-  border-color: #18181b !important;
-  box-shadow: 3px 3px 0px 0px #18181b !important;
-}
-
-html[data-theme="brutalist-concrete"] button.bg-blue-600,
-html[data-theme="brutalist-concrete"] .bg-blue-600 {
-  background-color: #dc2626 !important;
-  border: 2px solid #18181b !important;
-  box-shadow: 2px 2px 0px 0px #18181b !important;
-  color: #ffffff !important;
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ULTRA LITE & REDUCE MOTION SYSTEM (Ported from Tatakai for Android Speed)

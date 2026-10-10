@@ -11,10 +11,15 @@ import { useEffect } from "react";
  */
 export default function SpatialNavigationProvider() {
   useEffect(() => {
-    // Only engage enhanced spatial nav on large screens or TV browsers
-    const isTVOrLargeScreen = () => {
+    // Only engage enhanced spatial nav on dedicated TV browsers or explicit TV mode
+    const isTVMode = () => {
       if (typeof window === "undefined") return false;
-      return window.innerWidth >= 1280 || /TV|SmartTV|Android TV|BRAVIA|NetCast|Web0S|Tizen/i.test(navigator.userAgent);
+      const isTVDevice = /TV|SmartTV|Android TV|BRAVIA|NetCast|Web0S|Tizen/i.test(navigator.userAgent);
+      let isExplicitTV = false;
+      try {
+        isExplicitTV = localStorage.getItem("aniwavex_tv_mode") === "true";
+      } catch {}
+      return isTVDevice || isExplicitTV;
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -51,7 +56,7 @@ export default function SpatialNavigationProvider() {
         }
       }
 
-      if (!isTVOrLargeScreen()) return;
+      if (!isTVMode()) return;
 
       // Query all focusable interactive candidates
       const selector = `

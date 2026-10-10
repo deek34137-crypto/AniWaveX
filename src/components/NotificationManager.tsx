@@ -3,9 +3,7 @@
 import { useEffect } from "react";
 import {
   recordUserActivity,
-  scheduleBehaviorNotification,
   cancelPendingNotifications,
-  isActivelyWatching
 } from "@/lib/notifications";
 
 export default function NotificationManager() {
@@ -13,7 +11,7 @@ export default function NotificationManager() {
     // 1. Record activity on mount
     recordUserActivity();
 
-    // 2. While user is in the app, cancel any pending notifications so they are NEVER disturbed
+    // 2. While user is in the app, cancel any pending notifications so they are never disturbed
     cancelPendingNotifications();
 
     // 3. User interaction listener to update activity timestamp
@@ -31,11 +29,7 @@ export default function NotificationManager() {
         recordUserActivity();
         cancelPendingNotifications();
       } else {
-        // App went to background / tab hidden -> record time and schedule next eligible notification
         recordUserActivity();
-        if (!isActivelyWatching()) {
-          scheduleBehaviorNotification();
-        }
       }
     };
 
@@ -52,9 +46,6 @@ export default function NotificationManager() {
             cancelPendingNotifications();
           } else {
             recordUserActivity();
-            if (!isActivelyWatching()) {
-              scheduleBehaviorNotification();
-            }
           }
         }).then((handle: any) => {
           appListener = handle;
@@ -73,6 +64,5 @@ export default function NotificationManager() {
     };
   }, []);
 
-  // No notification permission prompt rendered
   return null;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid, List, Play, Search, X, Check } from "lucide-react";
+import { LayoutGrid, List, Play, Search, X, Check, ChevronDown } from "lucide-react";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 interface Episode {
@@ -236,21 +236,45 @@ export default function EpisodesGrid({
 
       {/* Episode Range Selector */}
       {!searchQuery && rangeChunks.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-thin scrollbar-thumb-slate-800">
-          <span className="text-xs font-semibold text-slate-400 shrink-0 mr-1">Range:</span>
-          {rangeChunks.map((chunk, idx) => (
-            <button
-              key={chunk.label}
-              onClick={() => setSelectedRangeIndex(idx)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                safeRangeIndex === idx
-                  ? "bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-                  : "bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-white/5"
-              }`}
-            >
-              {chunk.label}
-            </button>
-          ))}
+        <div className="mb-6">
+          {/* Mobile compact dropdown (< sm) */}
+          <div className="flex sm:hidden items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-2">
+            <span className="text-xs font-semibold text-slate-400 shrink-0">Range:</span>
+            <div className="relative flex-1">
+              <select
+                value={safeRangeIndex}
+                onChange={(e) => setSelectedRangeIndex(Number(e.target.value))}
+                className="w-full bg-slate-950/80 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-blue-500 appearance-none cursor-pointer pr-8"
+              >
+                {rangeChunks.map((chunk, idx) => (
+                  <option key={chunk.label} value={idx} className="bg-slate-900 text-white">
+                    Episodes {chunk.label}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                <ChevronDown className="w-3.5 h-3.5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop & tablet scrollable pill rail (>= sm) */}
+          <div className="hidden sm:flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-800">
+            <span className="text-xs font-semibold text-slate-400 shrink-0 mr-1">Range:</span>
+            {rangeChunks.map((chunk, idx) => (
+              <button
+                key={chunk.label}
+                onClick={() => setSelectedRangeIndex(idx)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  safeRangeIndex === idx
+                    ? "bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]"
+                    : "bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-white/5"
+                }`}
+              >
+                {chunk.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

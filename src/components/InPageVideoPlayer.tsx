@@ -124,14 +124,14 @@ export function getStoredEpisodeProgress(
 }
 
 export function cleanServerLabel(quality: string): string {
-  if (!quality) return "Server";
+  if (!quality) return "Server 1 HD";
   return quality
-    .replace(/hianime/gi, "HD-2")
-    .replace(/justanime/gi, "HD-1")
-    .replace(/kickassanime|kaa/gi, "Server 2")
+    .replace(/hianime/gi, "Server 2 HD")
+    .replace(/justanime/gi, "Server 1 HD")
+    .replace(/kickassanime|kaa/gi, "Server 2 HD")
     .replace(/reanime/gi, "Ultra HD")
-    .replace(/anikoto|megacloud/gi, "Server 1")
-    .replace(/toonstream/gi, "Server Hindi")
+    .replace(/anikoto|megacloud/gi, "Server 1 HD")
+    .replace(/toonstream/gi, "Hindi Dub")
     .replace(/vidmoly/gi, "Server Stream")
     .replace(/gogoanime/gi, "Server Fast")
     .trim();
@@ -1354,7 +1354,7 @@ export default function InPageVideoPlayer({
                           e.stopPropagation();
                           handleSelectServer(idx);
                         }}
-                        title={latency !== undefined ? `Server: ${cleanServerLabel(source.quality)} • ${latBadge.text}` : `Server: ${cleanServerLabel(source.quality)}`}
+                        title={`Server: ${cleanServerLabel(source.quality)} • ${latBadge.text}`}
                         className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer select-none ${
                           validServerIndex === idx 
                             ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400' 
@@ -1363,18 +1363,14 @@ export default function InPageVideoPlayer({
                       >
                         <Server className="w-3 h-3 opacity-70 shrink-0" />
                         <span>{cleanServerLabel(source.quality)}</span>
-                        {latency !== undefined && (
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              latency < 150
-                                ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)] animate-pulse'
-                                : latency < 400
-                                ? 'bg-blue-400'
-                                : 'bg-amber-400'
-                            }`}
-                            aria-label={latBadge.text}
-                          />
-                        )}
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            validServerIndex === idx
+                              ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]'
+                              : 'bg-slate-500'
+                          }`}
+                          aria-label={latBadge.text}
+                        />
                       </button>
                     );
                   })}

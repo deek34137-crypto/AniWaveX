@@ -92,7 +92,7 @@ export default function AppearanceSettings() {
         </div>
       </div>
 
-      {/* 25 Themes Selector Grid */}
+      {/* Curated Core Themes Grid */}
       <div className="bg-slate-900/70 border border-white/10 rounded-2xl p-5 shadow-xl space-y-5">
         <div className="flex items-center gap-2">
           <Palette className="w-5 h-5 text-cyan-400" />

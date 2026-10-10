@@ -114,13 +114,10 @@ export function getFastestServerIndex(
  */
 export function formatLatencyBadge(latencyMs?: number): { text: string; colorClass: string } {
   if (typeof latencyMs !== "number" || latencyMs >= 9000 || latencyMs <= 0) {
-    return { text: "Online", colorClass: "text-slate-400" };
+    return { text: "HD", colorClass: "text-slate-400" };
   }
-  if (latencyMs < 120) {
-    return { text: `${latencyMs}ms ⚡`, colorClass: "text-emerald-400 font-bold" };
+  if (latencyMs < 250) {
+    return { text: "Fast HD", colorClass: "text-emerald-400 font-bold" };
   }
-  if (latencyMs < 350) {
-    return { text: `${latencyMs}ms`, colorClass: "text-blue-400 font-medium" };
-  }
-  return { text: `${latencyMs}ms`, colorClass: "text-amber-400" };
+  return { text: "HD", colorClass: "text-blue-400 font-medium" };
 }

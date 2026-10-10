@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X, Dices, Clock, Trash2, Camera } from "lucide-react";
+import { Search, X, Dices, Clock, Trash2, Camera, Upload, Sparkles } from "lucide-react";
 import ImageSearchModal from "@/components/ImageSearchModal";
 import {
   getSearchHistory,
@@ -262,6 +262,52 @@ export default function SearchInput({ initialQuery = "" }: { initialQuery?: stri
         >
           <Dices className={`w-3.5 h-3.5 ${isSurprising ? "animate-spin" : ""}`} />
           {isSurprising ? "Finding..." : "Surprise Me"}
+        </button>
+      </div>
+
+      {/* Reverse Screenshot Search Dropzone / Discoverability Card */}
+      <div 
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const file = e.dataTransfer.files?.[0];
+          if (file && file.type.startsWith("image/")) {
+            setPastedFile(file);
+            setIsImageModalOpen(true);
+          }
+        }}
+        onClick={() => {
+          setPastedFile(null);
+          setIsImageModalOpen(true);
+        }}
+        className="max-w-2xl mx-auto mt-4 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-950/40 via-cyan-950/30 to-slate-900 border border-cyan-500/25 hover:border-cyan-400/50 shadow-lg hover:shadow-cyan-500/10 transition-all cursor-pointer group flex items-center justify-between gap-3 sm:gap-4"
+      >
+        <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+          <div className="w-10 sm:w-11 h-10 sm:h-11 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-cyan-500/20 transition-all">
+            <Camera className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                Search Anime by Screenshot
+              </h3>
+              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                Trace.moe
+              </span>
+            </div>
+            <p className="text-[11px] sm:text-xs text-slate-400 truncate mt-0.5">
+              Drop an image, paste (<kbd className="font-mono text-[10px] text-slate-300">Ctrl+V</kbd>), or tap to identify any anime scene &amp; timestamp
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="px-3 sm:px-4 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-bold border border-cyan-500/30 shrink-0 transition-colors group-hover:bg-cyan-500 group-hover:text-slate-950 group-hover:border-cyan-400 flex items-center gap-1.5"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Upload Screenshot</span>
+          <span className="sm:hidden">Upload</span>
         </button>
       </div>
     </div>

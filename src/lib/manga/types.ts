@@ -42,3 +42,13 @@ export interface MangaChapterPages {
     referer?: string;
   }[];
 }
+
+export interface MangaAdaptation {
+  id: string;
+  title: string;
+  romajiTitle?: string;
+  coverImage?: string;
+  status?: string;
+  relationType?: string;
+  totalChapters?: number;
+}

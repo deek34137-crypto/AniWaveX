@@ -9,6 +9,8 @@ import InPageVideoPlayer from "@/components/InPageVideoPlayer";
 import AnimeWatchMetaBar from "@/components/AnimeWatchMetaBar";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { useAuth } from "@/providers/AuthProvider";
+import MangaAdaptationBridge from "@/components/manga/MangaAdaptationBridge";
+import type { MangaAdaptation } from "@/lib/manga/types";
 
 function parseTimestamp(raw?: string | null): number | null {
   if (!raw) return null;
@@ -34,7 +36,8 @@ export default function AnimePageClient({
   user: initialUser, 
   lastWatchedEpisode: serverLastWatched,
   serverProgressSeconds,
-  serverTotalSeconds
+  serverTotalSeconds,
+  mangaAdaptation,
 }: { 
   data: any, 
   recommendations: any[],
@@ -43,7 +46,8 @@ export default function AnimePageClient({
   user?: any, 
   lastWatchedEpisode?: number | null,
   serverProgressSeconds?: number | null,
-  serverTotalSeconds?: number | null
+  serverTotalSeconds?: number | null,
+  mangaAdaptation?: MangaAdaptation | null,
 }) {
   const [activeEpisode, setActiveEpisode] = useState<any | null>(null);
   const [lastWatchedEpisode, setLastWatchedEpisode] = useState<number | null>(serverLastWatched ?? null);
@@ -247,6 +251,7 @@ export default function AnimePageClient({
               initialBookmarkStatus={initialBookmarkStatus}
               user={currentUser}
               lastWatchedEpisode={lastWatchedEpisode}
+              mangaAdaptation={mangaAdaptation}
             />
           </div>
         ) : (
@@ -256,11 +261,19 @@ export default function AnimePageClient({
             initialBookmarkStatus={initialBookmarkStatus}
             user={currentUser}
             lastWatchedEpisode={lastWatchedEpisode}
+            mangaAdaptation={mangaAdaptation}
             onPlayEpisode={(ep) => {
               setActiveEpisode(ep);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
           />
+        )}
+        
+        {/* Manga Adaptation Bridge Banner */}
+        {mangaAdaptation && (
+          <div className="pt-2">
+            <MangaAdaptationBridge manga={mangaAdaptation} animeTitle={data.title} />
+          </div>
         )}
         
         <EpisodesGrid 

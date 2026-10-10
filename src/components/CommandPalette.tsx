@@ -18,9 +18,11 @@ import {
   X,
   Loader2,
   ArrowRight,
-  BookOpen
+  BookOpen,
+  Camera
 } from "lucide-react";
 import Image from "next/image";
+import ImageSearchModal from "@/components/ImageSearchModal";
 
 interface SearchItem {
   id: string | number;
@@ -49,10 +51,21 @@ export default function CommandPalette() {
   const [mangaResults, setMangaResults] = useState<MangaSearchItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const staticActions = useMemo(() => [
+    {
+      id: "act-screenshot-search",
+      label: "Search Anime by Screenshot (Trace.moe)",
+      category: "Quick Actions",
+      icon: Camera,
+      action: () => {
+        setIsOpen(false);
+        setIsImageModalOpen(true);
+      },
+    },
     {
       id: "nav-home",
       label: "Home",
@@ -331,15 +344,17 @@ export default function CommandPalette() {
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && !isImageModalOpen) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-[200] flex items-start justify-center pt-16 sm:pt-24 px-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-200"
-      onClick={() => setIsOpen(false)}
-    >
+    <>
+      {isOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[200] flex items-start justify-center pt-16 sm:pt-24 px-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-200"
+          onClick={() => setIsOpen(false)}
+        >
       <div
         className="w-full max-w-2xl bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
@@ -493,5 +508,12 @@ export default function CommandPalette() {
         </div>
       </div>
     </div>
+  )}
+
+  <ImageSearchModal
+    isOpen={isImageModalOpen}
+    onClose={() => setIsImageModalOpen(false)}
+  />
+</>
   );
 }

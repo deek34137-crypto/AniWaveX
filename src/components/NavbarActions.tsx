@@ -67,6 +67,17 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
 
   return (
     <>
+      {/* 1-Click Direct Library / Watchlist Quick Access */}
+      <Link
+        href="/watchlist"
+        prefetch={true}
+        className="p-2 text-slate-300 hover:text-white rounded-full hover:bg-white/10 transition-colors relative"
+        title="My Watchlist & Library"
+        aria-label="My Watchlist"
+      >
+        <Bookmark className="w-5 h-5" />
+      </Link>
+
       <div ref={notificationsRef} className="relative hidden sm:block">
         <button 
           onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}

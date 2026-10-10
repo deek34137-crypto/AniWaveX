@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Star, Calendar, Clock, ChevronDown, Sparkles, Building2 } from "lucide-react";
+import { Star, Calendar, Clock, ChevronDown, Sparkles, Building2, BookOpen } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import WatchlistDropdown from "@/components/WatchlistDropdown";
 import { WatchlistStatus } from "@/lib/watchlist";
+import type { MangaAdaptation } from "@/lib/manga/types";
 
 interface AnimeWatchMetaBarProps {
   anime: any;
@@ -13,6 +14,7 @@ interface AnimeWatchMetaBarProps {
   initialBookmarkStatus?: WatchlistStatus | null;
   user?: any;
   lastWatchedEpisode?: number | null;
+  mangaAdaptation?: MangaAdaptation | null;
 }
 
 export default function AnimeWatchMetaBar({
@@ -21,6 +23,7 @@ export default function AnimeWatchMetaBar({
   initialBookmarkStatus = "watching",
   user,
   lastWatchedEpisode,
+  mangaAdaptation,
 }: AnimeWatchMetaBarProps) {
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
 
@@ -115,8 +118,19 @@ export default function AnimeWatchMetaBar({
           </div>
         </div>
 
-        {/* Right Section: Watchlist Status Dropdown Button */}
-        <div className="shrink-0 w-full md:w-auto">
+        {/* Right Section: Watchlist Status Dropdown & Read Manga Button */}
+        <div className="shrink-0 w-full md:w-auto flex items-center gap-2">
+          {mangaAdaptation && (
+            <Link
+              href={`/manga/${mangaAdaptation.id}`}
+              className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 hover:text-white text-xs font-bold border border-emerald-500/30 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+              title={`Read ${mangaAdaptation.title} Manga Adaptation`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Read Manga</span>
+            </Link>
+          )}
+
           <WatchlistDropdown
             anime={anime}
             initialBookmarked={initialBookmarked}
@@ -125,7 +139,7 @@ export default function AnimeWatchMetaBar({
             lastWatchedEpisode={lastWatchedEpisode}
             size="compact"
             direction="down"
-            className="w-full md:w-auto"
+            className="flex-1 md:flex-initial"
           />
         </div>
       </div>

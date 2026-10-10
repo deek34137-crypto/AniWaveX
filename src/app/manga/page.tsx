@@ -1,5 +1,6 @@
 import { getTrendingMangaList } from "@/lib/manga/service";
 import MangaCatalogClient from "@/components/manga/MangaCatalogClient";
+import ContinueReadingRow from "@/components/manga/ContinueReadingRow";
 import Navbar from "@/components/Navbar";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { Sparkles } from "lucide-react";
@@ -58,6 +59,9 @@ export default async function MangaHomePage() {
             </p>
           </div>
         </div>
+
+        {/* Continue Reading Shelf for returning readers */}
+        <ContinueReadingRow />
 
         {/* Seamless Interactive Catalog Client (Search + Category Filter + Grid) */}
         <MangaCatalogClient initialManga={trending} />

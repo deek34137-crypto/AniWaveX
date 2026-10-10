@@ -10,7 +10,7 @@
  *  3. Chapter pages              → backend /api/pages (with logo filtering & referer injection)
  */
 
-import { MangaItem, MangaChapter, MangaChapterPages } from './types';
+import { MangaItem, MangaChapter, MangaChapterPages, MangaAdaptation } from './types';
 
 const configuredUrl = process.env.NEXT_PUBLIC_MANGA_WORKER_URL || process.env.MANGA_API_URL;
 const BACKEND =
@@ -326,6 +326,115 @@ export async function getMangaDetails(id: string | number): Promise<MangaItem | 
     );
     const m = json?.data?.Media;
     if (m) return formatMangaItem(m);
+  }
+
+  return null;
+}
+
+export async function getMangaAdaptation(
+  animeTitle: string,
+  anilistAnimeId?: number | null
+): Promise<MangaAdaptation | null> {
+  // 1. If anilistAnimeId is available, inspect AniList direct relations
+  if (anilistAnimeId && !isNaN(Number(anilistAnimeId))) {
+    try {
+      const relJson = await anilistQuery(
+        `query ($id: Int) {
+          Media(id: $id, type: ANIME) {
+            relations {
+              edges {
+                relationType
+                node {
+                  id
+                  type
+                  format
+                  title { english romaji native }
+                  coverImage { large extraLarge }
+                  status
+                  chapters
+                }
+              }
+            }
+          }
+        }`,
+        { id: Number(anilistAnimeId) }
+      );
+
+      const edges: any[] = relJson?.data?.Media?.relations?.edges || [];
+      const mangaEdges = edges.filter(
+        (e) => e.node && e.node.type === "MANGA"
+      );
+
+      if (mangaEdges.length > 0) {
+        // Prioritize SOURCE (original manga) or ADAPTATION (official adaptation)
+        const preferred =
+          mangaEdges.find(
+            (e) => e.relationType === "SOURCE" || e.relationType === "ADAPTATION"
+          ) || mangaEdges[0];
+
+        const node = preferred.node;
+        const resolvedTitle =
+          node.title?.english || node.title?.romaji || node.title?.native || animeTitle;
+
+        return {
+          id: String(node.id),
+          title: resolvedTitle,
+          romajiTitle: node.title?.romaji,
+          coverImage: node.coverImage?.extraLarge || node.coverImage?.large || "",
+          status: node.status || undefined,
+          relationType: preferred.relationType,
+          totalChapters: node.chapters || undefined,
+        };
+      }
+    } catch {
+      // Fall through to title search
+    }
+  }
+
+  // 2. Fallback: Search AniList Manga by normalized title
+  if (animeTitle && animeTitle.trim()) {
+    try {
+      const cleanedTitle = animeTitle
+        .replace(/\s*\((?:tv|movie|special|ona|ova|dub|sub)\)/gi, "")
+        .replace(/(?:\s*[:\-]\s*)?(?:the\s+)?final\s+season.*$/gi, "")
+        .replace(/(?:\s*[:\-]\s*)?season\s*\d+.*$/gi, "")
+        .replace(/(?:\s*[:\-]\s*)?\d+(?:nd|rd|th|st)\s*season.*$/gi, "")
+        .replace(/(?:\s*[:\-]\s*)?part\s*\d+.*$/gi, "")
+        .replace(/(?:\s*[:\-]\s*)?cour\s*\d+.*$/gi, "")
+        .replace(/(?:\s*[:\-]\s*)?arc.*$/gi, "")
+        .trim();
+
+      const searchJson = await anilistQuery(
+        `query ($s: String) {
+          Media(search: $s, type: MANGA, sort: SEARCH_MATCH) {
+            id
+            format
+            title { english romaji native }
+            coverImage { large extraLarge }
+            status
+            chapters
+          }
+        }`,
+        { s: cleanedTitle || animeTitle.trim() }
+      );
+
+      const media = searchJson?.data?.Media;
+      if (media && media.id) {
+        const resolvedTitle =
+          media.title?.english || media.title?.romaji || media.title?.native || animeTitle;
+        return {
+          id: String(media.id),
+          title: resolvedTitle,
+          romajiTitle: media.title?.romaji,
+          coverImage: media.coverImage?.extraLarge || media.coverImage?.large || "",
+          status: media.status || undefined,
+          relationType: "ADAPTATION",
+          totalChapters: media.chapters || undefined,
+        };
+      }
+    } catch {
+      // Fall through to null
+    }
   }
 
   return null;

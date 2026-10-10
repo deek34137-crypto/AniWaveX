@@ -144,10 +144,10 @@ export default function MangaReaderClient({
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [offlineBlobs, setOfflineBlobs] = useState<Record<number, string>>({});
 
-  // Reading Tone & Mobile Chrome Visibility State
+  // Reading Tone & Mobile Chrome Visibility State (starts hidden for maximum immersion)
   const [readingTone, setReadingTone] = useState<ReadingTone>("dark");
   const [isToneMenuOpen, setIsToneMenuOpen] = useState(false);
-  const [isChromeVisible, setIsChromeVisible] = useState(true);
+  const [isChromeVisible, setIsChromeVisible] = useState(false);
   const toneMenuRef = useRef<HTMLDivElement | null>(null);
   const touchStartPosRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
@@ -159,6 +159,107 @@ export default function MangaReaderClient({
   const [modalSearch, setModalSearch] = useState("");
   const [modalSortOrder, setModalSortOrder] = useState<"asc" | "desc">("asc");
   const activeChapterButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Chapter-to-Chapter navigation uses router.replace to avoid history pollution
+  const navigateToChapter = useCallback(
+    (targetChapter: MangaChapter) => {
+      setIsChapterListOpen(false);
+      setActiveChapterId(targetChapter.id);
+      setActiveChapterNum(targetChapter.chapterNumber);
+      setPages([]);
+      setIsLoading(true);
+      setError(null);
+      setFailedImages({});
+      setCurrentVisiblePage(1);
+      window.scrollTo({ top: 0, behavior: "instant" });
+
+      const url = `/manga/${mangaId}/read?chapterId=${encodeURIComponent(targetChapter.id)}&ch=${targetChapter.chapterNumber}`;
+      router.replace(url, { scroll: false });
+    },
+    [router, mangaId]
+  );
+
+  // Determine current chapter index, previous chapter, and next chapter
+  const currentIndex = useMemo(() => {
+    if (!chapters || chapters.length === 0) return -1;
+    const byId = chapters.findIndex((c) => c.id === activeChapterId);
+    if (byId !== -1) return byId;
+    return chapters.findIndex((c) => c.chapterNumber === activeChapterNum);
+  }, [chapters, activeChapterId, activeChapterNum]);
+
+  const currentChapterObj = currentIndex >= 0 ? chapters[currentIndex] : null;
+  const prevChapter = currentIndex > 0 ? chapters[currentIndex - 1] : null;
+  const nextChapter = currentIndex >= 0 && currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null;
+
+  // Unified page navigation callbacks
+  const handlePrevPage = useCallback(() => {
+    if (readingMode === "webtoon") {
+      const prevP = Math.max(1, currentVisiblePage - 1);
+      setCurrentVisiblePage(prevP);
+      const el = document.querySelector(`[data-page="${prevP}"]`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (currentVisiblePage > 1) {
+      setCurrentVisiblePage((prev) => prev - 1);
+    } else if (prevChapter) {
+      navigateToChapter(prevChapter);
+    }
+  }, [currentVisiblePage, readingMode, prevChapter, navigateToChapter]);
+
+  const handleNextPage = useCallback(() => {
+    if (readingMode === "webtoon") {
+      const nextP = Math.min(pages.length, currentVisiblePage + 1);
+      setCurrentVisiblePage(nextP);
+      const el = document.querySelector(`[data-page="${nextP}"]`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (currentVisiblePage < pages.length) {
+      setCurrentVisiblePage((prev) => prev + 1);
+    } else if (nextChapter) {
+      navigateToChapter(nextChapter);
+    }
+  }, [currentVisiblePage, pages.length, readingMode, nextChapter, navigateToChapter]);
+
+  // Standardized Tap Gestures: Center 30% toggles UI, Left/Right 35% advances/reverses in paged mode
+  const handleTapAction = useCallback((clientX: number) => {
+    const screenWidth = window.innerWidth;
+    const isRTL = readingMode === "paged-rtl";
+
+    // Center 30% [35% -> 65%]: Toggles header & footer controls
+    if (clientX >= screenWidth * 0.35 && clientX <= screenWidth * 0.65) {
+      setIsChromeVisible((prev) => !prev);
+      return;
+    }
+
+    // In Webtoon continuous mode: tapping toggles header & scrub bar
+    if (readingMode === "webtoon") {
+      setIsChromeVisible((prev) => !prev);
+      return;
+    }
+
+    // In Paged Mode:
+    // Left 35% (< 0.35)
+    if (clientX < screenWidth * 0.35) {
+      if (isRTL) {
+        handleNextPage();
+      } else {
+        handlePrevPage();
+      }
+      return;
+    }
+
+    // Right 35% (> 0.65)
+    if (clientX > screenWidth * 0.65) {
+      if (isRTL) {
+        handlePrevPage();
+      } else {
+        handleNextPage();
+      }
+      return;
+    }
+  }, [readingMode, handleNextPage, handlePrevPage]);
 
   // Sync state if props change from external URL change
   useEffect(() => {
@@ -215,40 +316,16 @@ export default function MangaReaderClient({
     const duration = Date.now() - touchStartPosRef.current.time;
     touchStartPosRef.current = null;
 
-    // Must be a quick, deliberate tap with minimal travel (< 15px, < 350ms)
+    // Must be a deliberate tap with minimal travel (< 15px, < 350ms)
     if (diffX < 15 && diffY < 15 && duration < 350) {
-      const tapX = e.changedTouches[0].clientX;
-      const screenWidth = window.innerWidth;
-
-      // In Webtoon mode: tapping the middle third horizontally toggles UI
-      if (readingMode === "webtoon") {
-        if (tapX >= screenWidth * 0.25 && tapX <= screenWidth * 0.75) {
-          setIsChromeVisible((prev) => !prev);
-        }
-      } else {
-        // In Paged mode: center 40% toggles UI (outer 30% are next/prev page turn areas)
-        if (tapX >= screenWidth * 0.3 && tapX <= screenWidth * 0.7) {
-          setIsChromeVisible((prev) => !prev);
-        }
-      }
+      handleTapAction(e.changedTouches[0].clientX);
     }
   };
 
   const handleReaderClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest("button, a, input, [role='button'], .no-toggle-ui")) return;
-
-    const clickX = e.clientX;
-    const screenWidth = window.innerWidth;
-    if (readingMode === "webtoon") {
-      if (clickX >= screenWidth * 0.25 && clickX <= screenWidth * 0.75) {
-        setIsChromeVisible((prev) => !prev);
-      }
-    } else {
-      if (clickX >= screenWidth * 0.3 && clickX <= screenWidth * 0.7) {
-        setIsChromeVisible((prev) => !prev);
-      }
-    }
+    handleTapAction(e.clientX);
   };
 
   // Check if current chapter is saved offline in IndexedDB
@@ -291,17 +368,6 @@ export default function MangaReaderClient({
     };
   }, [offlineBlobs]);
 
-  // Determine current chapter index, previous chapter, and next chapter
-  const currentIndex = useMemo(() => {
-    if (!chapters || chapters.length === 0) return -1;
-    const byId = chapters.findIndex((c) => c.id === activeChapterId);
-    if (byId !== -1) return byId;
-    return chapters.findIndex((c) => c.chapterNumber === activeChapterNum);
-  }, [chapters, activeChapterId, activeChapterNum]);
-
-  const currentChapterObj = currentIndex >= 0 ? chapters[currentIndex] : null;
-  const prevChapter = currentIndex > 0 ? chapters[currentIndex - 1] : null;
-  const nextChapter = currentIndex >= 0 && currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null;
 
   // Fullscreen state listener
   useEffect(() => {
@@ -596,25 +662,6 @@ export default function MangaReaderClient({
     hasRestoredPageRef.current = false;
   }, [activeChapterId]);
 
-  // Chapter-to-Chapter navigation uses router.replace to avoid history pollution
-  const navigateToChapter = useCallback(
-    (targetChapter: MangaChapter) => {
-      setIsChapterListOpen(false);
-      // Immediately transition client state to eliminate stale page flash
-      setActiveChapterId(targetChapter.id);
-      setActiveChapterNum(targetChapter.chapterNumber);
-      setPages([]);
-      setIsLoading(true);
-      setError(null);
-      setFailedImages({});
-      setCurrentVisiblePage(1);
-      window.scrollTo({ top: 0, behavior: "instant" });
-
-      const url = `/manga/${mangaId}/read?chapterId=${encodeURIComponent(targetChapter.id)}&ch=${targetChapter.chapterNumber}`;
-      router.replace(url, { scroll: false });
-    },
-    [router, mangaId]
-  );
 
   // Fullscreen toggle
   const toggleFullscreen = useCallback(() => {
@@ -796,6 +843,7 @@ export default function MangaReaderClient({
   }, [isChapterListOpen]);
 
   const currentToneConfig = READING_TONES[readingTone] || READING_TONES.dark;
+  const isRTL = readingMode === "paged-rtl";
 
   return (
     <div className={`min-h-screen ${currentToneConfig.bodyBg} flex flex-col select-none transition-colors duration-200`}>
@@ -1177,23 +1225,6 @@ export default function MangaReaderClient({
           const liveProxyUrl = `/api/image-proxy?url=${encodeURIComponent(p.imageUrl)}${refererQuery}${retryCount > 0 ? `&_r=${retryCount}` : ""}`;
           const srcUrl = offlineBlobs[p.pageNumber] || liveProxyUrl;
 
-          const isRTL = readingMode === "paged-rtl";
-
-          const handlePrevPage = () => {
-            if (currentVisiblePage > 1) {
-              setCurrentVisiblePage((prev) => prev - 1);
-            } else if (prevChapter) {
-              navigateToChapter(prevChapter);
-            }
-          };
-
-          const handleNextPage = () => {
-            if (currentVisiblePage < pages.length) {
-              setCurrentVisiblePage((prev) => prev + 1);
-            } else if (nextChapter) {
-              navigateToChapter(nextChapter);
-            }
-          };
 
           return (
             <div className="relative w-full flex flex-col items-center select-none">
@@ -1280,6 +1311,87 @@ export default function MangaReaderClient({
           Page {currentVisiblePage} / {pages.length} • Tap for Menu
         </div>
       )}
+
+      {/* Bottom Scrub Bar (Shown when controls are visible) */}
+      <footer
+        className={`fixed bottom-0 inset-x-0 z-40 px-3 sm:px-6 py-2.5 sm:py-3 shadow-2xl backdrop-blur-xl border-t transition-all duration-300 ease-in-out ${
+          currentToneConfig.headerBg
+        } ${
+          isChromeVisible && !isLoading && pages.length > 0
+            ? "translate-y-0 opacity-100 pointer-events-auto"
+            : "translate-y-full opacity-0 pointer-events-none"
+        }`}
+      >
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 sm:gap-6">
+          {/* Quick Prev Page */}
+          <button
+            type="button"
+            onClick={isRTL ? handleNextPage : handlePrevPage}
+            disabled={
+              readingMode !== "webtoon"
+                ? isRTL
+                  ? currentVisiblePage >= pages.length && !nextChapter
+                  : currentVisiblePage <= 1 && !prevChapter
+                : !prevChapter && currentVisiblePage <= 1
+            }
+            className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs font-semibold transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${currentToneConfig.buttonBg}`}
+            title="Previous Page / Chapter"
+            aria-label="Previous Page"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Prev</span>
+          </button>
+
+          {/* Scrub Slider & Page Counter */}
+          <div className="flex-1 flex items-center gap-3">
+            <span className={`text-xs font-mono font-semibold shrink-0 ${currentToneConfig.subtextColor}`}>
+              {currentVisiblePage}
+            </span>
+
+            <input
+              type="range"
+              min={1}
+              max={pages.length || 1}
+              value={currentVisiblePage}
+              onChange={(e) => {
+                const targetP = parseInt(e.target.value, 10);
+                if (!isNaN(targetP)) {
+                  setCurrentVisiblePage(targetP);
+                  if (readingMode === "webtoon") {
+                    const el = document.querySelector(`[data-page="${targetP}"]`);
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }
+                }
+              }}
+              className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-cyan-400 focus:outline-none"
+              aria-label="Manga page scrub slider"
+            />
+
+            <span className={`text-xs font-mono font-semibold shrink-0 ${currentToneConfig.subtextColor}`}>
+              {pages.length}
+            </span>
+          </div>
+
+          {/* Quick Next Page */}
+          <button
+            type="button"
+            onClick={isRTL ? handlePrevPage : handleNextPage}
+            disabled={
+              readingMode !== "webtoon"
+                ? isRTL
+                  ? currentVisiblePage <= 1 && !prevChapter
+                  : currentVisiblePage >= pages.length && !nextChapter
+                : !nextChapter && currentVisiblePage >= pages.length
+            }
+            className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs font-semibold transition-all focus-visible:ring-4 focus-visible:ring-cyan-400 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${currentToneConfig.buttonBg}`}
+            title="Next Page / Chapter"
+            aria-label="Next Page"
+          >
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </footer>
 
       {/* End of Chapter Section — Obvious Continuous Flow (Phase 5, 6, 7) */}
       {!isLoading && !error && pages.length > 0 && (
