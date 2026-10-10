@@ -928,7 +928,7 @@ async function resolveStreamRaw(
       excludedProviders,
       targetProvider,
       maxProviders: 3,
-      gracePeriodMs: 1500,
+      gracePeriodMs: 2200,
     }
   );
 
