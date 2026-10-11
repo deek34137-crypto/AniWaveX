@@ -37,13 +37,27 @@ export default async function MangaReaderPage({
   const { id } = await params;
   const sParams = await searchParams;
 
-  // Retrieve manga details and chapter list server-side
-  const manga = await getMangaDetails(id);
-  if (!manga) {
-    notFound();
+  // Retrieve manga details and chapter list server-side with fallback if offline / upstream unavailable
+  let manga: any = null;
+  let chapters: any[] = [];
+
+  try {
+    manga = await getMangaDetails(id);
+    if (manga) {
+      chapters = await getMangaChapters(manga.title, manga.id, manga.romajiTitle, manga.synonyms);
+    }
+  } catch (err) {
+    console.warn("[MangaReaderPage] Upstream fetch failed, falling back to offline client reader:", err);
   }
 
-  const chapters = await getMangaChapters(manga.title, manga.id, manga.romajiTitle, manga.synonyms);
+  // Fallback manga placeholder if offline so client-side IndexedDB can take over
+  if (!manga) {
+    manga = {
+      id,
+      title: "Manga",
+      posterImage: "",
+    };
+  }
 
   // Match requested chapter
   let chapterId = sParams.chapterId;

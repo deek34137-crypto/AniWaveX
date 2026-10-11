@@ -507,7 +507,7 @@ export default function MangaReaderClient({
     // First check if device is offline or if chapter exists offline
     const offlineAvailable = await isChapterDownloaded(mangaId, activeChapterId);
 
-    if (!navigator.onLine && offlineAvailable) {
+    if ((!navigator.onLine || offlineAvailable) && offlineAvailable) {
       try {
         const offlineCh = await getOfflineChapter(mangaId, activeChapterId);
         if (offlineCh && offlineCh.pages.length > 0) {
@@ -524,7 +524,8 @@ export default function MangaReaderClient({
           setPages(offlinePagesList);
           setIsDownloaded(true);
           setIsLoading(false);
-          return;
+          // If offline, return immediately without network fetch
+          if (!navigator.onLine) return;
         }
       } catch (e) {
         console.warn("[Reader] Failed to load from offline storage directly", e);
@@ -532,7 +533,14 @@ export default function MangaReaderClient({
     }
 
     try {
-      const res = await fetch(`/api/manga/read?chapterId=${encodeURIComponent(activeChapterId)}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const res = await fetch(`/api/manga/read?chapterId=${encodeURIComponent(activeChapterId)}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
       const json = await res.json();
       if (!res.ok || !json.success) {
         throw new Error(json.error || "Failed to load chapter pages");

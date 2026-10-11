@@ -1,5 +1,5 @@
-// Basic Offline Service Worker for AniWaveX PWA
-const CACHE_NAME = "aniwavex-offline-v1";
+// Optimized Offline Service Worker for AniWaveX PWA
+const CACHE_NAME = "aniwavex-offline-v2";
 
 const PRECACHE_ASSETS = [
   "/",
@@ -10,7 +10,26 @@ const PRECACHE_ASSETS = [
   "/globe.svg"
 ];
 
-// Install Event - Precache critical shell routes
+// Helper: Fetch with timeout to prevent browser hanging on network drops
+function fetchWithTimeout(request, timeoutMs = 2500) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Network timeout"));
+    }, timeoutMs);
+
+    fetch(request)
+      .then((response) => {
+        clearTimeout(timer);
+        resolve(response);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
+// Install Event - Precache critical shell routes immediately
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -22,7 +41,7 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// Activate Event - Clean up stale caches
+// Activate Event - Clean up stale caches immediately and take control
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -38,7 +57,7 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch Event - Network first for fresh data, falling back to cache when offline
+// Fetch Event - Instant offline response with fast network fallback
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
@@ -55,27 +74,38 @@ self.addEventListener("fetch", (event) => {
   // For navigational requests (HTML pages)
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          // If valid response, clone into cache
-          if (response && response.status === 200) {
-            const responseClone = response.clone();
+      (async () => {
+        // If navigator is strictly offline, immediately serve cached page without waiting
+        const cachedPage = await caches.match(event.request);
+        const downloadsFallback = await caches.match("/downloads");
+
+        try {
+          // Race network against 2.5s timeout so user never waits 30s when offline
+          const networkResponse = await fetchWithTimeout(event.request, 2500);
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, responseClone);
             });
           }
-          return response;
-        })
-        .catch(async () => {
-          // Try to return matched cached page or the fallback /downloads page
-          const cached = await caches.match(event.request);
-          if (cached) return cached;
-          const downloadsFallback = await caches.match("/downloads");
+          return networkResponse;
+        } catch (err) {
+          // Network failed or timed out: serve matching cached page or /downloads fallback
+          if (cachedPage) return cachedPage;
           if (downloadsFallback) return downloadsFallback;
-          return new Response("You are currently offline. Open your saved downloads at /downloads.", {
-            headers: { "Content-Type": "text/plain" },
-          });
-        })
+
+          // If root "/" was requested and cached, return it
+          const rootFallback = await caches.match("/");
+          if (rootFallback) return rootFallback;
+
+          return new Response(
+            `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline - AniWaveX</title><style>body{background:#020617;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:1rem}a{color:#38bdf8;text-decoration:none;font-weight:600;padding:0.75rem 1.5rem;border-radius:0.75rem;background:#0369a1;display:inline-block;margin-top:1rem}</style></head><body><div><h1>You are currently offline</h1><p>Open your downloaded manga chapters to read without an internet connection.</p><a href="/downloads">Open Downloads</a></div></body></html>`,
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        }
+      })()
     );
     return;
   }
@@ -84,7 +114,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch in background to update cache
+        // Fetch in background to update cache silently
         fetch(event.request)
           .then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
@@ -100,7 +130,12 @@ self.addEventListener("fetch", (event) => {
           if (
             response &&
             response.status === 200 &&
-            (url.pathname.startsWith("/_next/static/") || url.pathname.endsWith(".png") || url.pathname.endsWith(".svg"))
+            (url.pathname.startsWith("/_next/static/") ||
+              url.pathname.endsWith(".png") ||
+              url.pathname.endsWith(".svg") ||
+              url.pathname.endsWith(".webp") ||
+              url.pathname.endsWith(".jpg") ||
+              url.pathname.endsWith(".woff2"))
           ) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));

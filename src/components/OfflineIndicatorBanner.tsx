@@ -16,8 +16,10 @@ export default function OfflineIndicatorBanner() {
       setIsOffline(!window.navigator.onLine);
 
       // Register service worker if supported
-      if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
-        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .catch((err) => console.warn("[SW] Registration skipped or failed:", err));
       }
     }
 
