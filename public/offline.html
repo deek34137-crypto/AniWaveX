@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Offline Downloads — AniWaveX</title>
+  <link rel="icon" href="/favicon.ico" />
+  <meta name="theme-color" content="#0a0a0c" />
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #030712;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 5rem;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 0.875rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      text-decoration: none;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 1.125rem;
+      letter-spacing: -0.025em;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.625rem;
+      border-radius: 9999px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .dot {
+      width: 0.375rem;
+      height: 0.375rem;
+      border-radius: 9999px;
+      background-color: #fbbf24;
+    }
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem;
+    }
+    .hero {
+      margin-bottom: 1.5rem;
+      padding: 1.25rem;
+      border-radius: 1rem;
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(59, 130, 246, 0.05));
+      border: 1px solid rgba(6, 182, 212, 0.2);
+    }
+    .hero h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 0.375rem;
+    }
+    .hero p {
+      color: #94a3b8;
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+    .stats {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1rem;
+      padding-top: 0.875rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 0.8125rem;
+      color: #cbd5e1;
+    }
+    .stats strong {
+      color: #38bdf8;
+    }
+    .search-bar {
+      margin-bottom: 1.5rem;
+    }
+    .search-input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      padding: 0.75rem 1rem;
+      border-radius: 0.75rem;
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus {
+      border-color: #06b6d4;
+    }
+    .manga-group {
+      margin-bottom: 1.75rem;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .manga-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .manga-poster {
+      width: 44px;
+      height: 60px;
+      object-fit: cover;
+      border-radius: 0.5rem;
+      background: #1e293b;
+      flex-shrink: 0;
+    }
+    .manga-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .manga-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .manga-count {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-top: 0.125rem;
+    }
+    .chapters-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 0.75rem;
+      padding: 1rem 1.25rem;
+    }
+    .chapter-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      border-radius: 0.75rem;
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.2s;
+      text-decoration: none;
+      color: inherit;
+    }
+    .chapter-card:hover {
+      background: #334155;
+      border-color: rgba(6, 182, 212, 0.4);
+      transform: translateY(-1px);
+    }
+    .chapter-number {
+      font-weight: 700;
+      color: #ffffff;
+      font-size: 0.875rem;
+    }
+    .chapter-meta {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 0.125rem;
+    }
+    .btn-read {
+      padding: 0.375rem 0.875rem;
+      background: #06b6d4;
+      color: #042f2e;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-delete {
+      padding: 0.375rem 0.5rem;
+      background: transparent;
+      color: #ef4444;
+      font-size: 0.75rem;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 0.5rem;
+      cursor: pointer;
+      margin-left: 0.5rem;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 4rem 1.5rem;
+      background: #0f172a;
+      border-radius: 1rem;
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+    .empty-state h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .empty-state p {
+      color: #64748b;
+      font-size: 0.875rem;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    /* Simple Offline Reader Modal */
+    #reader-view {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #000000;
+      z-index: 100;
+      overflow-y: auto;
+    }
+    #reader-bar {
+      position: sticky;
+      top: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #222;
+      z-index: 10;
+    }
+    #reader-pages {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 0;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    #reader-pages img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" class="brand">
+      <span>AniWaveX</span>
+    </a>
+    <div class="badge">
+      <span class="dot"></span>
+      <span>Offline Mode</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <h1>Offline Manga Storage</h1>
+      <p>All chapters saved to your browser's IndexedDB. You can read them anytime with zero internet connection.</p>
+      <div class="stats">
+        <span>Downloaded Chapters: <strong id="stat-chapters">0</strong></span>
+        <span>Estimated Pages: <strong id="stat-pages">0</strong></span>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <input type="text" id="search-input" class="search-input" placeholder="Search your downloaded titles or chapters..." />
+    </div>
+
+    <div id="downloads-container">
+      <div class="empty-state">
+        <h3>Loading your offline library...</h3>
+        <p>Retrieving stored pages from browser IndexedDB.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Built-in Standalone Offline Reader View -->
+  <div id="reader-view">
+    <div id="reader-bar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button id="btn-close-reader" style="background:#1e293b;border:1px solid #334155;color:#fff;padding:6px 14px;border-radius:8px;cursor:pointer;font-weight:bold;">← Back to Library</button>
+        <span id="reader-title" style="font-weight:bold;font-size:0.9rem;color:#fff;"></span>
+      </div>
+      <span id="reader-page-count" style="font-size:0.8rem;color:#94a3b8;"></span>
+    </div>
+    <div id="reader-pages"></div>
+  </div>
+
+  <script>
+    const DB_NAME = "aniwavex_manga_offline_db";
+    const DB_VERSION = 1;
+    const STORE_NAME = "downloaded_chapters";
+
+    let cachedChapters = [];
+
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+          reject(new Error("IndexedDB is not supported"));
+          return;
+        }
+        const req = window.indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            store.createIndex("mangaId", "mangaId", { unique: false });
+            store.createIndex("downloadedAt", "downloadedAt", { unique: false });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function loadChapters() {
+      try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.getAll();
+          req.onsuccess = () => {
+            const list = req.result || [];
+            list.sort((a, b) => (b.downloadedAt || 0) - (a.downloadedAt || 0));
+            resolve(list);
+          };
+          req.onerror = () => reject(req.error);
+        });
+      } catch (e) {
+        console.error("Failed to load DB", e);
+        return [];
+      }
+    }
+
+    async function deleteChapter(id) {
+      if (!confirm("Delete this chapter from your offline storage?")) return;
+      try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        store.delete(id);
+        tx.oncomplete = () => {
+          cachedChapters = cachedChapters.filter(c => c.id !== id);
+          render();
+        };
+      } catch (e) {
+        alert("Failed to delete chapter: " + e.message);
+      }
+    }
+
+    function openChapterReader(chapterId) {
+      const chapter = cachedChapters.find(c => c.id === chapterId);
+      if (!chapter) return;
+
+      const readerView = document.getElementById("reader-view");
+      const readerTitle = document.getElementById("reader-title");
+      const readerPageCount = document.getElementById("reader-page-count");
+      const readerPages = document.getElementById("reader-pages");
+
+      readerTitle.textContent = `${chapter.mangaTitle} - Chapter ${chapter.chapterNumber}`;
+      readerPageCount.textContent = `${chapter.pages.length} Pages`;
+      readerPages.innerHTML = "";
+
+      chapter.pages.forEach(p => {
+        const img = document.createElement("img");
+        const url = URL.createObjectURL(p.blob);
+        img.src = url;
+        img.alt = `Page ${p.pageNumber}`;
+        img.loading = "lazy";
+        readerPages.appendChild(img);
+      });
+
+      readerView.style.display = "block";
+      window.scrollTo(0, 0);
+    }
+
+    document.getElementById("btn-close-reader").onclick = () => {
+      const readerView = document.getElementById("reader-view");
+      readerView.style.display = "none";
+      document.getElementById("reader-pages").innerHTML = "";
+    };
+
+    function render(filter = "") {
+      const container = document.getElementById("downloads-container");
+      const query = filter.toLowerCase().trim();
+
+      const filtered = cachedChapters.filter(c => {
+        if (!query) return true;
+        return (c.mangaTitle || "").toLowerCase().includes(query) ||
+               String(c.chapterNumber).includes(query);
+      });
+
+      let totalPages = 0;
+      cachedChapters.forEach(c => totalPages += (c.totalPages || c.pages?.length || 0));
+      document.getElementById("stat-chapters").textContent = cachedChapters.length;
+      document.getElementById("stat-pages").textContent = totalPages;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <h3>No Offline Chapters Found</h3>
+            <p>${query ? 'No chapters matched your search query.' : 'Download your favorite manga chapters while connected to read them here anytime offline.'}</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Group by mangaId
+      const groups = new Map();
+      filtered.forEach(c => {
+        if (!groups.has(c.mangaId)) {
+          groups.set(c.mangaId, {
+            title: c.mangaTitle,
+            poster: c.posterImage,
+            chapters: []
+          });
+        }
+        groups.get(c.mangaId).chapters.push(c);
+      });
+
+      let html = "";
+      groups.forEach((g, mId) => {
+        html += `
+          <div class="manga-group">
+            <div class="manga-header">
+              ${g.poster ? `<img src="${g.poster}" class="manga-poster" alt="${g.title}" onerror="this.style.display='none'" />` : ''}
+              <div class="manga-info">
+                <div class="manga-title">${g.title}</div>
+                <div class="manga-count">${g.chapters.length} ${g.chapters.length === 1 ? 'chapter' : 'chapters'} saved offline</div>
+              </div>
+            </div>
+            <div class="chapters-list">
+              ${g.chapters.map(ch => `
+                <div class="chapter-card">
+                  <div>
+                    <div class="chapter-number">Chapter ${ch.chapterNumber}</div>
+                    <div class="chapter-meta">${ch.totalPages || ch.pages?.length || 0} pages • ${new Date(ch.downloadedAt).toLocaleDateString()}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;">
+                    <button class="btn-read" onclick="openChapterReader('${ch.id}')">Read Offline</button>
+                    <button class="btn-delete" onclick="deleteChapter('${ch.id}')">Delete</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    document.getElementById("search-input").addEventListener("input", (e) => {
+      render(e.target.value);
+    });
+
+    // Initial Load
+    loadChapters().then(list => {
+      cachedChapters = list;
+      render();
+    });
+  </script>
+</body>
+</html>
