@@ -159,7 +159,16 @@ export default function InPageVideoPlayer({
   targetSeekSeconds
 }: InPageVideoPlayerProps) {
   const { user: authUser, supabase } = useAuth();
-  const [activeTab, setActiveTab] = useState<"sub" | "dub" | "hindi">("sub");
+  const [activeTab, setActiveTab] = useState<"sub" | "dub" | "hindi">(() => {
+    if (typeof window === "undefined") return "sub";
+    try {
+      const savedPref = safeStorage.getItem("user_preference_audio") || safeStorage.getItem("aniwavex_audio_preference");
+      if (savedPref && ["sub", "dub", "hindi"].includes(savedPref)) {
+        return savedPref as "sub" | "dub" | "hindi";
+      }
+    } catch {}
+    return "sub";
+  });
   const [streams, setStreams] = useState<{ sub: StreamSource[], dub: StreamSource[], hindi?: StreamSource[], sources?: StreamSource[], nativeStream?: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingFallback, setIsFetchingFallback] = useState(false);
@@ -232,6 +241,19 @@ export default function InPageVideoPlayer({
   // Watch Party Realtime Sync State
   const [isWatchPartyModalOpen, setIsWatchPartyModalOpen] = useState(false);
 
+  const handleTabChange = useCallback((tab: "sub" | "dub" | "hindi", persistPreference = true) => {
+    setActiveTab(tab);
+    setSelectedServerIndex(0);
+    setPlayerError(false);
+    setFallbackToIframe(false);
+    if (persistPreference) {
+      try {
+        safeStorage.setItem("user_preference_audio", tab);
+        safeStorage.setItem("aniwavex_audio_preference", tab);
+      } catch {}
+    }
+  }, []);
+
   const handleRemoteSeek = useCallback((targetSeconds: number) => {
     if (mediaPlayerRef.current) {
       try {
@@ -268,6 +290,8 @@ export default function InPageVideoPlayer({
     }
   }, [episodes, onEpisodeChange]);
 
+  const currentUserRef = useRef<any>(authUser || initialUser);
+
   const {
     roomId: watchPartyRoomId,
     isPartyActive: isWatchPartyActive,
@@ -289,7 +313,6 @@ export default function InPageVideoPlayer({
     onRemoteEpisodeChange: handleRemoteEpisodeChange,
   });
 
-  const currentUserRef = useRef<any>(authUser || initialUser);
   const playerRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const mediaPlayerRef = useRef<MediaPlayerInstance>(null);
@@ -913,10 +936,10 @@ export default function InPageVideoPlayer({
             }
           }
         } else {
-          // If Hindi stream returned no sources or error, gracefully fallback to Japanese (sub)
+          // If Hindi stream returned no sources or error, gracefully fallback to Japanese (sub) without overriding global preference
           if (activeTab === 'hindi') {
             showToast("Hindi Dub not found — switching to Japanese Sub 🇯🇵");
-            setActiveTab("sub");
+            handleTabChange("sub", false);
             return;
           }
           if (data.error) {
@@ -932,7 +955,7 @@ export default function InPageVideoPlayer({
           console.error("Failed to fetch stream", error);
           if (activeTab === 'hindi') {
             showToast("Hindi Dub failed — switching to Japanese Sub 🇯🇵");
-            setActiveTab("sub");
+            handleTabChange("sub", false);
             return;
           }
         }
@@ -1425,34 +1448,19 @@ export default function InPageVideoPlayer({
             {/* Language Selector: SUB / ENG DUB / HINDI DUB (Desktop) */}
             <div className="hidden sm:flex p-1 bg-white/5 rounded-lg border border-white/10 shrink-0 gap-1">
               <button 
-                onClick={() => {
-                  setActiveTab("sub");
-                  setSelectedServerIndex(0);
-                  setPlayerError(false);
-                  setFallbackToIframe(false);
-                }}
+                onClick={() => handleTabChange("sub")}
                 className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors ${activeTab === 'sub' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
               >
                 SUB (JP)
               </button>
               <button 
-                onClick={() => {
-                  setActiveTab("dub");
-                  setSelectedServerIndex(0);
-                  setPlayerError(false);
-                  setFallbackToIframe(false);
-                }}
+                onClick={() => handleTabChange("dub")}
                 className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors ${activeTab === 'dub' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
               >
                 ENG DUB
               </button>
               <button 
-                onClick={() => {
-                  setActiveTab("hindi");
-                  setSelectedServerIndex(0);
-                  setPlayerError(false);
-                  setFallbackToIframe(false);
-                }}
+                onClick={() => handleTabChange("hindi")}
                 className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 ${activeTab === 'hindi' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-400 hover:text-amber-300'}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${activeTab === 'hindi' ? 'bg-white' : 'bg-amber-400 animate-pulse'}`} />
@@ -1825,7 +1833,7 @@ export default function InPageVideoPlayer({
                 <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
                   {activeTab !== 'sub' && (
                     <button
-                      onClick={() => setActiveTab('sub')}
+                      onClick={() => handleTabChange('sub')}
                       className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
                     >
                       Switch to SUB (JP)
@@ -1833,7 +1841,7 @@ export default function InPageVideoPlayer({
                   )}
                   {activeTab !== 'dub' && (
                     <button
-                      onClick={() => setActiveTab('dub')}
+                      onClick={() => handleTabChange('dub')}
                       className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-white/10 transition-colors"
                     >
                       Switch to ENG DUB
@@ -1841,7 +1849,7 @@ export default function InPageVideoPlayer({
                   )}
                   {activeTab !== 'hindi' && (
                     <button
-                      onClick={() => setActiveTab('hindi')}
+                      onClick={() => handleTabChange('hindi')}
                       className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-300 border border-amber-500/20 transition-colors"
                     >
                       Try HINDI DUB
@@ -2033,12 +2041,7 @@ export default function InPageVideoPlayer({
           isOpen={isMobileControlsOpen}
           onClose={() => setIsMobileControlsOpen(false)}
           activeTab={activeTab}
-          onTabChange={(tab) => {
-            setActiveTab(tab);
-            setSelectedServerIndex(0);
-            setPlayerError(false);
-            setFallbackToIframe(false);
-          }}
+          onTabChange={(tab) => handleTabChange(tab)}
           activeSources={activeSources || []}
           validServerIndex={validServerIndex}
           onSelectServer={(idx) => handleSelectServer(idx)}

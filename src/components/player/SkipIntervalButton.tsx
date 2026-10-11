@@ -1,10 +1,10 @@
 "use client";
 
 import React, { memo } from "react";
-import type { AniSkipInterval } from "@/lib/aniskip";
+import type { SkipInterval } from "@/lib/aniskip";
 
 interface SkipIntervalButtonProps {
-  activeSkip: AniSkipInterval | null;
+  activeSkip: SkipInterval | null;
   mediaDuration: number;
   hasNext: boolean;
   onExecuteSkip: () => void;

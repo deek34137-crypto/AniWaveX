@@ -364,7 +364,7 @@ export default function PublicProfileClient({
           username,
           displayName: meta.display_name || username,
           bio,
-          avatarUrl,
+          avatarUrl: avatarUrl || undefined,
           avatarId: meta.avatar_id,
           memberDate: "Member of AniWaveX",
           bannerPresetId,

@@ -141,7 +141,7 @@ export function useWatchParty({
 
         setMembers(activeMembers);
       })
-      .subscribe(async (status) => {
+      .subscribe(async (status: string) => {
         if (status === "SUBSCRIBED") {
           // Track presence
           await channel.track({

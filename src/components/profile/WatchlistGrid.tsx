@@ -394,7 +394,7 @@ export default function WatchlistGrid({
   // Export & Share Collection as Social PNG Card
   const handleShareCollection = async () => {
     const isAnime = mediaType === "anime";
-    const currentList = isAnime ? filteredItems : filteredMangaItems;
+    const currentList = isAnime ? filteredAnimeItems : filteredMangaItems;
     if (currentList.length === 0 || isExportingCard) return;
 
     setIsExportingCard(true);

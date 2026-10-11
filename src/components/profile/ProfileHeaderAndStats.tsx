@@ -17,6 +17,7 @@ import {
   Share2,
   Check,
   Trophy,
+  Tv,
 } from 'lucide-react';
 import AnimeImage from '@/components/AnimeImage';
 import { getAvatarUrl, getFallbackInitials } from '@/lib/avatars';
