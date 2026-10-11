@@ -165,7 +165,7 @@ export default function SearchBar() {
   return (
     <>
       <div className="relative w-full max-w-sm" ref={dropdownRef}>
-        <div className="relative flex items-center">
+        <div className="relative flex items-center rounded-full">
           <Search className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
           <input
             type="text"

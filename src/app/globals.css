@@ -406,25 +406,17 @@ html.reduce-motion *::after {
    TV (10-FOOT UI), 4K & LARGE DISPLAY RESPONSIVE SYSTEM
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Accessible focus outline for remote controls & keyboards (inherits border curvature) */
-:focus-visible {
+/* Accessible focus outline for remote controls & keyboards */
+:focus-visible:not(input):not(textarea):not([class*="outline-none"]):not([class*="ring-"]) {
   outline: 2px solid #38bdf8;
   outline-offset: 2px;
-  border-radius: inherit;
 }
 
-a:focus-visible,
-button:focus-visible,
-select:focus-visible {
-  outline: 2px solid #38bdf8;
-  outline-offset: 2px;
-  border-radius: inherit;
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
-}
-
-/* Form inputs & search bars: suppress harsh rectangular outlines in favor of soft rounded focus rings */
+/* Form inputs & search bars: preserve border curvature and suppress harsh rectangular outlines */
+input,
 input:focus,
 input:focus-visible,
+textarea,
 textarea:focus,
 textarea:focus-visible {
   outline: none !important;
