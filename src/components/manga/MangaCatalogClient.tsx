@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useTransition } from "react";
 import MangaCard from "@/components/manga/MangaCard";
 import { MangaItem } from "@/lib/manga/types";
-import { Search, X, Loader2, Sparkles, Flame, BookOpen } from "lucide-react";
+import { Search, X, Loader2, Sparkles, Flame, BookOpen, RotateCw } from "lucide-react";
 
 interface CategoryDef {
   id: string;
@@ -31,7 +31,7 @@ export default function MangaCatalogClient({
 }: {
   initialManga: MangaItem[];
 }) {
-  const [mangaList, setMangaList] = useState<MangaItem[]>(initialManga);
+  const [mangaList, setMangaList] = useState<MangaItem[]>(initialManga || []);
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -65,11 +65,18 @@ export default function MangaCatalogClient({
     }
   };
 
+  // Client recovery on mount: if initialManga was empty on SSR, fetch immediately
+  useEffect(() => {
+    if ((!initialManga || initialManga.length === 0) && mangaList.length === 0) {
+      fetchCatalog(activeCategory);
+    }
+  }, []);
+
   // Handle category switch (100% in background, no redirects)
   const handleCategorySelect = (categoryId: string) => {
     setActiveCategory(categoryId);
     setSearchQuery(""); // Clear search so category results take over cleanly
-    if (categoryId === "all") {
+    if (categoryId === "all" && initialManga && initialManga.length > 0) {
       setMangaList(initialManga);
     } else {
       fetchCatalog(categoryId);
@@ -87,7 +94,7 @@ export default function MangaCatalogClient({
 
     if (!val.trim()) {
       // Revert back to active category immediately
-      if (activeCategory === "all") {
+      if (activeCategory === "all" && initialManga && initialManga.length > 0) {
         setMangaList(initialManga);
       } else {
         fetchCatalog(activeCategory);
@@ -103,7 +110,7 @@ export default function MangaCatalogClient({
   // Clear search input button
   const handleClearSearch = () => {
     setSearchQuery("");
-    if (activeCategory === "all") {
+    if (activeCategory === "all" && initialManga && initialManga.length > 0) {
       setMangaList(initialManga);
     } else {
       fetchCatalog(activeCategory);
@@ -218,10 +225,17 @@ export default function MangaCatalogClient({
               </p>
             </div>
             <button
-              onClick={() => handleCategorySelect("all")}
-              className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white font-bold text-sm transition-colors shadow-lg shadow-cyan-500/20"
+              type="button"
+              onClick={() => {
+                setActiveCategory("all");
+                setSearchQuery("");
+                fetchCatalog("all");
+              }}
+              disabled={isLoading}
+              className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white font-bold text-sm transition-all shadow-lg shadow-cyan-500/20 cursor-pointer inline-flex items-center gap-2 mx-auto disabled:opacity-50"
             >
-              Back to All Manga
+              <RotateCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              <span>{isLoading ? "Loading Manga…" : "Back to All Manga"}</span>
             </button>
           </div>
         )}

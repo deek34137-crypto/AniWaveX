@@ -45,16 +45,28 @@ const GQL_FIELDS = `
   averageScore genres chapters
 `;
 
-async function anilistQuery(query: string, variables: Record<string, any>): Promise<any> {
+async function anilistQuery(query: string, variables: Record<string, any>, retries = 1): Promise<any> {
   try {
     const res = await fetch('https://graphql.anilist.co', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(6000),
       next: { revalidate: 300 },
     });
-    return res.ok ? await res.json() : null;
+    if (!res.ok) {
+      if (retries > 0 && (res.status === 429 || res.status >= 500)) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        return anilistQuery(query, variables, retries - 1);
+      }
+      return null;
+    }
+    return await res.json();
   } catch {
+    if (retries > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      return anilistQuery(query, variables, retries - 1);
+    }
     return null;
   }
 }
@@ -188,7 +200,35 @@ export async function getTrendingMangaList(limit = 24): Promise<MangaItem[]> {
     `query ($l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC){${GQL_FIELDS}}}}`,
     { l: limit }
   );
-  return (json?.data?.Page?.media || []).map(formatMangaItem);
+  const items = (json?.data?.Page?.media || []).map(formatMangaItem);
+  if (items.length > 0) return items;
+
+  // Fallback 1: AniList Popularity
+  const popularJson = await anilistQuery(
+    `query ($l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:POPULARITY_DESC){${GQL_FIELDS}}}}`,
+    { l: limit }
+  );
+  const popItems = (popularJson?.data?.Page?.media || []).map(formatMangaItem);
+  if (popItems.length > 0) return popItems;
+
+  // Fallback 2: Kitsu top manga
+  try {
+    const kitsuRes = await fetch(
+      `https://kitsu.io/api/edge/manga?sort=-userCount&page[limit]=${Math.min(limit, 20)}`,
+      {
+        headers: { Accept: 'application/vnd.api+json' },
+        signal: AbortSignal.timeout(5000),
+        next: { revalidate: 3600 },
+      }
+    );
+    if (kitsuRes.ok) {
+      const kData = await kitsuRes.json();
+      const kItems = (kData?.data || []).map(formatKitsuMangaItem);
+      if (kItems.length > 0) return kItems;
+    }
+  } catch {}
+
+  return [];
 }
 
 export interface MangaFilterOptions {
@@ -211,7 +251,22 @@ export async function filterMangaList(options: MangaFilterOptions): Promise<Mang
       `query ($l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC,countryOfOrigin:"KR"){${GQL_FIELDS}}}}`,
       { l: limit }
     );
-    return (json?.data?.Page?.media || []).map(formatMangaItem);
+    const items = (json?.data?.Page?.media || []).map(formatMangaItem);
+    if (items.length > 0) return items;
+
+    // Fallback Kitsu manhwa
+    try {
+      const res = await fetch(
+        `https://kitsu.io/api/edge/manga?filter[subtype]=manhwa&sort=-userCount&page[limit]=${Math.min(limit, 20)}`,
+        { headers: { Accept: 'application/vnd.api+json' }, signal: AbortSignal.timeout(5000) }
+      );
+      if (res.ok) {
+        const d = await res.json();
+        const kItems = (d?.data || []).map(formatKitsuMangaItem);
+        if (kItems.length > 0) return kItems;
+      }
+    } catch {}
+    return getTrendingMangaList(limit);
   }
 
   if (cat === 'manhua') {
@@ -219,7 +274,22 @@ export async function filterMangaList(options: MangaFilterOptions): Promise<Mang
       `query ($l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC,countryOfOrigin:"CN"){${GQL_FIELDS}}}}`,
       { l: limit }
     );
-    return (json?.data?.Page?.media || []).map(formatMangaItem);
+    const items = (json?.data?.Page?.media || []).map(formatMangaItem);
+    if (items.length > 0) return items;
+
+    // Fallback Kitsu manhua
+    try {
+      const res = await fetch(
+        `https://kitsu.io/api/edge/manga?filter[subtype]=manhua&sort=-userCount&page[limit]=${Math.min(limit, 20)}`,
+        { headers: { Accept: 'application/vnd.api+json' }, signal: AbortSignal.timeout(5000) }
+      );
+      if (res.ok) {
+        const d = await res.json();
+        const kItems = (d?.data || []).map(formatKitsuMangaItem);
+        if (kItems.length > 0) return kItems;
+      }
+    } catch {}
+    return getTrendingMangaList(limit);
   }
 
   if (cat === 'isekai') {
@@ -227,7 +297,9 @@ export async function filterMangaList(options: MangaFilterOptions): Promise<Mang
       `query ($l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC,tag:"Isekai"){${GQL_FIELDS}}}}`,
       { l: limit }
     );
-    return (json?.data?.Page?.media || []).map(formatMangaItem);
+    const items = (json?.data?.Page?.media || []).map(formatMangaItem);
+    if (items.length > 0) return items;
+    return getTrendingMangaList(limit);
   }
 
   const GENRES: Record<string, string> = {
@@ -250,7 +322,22 @@ export async function filterMangaList(options: MangaFilterOptions): Promise<Mang
       `query ($g:String,$l:Int){Page(page:1,perPage:$l){media(type:MANGA,sort:TRENDING_DESC,genre:$g){${GQL_FIELDS}}}}`,
       { g: genre, l: limit }
     );
-    return (json?.data?.Page?.media || []).map(formatMangaItem);
+    const items = (json?.data?.Page?.media || []).map(formatMangaItem);
+    if (items.length > 0) return items;
+
+    // Fallback Kitsu genre
+    try {
+      const res = await fetch(
+        `https://kitsu.io/api/edge/manga?filter[categories]=${encodeURIComponent(genre.toLowerCase())}&sort=-userCount&page[limit]=${Math.min(limit, 20)}`,
+        { headers: { Accept: 'application/vnd.api+json' }, signal: AbortSignal.timeout(5000) }
+      );
+      if (res.ok) {
+        const d = await res.json();
+        const kItems = (d?.data || []).map(formatKitsuMangaItem);
+        if (kItems.length > 0) return kItems;
+      }
+    } catch {}
+    return getTrendingMangaList(limit);
   }
 
   return getTrendingMangaList(limit);
@@ -326,6 +413,20 @@ export async function getMangaDetails(id: string | number): Promise<MangaItem | 
     );
     const m = json?.data?.Media;
     if (m) return formatMangaItem(m);
+
+    // Fallback: Check Kitsu if numeric ID failed on AniList (or was a Kitsu ID)
+    try {
+      const kitsuRes = await fetch(`https://kitsu.io/api/edge/manga/${numId}`, {
+        headers: { Accept: 'application/vnd.api+json' },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (kitsuRes.ok) {
+        const kData = await kitsuRes.json();
+        if (kData?.data) {
+          return formatKitsuMangaItem(kData.data);
+        }
+      }
+    } catch {}
   }
 
   return null;
@@ -1117,5 +1218,43 @@ function formatMangaItem(m: any): MangaItem {
     genres: m.genres || [],
     totalChapters: m.chapters || undefined,
     source: 'AniList',
+  };
+}
+
+function formatKitsuMangaItem(k: any): MangaItem {
+  const attrs = k.attributes || {};
+  const titles = attrs.titles || {};
+  const title = attrs.canonicalTitle || titles.en || titles.en_jp || 'Manga';
+  const desc = attrs.synopsis || attrs.description || '';
+  const rating = attrs.averageRating ? (parseFloat(attrs.averageRating) / 10).toFixed(1) : 'N/A';
+  let type: MangaItem['type'] = 'manga';
+  const subtype = (attrs.subtype || '').toLowerCase();
+  if (subtype.includes('manhwa')) type = 'manhwa';
+  else if (subtype.includes('manhua')) type = 'manhua';
+  else if (subtype.includes('novel')) type = 'comic';
+
+  const poster =
+    attrs.posterImage?.large ||
+    attrs.posterImage?.original ||
+    attrs.posterImage?.medium ||
+    '';
+  const banner = attrs.coverImage?.large || attrs.coverImage?.original || poster;
+
+  return {
+    id: String(k.id),
+    slug: String(k.id),
+    title,
+    romajiTitle: titles.en_jp,
+    nativeTitle: titles.ja_jp,
+    synonyms: titles.en ? [titles.en] : [],
+    posterImage: poster,
+    bannerImage: banner,
+    description: desc.replace(/<[^>]*>?/gm, '').trim(),
+    status: attrs.status === 'current' ? 'Ongoing' : attrs.status === 'finished' ? 'Completed' : 'Unknown',
+    type,
+    rating,
+    genres: [],
+    totalChapters: attrs.chapterCount || undefined,
+    source: 'Kitsu',
   };
 }

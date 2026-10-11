@@ -38,6 +38,8 @@ interface ReaderPageProps {
   mangaId: string;
   mangaTitle?: string;
   posterImage?: string;
+  romajiTitle?: string;
+  synonyms?: string[];
   chapterId: string;
   chapterNumber?: number;
   chapters?: MangaChapter[];
@@ -117,6 +119,8 @@ export default function MangaReaderClient({
   mangaId,
   mangaTitle = "Manga",
   posterImage,
+  romajiTitle,
+  synonyms,
   chapterId,
   chapterNumber,
   chapters = [],
@@ -127,6 +131,34 @@ export default function MangaReaderClient({
   // Active chapter state: initialized from props, updated immediately on client navigation
   const [activeChapterId, setActiveChapterId] = useState(chapterId);
   const [activeChapterNum, setActiveChapterNum] = useState<number | undefined>(chapterNumber);
+  const [chapterList, setChapterList] = useState<MangaChapter[]>(chapters || []);
+
+  useEffect(() => {
+    if (chapters && chapters.length > 0) {
+      setChapterList(chapters);
+    }
+  }, [chapters]);
+
+  // Fallback chapter fetch if chapters were empty on SSR
+  useEffect(() => {
+    if (chapterList.length === 0 && mangaTitle) {
+      const params = new URLSearchParams({
+        title: mangaTitle,
+        id: mangaId,
+      });
+      if (romajiTitle) params.set("romajiTitle", romajiTitle);
+      if (synonyms && synonyms.length > 0) params.set("synonyms", JSON.stringify(synonyms));
+
+      fetch(`/api/manga/chapters?${params.toString()}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.chapters && Array.isArray(data.chapters) && data.chapters.length > 0) {
+            setChapterList(data.chapters);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [chapterList.length, mangaTitle, mangaId, romajiTitle, synonyms]);
 
   const [pages, setPages] = useState<{ pageNumber: number; imageUrl: string; referer?: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -181,15 +213,15 @@ export default function MangaReaderClient({
 
   // Determine current chapter index, previous chapter, and next chapter
   const currentIndex = useMemo(() => {
-    if (!chapters || chapters.length === 0) return -1;
-    const byId = chapters.findIndex((c) => c.id === activeChapterId);
+    if (!chapterList || chapterList.length === 0) return -1;
+    const byId = chapterList.findIndex((c) => c.id === activeChapterId);
     if (byId !== -1) return byId;
-    return chapters.findIndex((c) => c.chapterNumber === activeChapterNum);
-  }, [chapters, activeChapterId, activeChapterNum]);
+    return chapterList.findIndex((c) => c.chapterNumber === activeChapterNum);
+  }, [chapterList, activeChapterId, activeChapterNum]);
 
-  const currentChapterObj = currentIndex >= 0 ? chapters[currentIndex] : null;
-  const prevChapter = currentIndex > 0 ? chapters[currentIndex - 1] : null;
-  const nextChapter = currentIndex >= 0 && currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null;
+  const currentChapterObj = currentIndex >= 0 ? chapterList[currentIndex] : null;
+  const prevChapter = currentIndex > 0 ? chapterList[currentIndex - 1] : null;
+  const nextChapter = currentIndex >= 0 && currentIndex < chapterList.length - 1 ? chapterList[currentIndex + 1] : null;
 
   // Unified page navigation callbacks
   const handlePrevPage = useCallback(() => {
@@ -845,7 +877,7 @@ export default function MangaReaderClient({
 
   // Filtered & sorted chapters for modal
   const filteredModalChapters = useMemo(() => {
-    let result = [...chapters];
+    let result = [...chapterList];
     if (modalSearch.trim()) {
       const q = modalSearch.toLowerCase().trim();
       result = result.filter(
@@ -858,7 +890,7 @@ export default function MangaReaderClient({
       result.sort((a, b) => a.chapterNumber - b.chapterNumber);
     }
     return result;
-  }, [chapters, modalSearch, modalSortOrder]);
+  }, [chapterList, modalSearch, modalSortOrder]);
 
   // Auto-scroll to active chapter when modal opens
   useEffect(() => {
@@ -944,7 +976,7 @@ export default function MangaReaderClient({
           </button>
 
           {/* Chapter Selector Jump Trigger */}
-          {chapters.length > 0 && (
+          {chapterList.length > 0 && (
             <button
               type="button"
               onClick={() => {
@@ -957,7 +989,7 @@ export default function MangaReaderClient({
             >
               <BookOpen className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Chapters</span>
-              <span className="text-[10px] opacity-70 font-mono">({chapters.length})</span>
+              <span className="text-[10px] opacity-70 font-mono">({chapterList.length})</span>
             </button>
           )}
 
@@ -1534,7 +1566,7 @@ export default function MangaReaderClient({
                   <BookOpen className="w-4 h-4 text-cyan-400" />
                   Jump to Chapter
                 </h3>
-                <p className="text-xs text-slate-400 truncate max-w-xs">{mangaTitle} • {chapters.length} chapters</p>
+                <p className="text-xs text-slate-400 truncate max-w-xs">{mangaTitle} • {chapterList.length} chapters</p>
               </div>
               <button
                 type="button"

@@ -43,7 +43,7 @@ export default async function MangaReaderPage({
     notFound();
   }
 
-  const chapters = await getMangaChapters(manga.title, manga.id, manga.romajiTitle);
+  const chapters = await getMangaChapters(manga.title, manga.id, manga.romajiTitle, manga.synonyms);
 
   // Match requested chapter
   let chapterId = sParams.chapterId;
@@ -71,6 +71,8 @@ export default async function MangaReaderPage({
       mangaId={id}
       mangaTitle={manga?.title || "Manga"}
       posterImage={manga?.posterImage}
+      romajiTitle={manga?.romajiTitle}
+      synonyms={manga?.synonyms}
       chapterId={chapterId}
       chapterNumber={chapterNum}
       chapters={chapters}

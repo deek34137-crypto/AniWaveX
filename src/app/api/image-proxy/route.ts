@@ -21,9 +21,13 @@ const ALLOWED_HOST_DOMAINS = [
   "asuracomic.net",
   "asuratoon.com",
   "gg.asuracomic.net",
+  "asura.gg",
+  "asuracomics.com",
+  "asurascans.com",
   // FlameComics & KaliScan
   "flamecomics.xyz",
   "flamecomics.me",
+  "flamecomics.com",
   "kaliscan.io",
   "kaliscan.com",
   // MangaRead / MGeko
@@ -36,6 +40,8 @@ const ALLOWED_HOST_DOMAINS = [
   "workexplained.com",
   // Comick
   "comick.app",
+  "comick.io",
+  "comick.pictures",
   "meo.comick.pictures",
   "meo2.comick.pictures",
   "meo3.comick.pictures",
@@ -44,6 +50,13 @@ const ALLOWED_HOST_DOMAINS = [
   "static.mangafire.to",
   "img.mangafire.to",
   "cdn.mangafire.to",
+  // MangaKakalot / ChapManganato / Manganato
+  "mangakakalot.com",
+  "mangakakalot.tv",
+  "chapmanganato.to",
+  "chapmanganato.com",
+  "manganato.com",
+  "readmng.com",
   // Bato & Webtoons
   "bato.to",
   "batotoo.com",
@@ -56,6 +69,8 @@ const ALLOWED_HOST_DOMAINS = [
   // Kitsu media & S3 backblaze CDN
   "kitsu.io",
   "media.kitsu.io",
+  "kitsu.app",
+  "media.kitsu.app",
   "kitsu-production-media.s3.us-west-002.backblazeb2.com",
   // MyAnimeList images
   "myanimelist.net",

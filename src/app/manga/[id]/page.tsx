@@ -173,6 +173,8 @@ export default async function MangaDetailPage({
               chapters={chapters}
               mangaTitle={manga.title}
               posterImage={manga.posterImage}
+              romajiTitle={manga.romajiTitle}
+              synonyms={manga.synonyms}
             />
           </div>
         </div>

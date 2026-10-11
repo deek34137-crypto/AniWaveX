@@ -20,6 +20,8 @@ interface MangaDetailChaptersClientProps {
   chapters: MangaChapter[];
   mangaTitle?: string;
   posterImage?: string;
+  romajiTitle?: string;
+  synonyms?: string[];
 }
 
 interface MangaReadingProgress {
@@ -37,6 +39,8 @@ export default function MangaDetailChaptersClient({
   chapters,
   mangaTitle,
   posterImage,
+  romajiTitle,
+  synonyms,
 }: MangaDetailChaptersClientProps) {
   const [chapterList, setChapterList] = useState<MangaChapter[]>(chapters || []);
   const [isFetching, setIsFetching] = useState<boolean>(false);
@@ -53,7 +57,14 @@ export default function MangaDetailChaptersClient({
   const fetchFallbackChapters = React.useCallback(() => {
     if (!mangaTitle) return;
     setIsFetching(true);
-    fetch(`/api/manga/chapters?title=${encodeURIComponent(mangaTitle)}&id=${encodeURIComponent(mangaId)}`)
+    const params = new URLSearchParams({
+      title: mangaTitle,
+      id: mangaId,
+    });
+    if (romajiTitle) params.set("romajiTitle", romajiTitle);
+    if (synonyms && synonyms.length > 0) params.set("synonyms", JSON.stringify(synonyms));
+
+    fetch(`/api/manga/chapters?${params.toString()}`)
       .then((res) => res.json())
       .then((data) => {
         if (data?.chapters && Array.isArray(data.chapters) && data.chapters.length > 0) {
@@ -62,7 +73,7 @@ export default function MangaDetailChaptersClient({
       })
       .catch(() => {})
       .finally(() => setIsFetching(false));
-  }, [mangaId, mangaTitle]);
+  }, [mangaId, mangaTitle, romajiTitle, synonyms]);
 
   useEffect(() => {
     if (chapterList.length === 0 && mangaTitle) {
