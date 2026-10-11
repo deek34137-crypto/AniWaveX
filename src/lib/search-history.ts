@@ -1,7 +1,9 @@
-﻿/**
+/**
  * AniWaveX Search History Utility
  * Manages search history in localStorage with add, remove particular, and clear all functionality.
  */
+
+import { safeStorage } from "./safe-storage";
 
 const SEARCH_HISTORY_KEY = "aniwavex_search_history";
 const MAX_HISTORY_ITEMS = 20;
@@ -9,7 +11,7 @@ const MAX_HISTORY_ITEMS = 20;
 export function getSearchHistory(): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+    const raw = safeStorage.getItem(SEARCH_HISTORY_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -29,7 +31,7 @@ export function saveSearchQuery(query: string): string[] {
       (item) => item.toLowerCase() !== trimmed.toLowerCase()
     );
     const updated = [trimmed, ...filtered].slice(0, MAX_HISTORY_ITEMS);
-    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+    safeStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event("search-history-updated"));
     return updated;
   } catch {
@@ -44,7 +46,7 @@ export function removeSearchItem(query: string): string[] {
     const updated = current.filter(
       (item) => item.toLowerCase() !== query.trim().toLowerCase()
     );
-    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+    safeStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event("search-history-updated"));
     return updated;
   } catch {
@@ -55,7 +57,7 @@ export function removeSearchItem(query: string): string[] {
 export function clearSearchHistory(): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.removeItem(SEARCH_HISTORY_KEY);
+    safeStorage.removeItem(SEARCH_HISTORY_KEY);
     window.dispatchEvent(new Event("search-history-updated"));
   } catch {}
 }

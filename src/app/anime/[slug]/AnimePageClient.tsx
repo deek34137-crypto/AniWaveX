@@ -269,26 +269,29 @@ export default function AnimePageClient({
           />
         )}
         
-        {/* Manga Adaptation Bridge Banner */}
-        {mangaAdaptation && (
-          <div className="pt-2">
-            <MangaAdaptationBridge manga={mangaAdaptation} animeTitle={data.title} />
-          </div>
-        )}
-        
-        <EpisodesGrid 
-          episodes={data.episodes} 
-          activeEpisodeId={activeEpisode?.id}
-          onPlay={(episode) => {
-            setActiveEpisode(episode);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }} 
-          animeSlug={data.slug}
-          animeId={data.animeId || data.id}
-          lastWatchedEpisode={lastWatchedEpisode}
-        />
-        
-        <Recommendations items={recommendations} />
+        {/* Lower page content with auto-dimming cinema backdrop effect when player is active */}
+        <div className={`space-y-6 tv:space-y-10 transition-opacity duration-500 ${activeEpisode ? "opacity-40 hover:opacity-100 transition-all duration-300" : "opacity-100"}`}>
+          {/* Manga Adaptation Bridge Banner */}
+          {mangaAdaptation && (
+            <div className="pt-2">
+              <MangaAdaptationBridge manga={mangaAdaptation} animeTitle={data.title} />
+            </div>
+          )}
+          
+          <EpisodesGrid 
+            episodes={data.episodes} 
+            activeEpisodeId={activeEpisode?.id}
+            onPlay={(episode) => {
+              setActiveEpisode(episode);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }} 
+            animeSlug={data.slug}
+            animeId={data.animeId || data.id}
+            lastWatchedEpisode={lastWatchedEpisode}
+          />
+          
+          <Recommendations items={recommendations} />
+        </div>
       </div>
     </main>
   );

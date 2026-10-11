@@ -24,6 +24,9 @@ import {
   ScrollText,
   Cloud,
   Palette,
+  Sun,
+  Moon,
+  MousePointerClick,
 } from "lucide-react";
 import { MangaChapter } from "@/lib/manga/types";
 import {
@@ -49,6 +52,7 @@ interface ReaderPageProps {
 type ReaderWidth = "standard" | "fit-screen" | "wide" | "full";
 export type ReadingMode = "webtoon" | "paged-rtl" | "paged-ltr";
 export type ReadingTone = "dark" | "oled" | "sepia";
+export type TapZoneMode = "three-zone" | "scroll-only";
 
 export interface ReadingToneConfig {
   id: ReadingTone;
@@ -176,10 +180,13 @@ export default function MangaReaderClient({
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [offlineBlobs, setOfflineBlobs] = useState<Record<number, string>>({});
 
-  // Reading Tone & Mobile Chrome Visibility State (starts hidden for maximum immersion)
+  // Reading Tone, Tap Zone Mode & Mobile Chrome Visibility State (starts hidden for maximum immersion)
   const [readingTone, setReadingTone] = useState<ReadingTone>("dark");
+  const [tapZoneMode, setTapZoneMode] = useState<TapZoneMode>("three-zone");
+  const [brightness, setBrightness] = useState<number>(100);
   const [isToneMenuOpen, setIsToneMenuOpen] = useState(false);
   const [isChromeVisible, setIsChromeVisible] = useState(false);
+  const [hoverScrubPage, setHoverScrubPage] = useState<number | null>(null);
   const toneMenuRef = useRef<HTMLDivElement | null>(null);
   const touchStartPosRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
@@ -256,6 +263,12 @@ export default function MangaReaderClient({
 
   // Standardized Tap Gestures: Center 30% toggles UI, Left/Right 35% advances/reverses in paged mode
   const handleTapAction = useCallback((clientX: number) => {
+    // If user configured "scroll-only" mode, any deliberate tap simply toggles the UI chrome
+    if (tapZoneMode === "scroll-only") {
+      setIsChromeVisible((prev) => !prev);
+      return;
+    }
+
     const screenWidth = window.innerWidth;
     const isRTL = readingMode === "paged-rtl";
 
@@ -271,7 +284,7 @@ export default function MangaReaderClient({
       return;
     }
 
-    // In Paged Mode:
+    // In Paged Mode with "three-zone" active:
     // Left 35% (< 0.35)
     if (clientX < screenWidth * 0.35) {
       if (isRTL) {
@@ -291,7 +304,7 @@ export default function MangaReaderClient({
       }
       return;
     }
-  }, [readingMode, handleNextPage, handlePrevPage]);
+  }, [tapZoneMode, readingMode, handleNextPage, handlePrevPage]);
 
   // Sync state if props change from external URL change
   useEffect(() => {
@@ -313,6 +326,17 @@ export default function MangaReaderClient({
       const savedTone = localStorage.getItem("aniwavex_manga_reading_tone") as ReadingTone;
       if (savedTone && ["dark", "oled", "sepia"].includes(savedTone)) {
         setReadingTone(savedTone);
+      }
+      const savedTapZone = localStorage.getItem("aniwavex_manga_tap_zones") as TapZoneMode;
+      if (savedTapZone && ["three-zone", "scroll-only"].includes(savedTapZone)) {
+        setTapZoneMode(savedTapZone);
+      }
+      const savedBrightness = localStorage.getItem("aniwavex_manga_brightness");
+      if (savedBrightness) {
+        const parsedB = parseInt(savedBrightness, 10);
+        if (!isNaN(parsedB) && parsedB >= 30 && parsedB <= 100) {
+          setBrightness(parsedB);
+        }
       }
     } catch {}
   }, []);
@@ -473,12 +497,40 @@ export default function MangaReaderClient({
     }
   };
 
-  // Fetch chapter pages
+  // Fetch chapter pages with offline IndexedDB fallback
   const fetchPages = useCallback(async () => {
     if (!activeChapterId) return;
     setIsLoading(true);
     setError(null);
     setFailedImages({});
+
+    // First check if device is offline or if chapter exists offline
+    const offlineAvailable = await isChapterDownloaded(mangaId, activeChapterId);
+
+    if (!navigator.onLine && offlineAvailable) {
+      try {
+        const offlineCh = await getOfflineChapter(mangaId, activeChapterId);
+        if (offlineCh && offlineCh.pages.length > 0) {
+          const blobsMap: Record<number, string> = {};
+          const offlinePagesList = offlineCh.pages.map((p) => {
+            const blobUrl = URL.createObjectURL(p.blob);
+            blobsMap[p.pageNumber] = blobUrl;
+            return {
+              pageNumber: p.pageNumber,
+              imageUrl: blobUrl,
+            };
+          });
+          setOfflineBlobs(blobsMap);
+          setPages(offlinePagesList);
+          setIsDownloaded(true);
+          setIsLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn("[Reader] Failed to load from offline storage directly", e);
+      }
+    }
+
     try {
       const res = await fetch(`/api/manga/read?chapterId=${encodeURIComponent(activeChapterId)}`);
       const json = await res.json();
@@ -487,11 +539,35 @@ export default function MangaReaderClient({
       }
       setPages(json.data.pages || []);
     } catch (err: any) {
+      // If network fetch fails, check if chapter is stored in offline IndexedDB
+      if (offlineAvailable) {
+        try {
+          const offlineCh = await getOfflineChapter(mangaId, activeChapterId);
+          if (offlineCh && offlineCh.pages.length > 0) {
+            const blobsMap: Record<number, string> = {};
+            const offlinePagesList = offlineCh.pages.map((p) => {
+              const blobUrl = URL.createObjectURL(p.blob);
+              blobsMap[p.pageNumber] = blobUrl;
+              return {
+                pageNumber: p.pageNumber,
+                imageUrl: blobUrl,
+              };
+            });
+            setOfflineBlobs(blobsMap);
+            setPages(offlinePagesList);
+            setIsDownloaded(true);
+            setIsLoading(false);
+            return;
+          }
+        } catch (offlineErr) {
+          console.error("[Reader] Failed to load offline fallback:", offlineErr);
+        }
+      }
       setError(err.message || "Unable to load chapter images");
     } finally {
       setIsLoading(false);
     }
-  }, [activeChapterId]);
+  }, [activeChapterId, mangaId]);
 
   useEffect(() => {
     fetchPages();
@@ -1093,6 +1169,76 @@ export default function MangaReaderClient({
                     </button>
                   );
                 })}
+
+                {/* Software Bedtime Brightness Filter Slider */}
+                <div className="mt-2 pt-2 border-t border-black/10 dark:border-white/10 px-2.5 pb-1 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-60">
+                    <span className="flex items-center gap-1">
+                      <Sun className="w-3 h-3 text-amber-400" />
+                      Brightness
+                    </span>
+                    <span className="font-mono">{brightness}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={30}
+                    max={100}
+                    step={5}
+                    value={brightness}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setBrightness(val);
+                      try {
+                        localStorage.setItem("aniwavex_manga_brightness", val.toString());
+                      } catch {}
+                    }}
+                    className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                  />
+                </div>
+
+                {/* Configurable Tap Zones (Classic 3-Zone vs Scroll Only) */}
+                <div className="mt-1 pt-1.5 border-t border-black/10 dark:border-white/10 px-2.5 pb-1 space-y-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider opacity-60 flex items-center gap-1">
+                    <MousePointerClick className="w-3 h-3 text-cyan-400" />
+                    Tap Behavior
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTapZoneMode("three-zone");
+                        try {
+                          localStorage.setItem("aniwavex_manga_tap_zones", "three-zone");
+                        } catch {}
+                      }}
+                      className={`px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all text-center border ${
+                        tapZoneMode === "three-zone"
+                          ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
+                          : "border-transparent opacity-60 hover:opacity-100 hover:bg-white/5"
+                      }`}
+                      title="Left/Right tap flips pages, Center opens menu"
+                    >
+                      3-Zone Tap
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTapZoneMode("scroll-only");
+                        try {
+                          localStorage.setItem("aniwavex_manga_tap_zones", "scroll-only");
+                        } catch {}
+                      }}
+                      className={`px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all text-center border ${
+                        tapZoneMode === "scroll-only"
+                          ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
+                          : "border-transparent opacity-60 hover:opacity-100 hover:bg-white/5"
+                      }`}
+                      title="Tap anywhere toggles menu, avoid accidental flips on mobile"
+                    >
+                      Scroll Only
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1173,6 +1319,10 @@ export default function MangaReaderClient({
         onClick={handleReaderClick}
         onTouchStart={handleReaderTouchStart}
         onTouchEnd={handleReaderTouchEnd}
+        style={{
+          filter: brightness < 100 ? `brightness(${brightness / 100})` : undefined,
+          transition: "filter 150ms ease",
+        }}
         className={`flex-1 w-full mx-auto px-2 sm:px-4 py-4 sm:py-8 flex flex-col items-center gap-3 transition-all duration-300 ${getWidthClass()}`}
       >
         {isLoading && (
@@ -1399,30 +1549,64 @@ export default function MangaReaderClient({
             <span className="hidden sm:inline">Prev</span>
           </button>
 
-          {/* Scrub Slider & Page Counter */}
-          <div className="flex-1 flex items-center gap-3">
+          {/* Scrub Slider & Page Counter with Hover Preview */}
+          <div className="flex-1 flex items-center gap-3 relative">
             <span className={`text-xs font-mono font-semibold shrink-0 ${currentToneConfig.subtextColor}`}>
               {currentVisiblePage}
             </span>
 
-            <input
-              type="range"
-              min={1}
-              max={pages.length || 1}
-              value={currentVisiblePage}
-              onChange={(e) => {
-                const targetP = parseInt(e.target.value, 10);
-                if (!isNaN(targetP)) {
-                  setCurrentVisiblePage(targetP);
-                  if (readingMode === "webtoon") {
-                    const el = document.querySelector(`[data-page="${targetP}"]`);
-                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            <div className="relative flex-1 flex items-center">
+              {/* Thumbnail / Page Jump Preview Tooltip */}
+              {hoverScrubPage !== null && pages[hoverScrubPage - 1] && (
+                <div
+                  className="absolute bottom-6 -translate-x-1/2 flex flex-col items-center pointer-events-none z-50 animate-in fade-in zoom-in-95 duration-100"
+                  style={{
+                    left: `${((hoverScrubPage - 1) / Math.max(1, pages.length - 1)) * 100}%`,
+                  }}
+                >
+                  <div className="p-1 rounded-xl bg-slate-900/95 border border-cyan-500/40 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-1">
+                    <img
+                      src={offlineBlobs[hoverScrubPage] || `/api/image-proxy?url=${encodeURIComponent(pages[hoverScrubPage - 1].imageUrl)}${pages[hoverScrubPage - 1].referer ? `&referer=${encodeURIComponent(pages[hoverScrubPage - 1].referer!)}` : ""}`}
+                      alt={`Preview page ${hoverScrubPage}`}
+                      className="w-16 h-24 object-cover rounded-lg border border-white/10"
+                    />
+                    <span className="text-[10px] font-mono font-bold text-cyan-300">
+                      Page {hoverScrubPage}
+                    </span>
+                  </div>
+                  <div className="w-2 h-2 bg-slate-900 border-r border-b border-cyan-500/40 rotate-45 -mt-1" />
+                </div>
+              )}
+
+              <input
+                type="range"
+                min={1}
+                max={pages.length || 1}
+                value={currentVisiblePage}
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  const estimatedPage = Math.round(ratio * (pages.length - 1)) + 1;
+                  setHoverScrubPage(estimatedPage);
+                }}
+                onMouseLeave={() => setHoverScrubPage(null)}
+                onTouchStart={() => setHoverScrubPage(currentVisiblePage)}
+                onTouchEnd={() => setHoverScrubPage(null)}
+                onChange={(e) => {
+                  const targetP = parseInt(e.target.value, 10);
+                  if (!isNaN(targetP)) {
+                    setCurrentVisiblePage(targetP);
+                    setHoverScrubPage(targetP);
+                    if (readingMode === "webtoon") {
+                      const el = document.querySelector(`[data-page="${targetP}"]`);
+                      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
                   }
-                }
-              }}
-              className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-cyan-400 focus:outline-none"
-              aria-label="Manga page scrub slider"
-            />
+                }}
+                className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-cyan-400 focus:outline-none"
+                aria-label="Manga page scrub slider"
+              />
+            </div>
 
             <span className={`text-xs font-mono font-semibold shrink-0 ${currentToneConfig.subtextColor}`}>
               {pages.length}

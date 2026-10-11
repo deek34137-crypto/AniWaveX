@@ -11,8 +11,10 @@ import {
   Bookmark,
   Loader2,
   RotateCw,
+  Download,
 } from "lucide-react";
 import { MangaChapter } from "@/lib/manga/types";
+import { getDownloadedChaptersForManga } from "@/lib/manga/offline-storage";
 import MangaBookmarkButton from "@/components/manga/MangaBookmarkButton";
 
 interface MangaDetailChaptersClientProps {
@@ -47,6 +49,23 @@ export default function MangaDetailChaptersClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [progress, setProgress] = useState<MangaReadingProgress | null>(null);
+  const [downloadedChapterIds, setDownloadedChapterIds] = useState<Set<string>>(new Set());
+
+  // Load offline downloaded chapters for this manga
+  useEffect(() => {
+    let isMounted = true;
+    getDownloadedChaptersForManga(mangaId)
+      .then((downloaded) => {
+        if (!isMounted) return;
+        const idSet = new Set(downloaded.map((d) => d.chapterId));
+        setDownloadedChapterIds(idSet);
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [mangaId]);
 
   useEffect(() => {
     if (chapters && chapters.length > 0) {
@@ -344,6 +363,11 @@ export default function MangaDetailChaptersClient({
                   {isLastRead && (
                     <span className="shrink-0 px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 text-[10px] font-bold flex items-center gap-0.5 border border-cyan-500/30">
                       <CheckCircle2 className="w-3 h-3" /> Read
+                    </span>
+                  )}
+                  {downloadedChapterIds.has(ch.id) && (
+                    <span className="shrink-0 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold flex items-center gap-0.5 border border-emerald-500/30" title="Downloaded for offline reading">
+                      <Download className="w-3 h-3" /> Offline
                     </span>
                   )}
                 </div>

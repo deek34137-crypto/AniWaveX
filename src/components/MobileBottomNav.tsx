@@ -15,7 +15,8 @@ import {
   Sparkles, 
   Bookmark, 
   Calendar,
-  ChevronRight
+  ChevronRight,
+  Download
 } from "lucide-react";
 
 function BottomNavContent() {
@@ -189,6 +190,15 @@ function BottomNavContent() {
       iconBg: "bg-blue-500/10 border-blue-500/20",
       href: "/watchlist",
       badge: "Library",
+    },
+    {
+      title: "Offline Downloads",
+      subtitle: "Read saved manga chapters without internet",
+      icon: Download,
+      iconColor: "text-cyan-400",
+      iconBg: "bg-cyan-500/10 border-cyan-500/20",
+      href: "/downloads",
+      badge: "Offline",
     },
     {
       title: "Airing Schedule",

@@ -27,6 +27,7 @@ import { getAvatarUrl } from "@/lib/avatars";
 import { PROFILE_BANNER_PRESETS, AnimeTierList } from "@/lib/tierlist";
 import { useAuth } from "@/providers/AuthProvider";
 import WatchHistoryGrid from "@/components/profile/WatchHistoryGrid";
+import ProfileHeaderAndStats from "@/components/profile/ProfileHeaderAndStats";
 
 interface PublicProfileClientProps {
   username: string;
@@ -357,191 +358,33 @@ export default function PublicProfileClient({
 
   return (
     <div className="w-full flex flex-col gap-8 animate-in fade-in duration-500">
-      {/* 1. Hero Profile Banner */}
-      <div
-        className={`relative rounded-3xl overflow-hidden border ${bannerPreset.border} shadow-2xl bg-gradient-to-r ${bannerPreset.gradient} min-h-[260px] sm:min-h-[300px] flex flex-col justify-end p-6 sm:p-10`}
-      >
-        {/* Custom background image if provided */}
-        {customBannerUrl && (
-          <div className="absolute inset-0 z-0">
-            <Image
-              src={customBannerUrl}
-              alt="Banner"
-              fill
-              unoptimized
-              className="object-cover opacity-30"
-            />
-          </div>
-        )}
-
-        {/* Ambient Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent z-0" />
-
-        {/* Top Action Buttons (Mobile: clean row at top, Desktop: absolute top-right) */}
-        <div className="flex sm:absolute sm:top-6 sm:right-6 items-center gap-2 z-10 flex-wrap justify-start sm:justify-end mb-4 sm:mb-0 w-full sm:w-auto">
-          {isOwner && (
-            <Link
-              href="/profile?tab=settings"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-xl sm:rounded-2xl text-xs font-bold transition-all border border-white/10 backdrop-blur-md shadow-lg active:scale-95"
-            >
-              <Settings className="w-3.5 h-3.5 text-blue-400" />
-              <span>Edit Profile</span>
-            </Link>
-          )}
-
-          <Link
-            href="/tier-list"
-            className="flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-xl sm:rounded-2xl text-xs font-bold transition-all border border-white/10 backdrop-blur-md shadow-lg active:scale-95"
-          >
-            <Layers className="w-3.5 h-3.5 text-blue-400" />
-            <span>Tier List</span>
-          </Link>
-
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl sm:rounded-2xl text-xs font-bold transition-all shadow-lg active:scale-95"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span>{copied ? "Copied!" : "Share Profile"}</span>
-          </button>
-        </div>
-
-        {/* Profile Info Row */}
-        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-end gap-6">
-          {/* Avatar */}
-          <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl overflow-hidden bg-slate-800 border-4 border-slate-900 shadow-2xl shrink-0 flex items-center justify-center text-3xl font-black text-white">
-            {avatarUrl ? (
-              <Image src={avatarUrl} alt={username} fill sizes="112px" unoptimized className="object-cover" />
-            ) : (
-              username.charAt(0).toUpperCase()
-            )}
-          </div>
-
-          {/* User Details */}
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-                {username}
-              </h1>
-              <span className="px-2.5 py-0.5 bg-blue-600/30 text-blue-400 border border-blue-500/30 text-[10px] sm:text-xs font-bold rounded-lg uppercase tracking-wider">
-                Otaku
-              </span>
-            </div>
-
-            <p className="text-slate-300 text-xs sm:text-sm max-w-2xl leading-relaxed mb-3 line-clamp-2">
-              {bio}
-            </p>
-
-            <div className="flex items-center gap-4 text-xs text-slate-400 font-medium">
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5" />
-                Member of AniWaveX
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Stats Dashboard */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab("history");
-            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
-          }}
-          className={`text-left bg-slate-900/70 border rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer group ${
-            activeTab === "history"
-              ? "border-blue-500/80 bg-blue-950/20 shadow-blue-950/30 ring-1 ring-blue-500/50"
-              : "border-white/10 hover:border-blue-500/50"
-          }`}
-          title="Click to view Watch History"
-        >
-          <div className="p-3 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30 shrink-0 group-hover:scale-110 transition-transform">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-black text-white">{estimatedHours} hrs</div>
-            <div className="text-[11px] font-semibold text-slate-400 group-hover:text-blue-400 uppercase tracking-wider transition-colors">
-              Watch Time
-            </div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab("history");
-            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
-          }}
-          className={`text-left bg-slate-900/70 border rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer group ${
-            activeTab === "history"
-              ? "border-purple-500/80 bg-purple-950/20 shadow-purple-950/30 ring-1 ring-purple-500/50"
-              : "border-white/10 hover:border-purple-500/50"
-          }`}
-          title="Click to view Episodes Watched"
-        >
-          <div className="p-3 bg-purple-600/20 text-purple-400 rounded-xl border border-purple-500/30 shrink-0 group-hover:scale-110 transition-transform">
-            <Tv className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-black text-white">{totalEpisodesWatched}</div>
-            <div className="text-[11px] font-semibold text-slate-400 group-hover:text-purple-400 uppercase tracking-wider transition-colors">
-              Episodes Watched
-            </div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab("watchlist");
-            setWatchlistFilter("completed");
-            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
-          }}
-          className={`text-left bg-slate-900/70 border rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer group ${
-            activeTab === "watchlist" && watchlistFilter === "completed"
-              ? "border-emerald-500/80 bg-emerald-950/20 shadow-emerald-950/30 ring-1 ring-emerald-500/50"
-              : "border-white/10 hover:border-emerald-500/50"
-          }`}
-          title="Click to view Completed Shows"
-        >
-          <div className="p-3 bg-emerald-600/20 text-emerald-400 rounded-xl border border-emerald-500/30 shrink-0 group-hover:scale-110 transition-transform">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-black text-white">{completedCount}</div>
-            <div className="text-[11px] font-semibold text-slate-400 group-hover:text-emerald-400 uppercase tracking-wider transition-colors">
-              Completed Shows
-            </div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab("watchlist");
-            setWatchlistFilter("all");
-            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
-          }}
-          className={`text-left bg-slate-900/70 border rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer group ${
-            activeTab === "watchlist" && watchlistFilter === "all"
-              ? "border-amber-500/80 bg-amber-950/20 shadow-amber-950/30 ring-1 ring-amber-500/50"
-              : "border-white/10 hover:border-amber-500/50"
-          }`}
-          title="Click to view Watchlist"
-        >
-          <div className="p-3 bg-amber-600/20 text-amber-400 rounded-xl border border-amber-500/30 shrink-0 group-hover:scale-110 transition-transform">
-            <Bookmark className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-black text-white">{bookmarks.length}</div>
-            <div className="text-[11px] font-semibold text-slate-400 group-hover:text-amber-400 uppercase tracking-wider transition-colors">
-              Total Watchlist
-            </div>
-          </div>
-        </button>
-      </div>
+      {/* 1. Unified Shared Profile Header & Stats Dashboard */}
+      <ProfileHeaderAndStats
+        data={{
+          username,
+          displayName: meta.display_name || username,
+          bio,
+          avatarUrl,
+          avatarId: meta.avatar_id,
+          memberDate: "Member of AniWaveX",
+          bannerPresetId,
+          customBannerUrl,
+          isOwner,
+          topFive,
+          stats: {
+            animeWatched: Math.max(bookmarks.length, history.length),
+            episodesWatched: totalEpisodesWatched,
+            completed: completedCount,
+            currentlyWatching: watchingCount,
+            planToWatch: bookmarks.filter((b) => b.status === "plan_to_watch").length,
+            totalWatchTimeHours: estimatedHours,
+            favoritesCount: topFive.length,
+          },
+        }}
+        onEditClick={isOwner ? () => window.location.assign("/profile?tab=edit") : undefined}
+        onShareClick={handleShare}
+        copied={copied}
+      />
 
       {/* 3. Navigation Tabs */}
       <div ref={tabsRef} className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto hide-scrollbar">

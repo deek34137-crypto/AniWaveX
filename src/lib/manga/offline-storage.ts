@@ -107,3 +107,33 @@ export async function deleteOfflineChapter(mangaId: string, chapterId: string): 
     req.onerror = () => reject(req.error);
   });
 }
+
+export async function getAllOfflineChapters(): Promise<OfflineChapter[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+      const results = (req.result || []) as OfflineChapter[];
+      // Sort newest downloads first
+      results.sort((a, b) => b.downloadedAt - a.downloadedAt);
+      resolve(results);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearAllOfflineChapters(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.clear();
+
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+

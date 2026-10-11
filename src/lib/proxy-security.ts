@@ -117,3 +117,38 @@ export function verifyProxySignature(
 
   return true;
 }
+
+/**
+ * Centralized list of known dead, ad-redirect, or malicious embed domains.
+ * Configurable via BLOCKED_EMBED_DOMAINS env var (comma-separated) with robust built-in defaults.
+ */
+export const BLOCKED_EMBED_DOMAINS: string[] = (() => {
+  const envBlocked = process.env.BLOCKED_EMBED_DOMAINS;
+  const defaults = [
+    "animeapps.top",
+    "short.ink",
+    "vidstreaming.xyz",
+    "ww19.",
+    "megaplay.buzz",
+    "adcash",
+    "popcash",
+    "bet365",
+  ];
+  if (envBlocked) {
+    const parsed = envBlocked.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
+    return Array.from(new Set([...defaults, ...parsed]));
+  }
+  return defaults;
+})();
+
+export function isValidEmbedUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== "string") return false;
+  if (url.startsWith("/api/proxy") || url.includes(".m3u8")) {
+    return false;
+  }
+  const lower = url.toLowerCase();
+  for (const blocked of BLOCKED_EMBED_DOMAINS) {
+    if (lower.includes(blocked)) return false;
+  }
+  return url.startsWith("http://") || url.startsWith("https://");
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, User, LogOut, Activity, Shield, Bookmark, Link2 } from "lucide-react";
+import { Bell, User, LogOut, Activity, Shield, Bookmark, Link2, Download } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import AuthModal from "./AuthModal";
 import UsernameModal from "./UsernameModal";
@@ -164,6 +164,13 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
               className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
             >
               <Bookmark className="w-4 h-4 text-cyan-400" /> My Library
+            </Link>
+            <Link 
+              href="/downloads" 
+              onClick={() => setIsMenuOpen(false)}
+              className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-2 transition-colors font-medium"
+            >
+              <Download className="w-4 h-4 text-emerald-400" /> Offline Downloads
             </Link>
             {isAdmin && (
               <Link 

@@ -2,8 +2,9 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Trash2, ChevronDown, BookOpen, Film, BookMarked, Play } from "lucide-react";
+import { Trash2, ChevronDown, BookOpen, Film, BookMarked, Play, Download, Share2, Loader2 } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
+import { generateCollectionCardBlob, shareOrDownloadCard } from "@/lib/card-export";
 import { WATCHLIST_STATUSES, WatchlistStatus } from "@/lib/watchlist";
 import {
   MANGA_BOOKMARK_STATUSES,
@@ -35,6 +36,9 @@ export default function WatchlistGrid({
   const [mangaItems, setMangaItems] = useState<MangaBookmarkItem[]>(initialMangaItems);
   const [selectedMangaTab, setSelectedMangaTab] = useState<MangaBookmarkStatus | "all">("all");
   const [editingMangaId, setEditingMangaId] = useState<string | null>(null);
+
+  // Card Sharing State
+  const [isExportingCard, setIsExportingCard] = useState(false);
 
   // Undo Toast State
   const [toastItem, setToastItem] = useState<{
@@ -387,6 +391,60 @@ export default function WatchlistGrid({
     }
   };
 
+  // Export & Share Collection as Social PNG Card
+  const handleShareCollection = async () => {
+    const isAnime = mediaType === "anime";
+    const currentList = isAnime ? filteredItems : filteredMangaItems;
+    if (currentList.length === 0 || isExportingCard) return;
+
+    setIsExportingCard(true);
+    try {
+      const cardItems = isAnime
+        ? currentList.map((i: any) => ({
+            title: i.anime_title || "Anime",
+            posterImage: i.poster_image || "",
+            badge: i.status ? i.status.toUpperCase() : undefined,
+          }))
+        : currentList.map((m: any) => ({
+            title: m.manga_title || "Manga",
+            posterImage: m.poster_image || "",
+            badge: m.status ? m.status.toUpperCase() : undefined,
+          }));
+
+      const displayTitle = isAnime
+        ? selectedTab === "all"
+          ? "My Anime Watchlist"
+          : `${selectedTab.toUpperCase()} Anime Collection`
+        : selectedMangaTab === "all"
+        ? "My Manga Library"
+        : `${selectedMangaTab.toUpperCase()} Manga Collection`;
+
+      const authorName = user?.user_metadata?.username;
+
+      const { blob, dataUrl } = await generateCollectionCardBlob({
+        title: displayTitle,
+        subtitle: `${currentList.length} titles curated on AniWaveX`,
+        items: cardItems,
+        category: isAnime ? "anime" : "manga",
+        authorName,
+      });
+
+      const fileName = `${displayTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-card.png`;
+
+      await shareOrDownloadCard({
+        blob,
+        dataUrl,
+        fileName,
+        title: displayTitle,
+        text: `Check out my ${isAnime ? "anime watchlist" : "manga reading collection"} on AniWaveX!`,
+      });
+    } catch (err: any) {
+      console.error("[Card Share] Error:", err);
+    } finally {
+      setIsExportingCard(false);
+    }
+  };
+
   return (
     <div className="relative">
       {/* Header and Segmented Switch */}
@@ -427,6 +485,30 @@ export default function WatchlistGrid({
           >
             <BookOpen className="w-4 h-4" />
             <span>Manga ({mangaCounts.all})</span>
+          </button>
+
+          <Link
+            href="/downloads"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/20 transition-all"
+            title="View offline downloaded chapters"
+          >
+            <Download className="w-4 h-4 text-cyan-400" />
+            <span className="hidden sm:inline">Offline Downloads</span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleShareCollection}
+            disabled={isExportingCard}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/10 hover:border-cyan-500/30 transition-all disabled:opacity-50 cursor-pointer shadow-md"
+            title="Export high-resolution card preview and share to Twitter or Discord"
+          >
+            {isExportingCard ? (
+              <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+            ) : (
+              <Share2 className="w-4 h-4 text-cyan-400" />
+            )}
+            <span>Share Card</span>
           </button>
         </div>
       </div>

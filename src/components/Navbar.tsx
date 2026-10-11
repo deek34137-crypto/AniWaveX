@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import NavbarLinks from "./NavbarLinks";
 import NavbarActions from "./NavbarActions";
-import { Search } from "lucide-react";
+import MobileSearchButton from "./MobileSearchButton";
 
 export default async function Navbar() {
   const supabase = await createClient();
@@ -30,14 +30,8 @@ export default async function Navbar() {
             <SearchBar />
           </div>
 
-          {/* Mobile Search Icon */}
-          <Link 
-            href="/search" 
-            className="sm:hidden p-2 text-slate-300 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-            aria-label="Search Anime"
-          >
-            <Search className="w-5 h-5" />
-          </Link>
+          {/* Mobile Search Overlay Trigger */}
+          <MobileSearchButton />
 
           <NavbarActions user={user} />
         </div>

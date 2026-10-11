@@ -66,6 +66,12 @@ body {
   }
 }
 
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    DYNAMIC THEME PROPAGATION (Dark, Light, and Special Themes)
    Applies selected theme colors to background, cards, borders, and buttons

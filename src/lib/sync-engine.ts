@@ -256,7 +256,7 @@ export async function applyMalSync(
   items: SyncDiffItem[]
 ): Promise<{ successful: number; failed: number }> {
   try {
-    const res = await fetch("/api/sync/mal/apply", {
+    const res = await fetch("/api/account/connections/mal/apply", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

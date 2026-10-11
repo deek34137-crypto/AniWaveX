@@ -19,6 +19,7 @@ import {
   Layers,
   X,
   ArrowDownToLine,
+  Share2,
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import { DEFAULT_TIER_ROWS, TierRow, TierItem, AnimeTierList } from "@/lib/tierlist";
@@ -702,11 +703,40 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
       ctx.font = "20px system-ui, -apple-system, sans-serif";
       ctx.fillText("Generated on AniWaveX - The Ultimate Anime Experience", 40, totalHeight - 26);
 
-      const dataUrl = canvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.download = `${(title || "anime").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-tierlist.png`;
-      link.href = dataUrl;
-      link.click();
+      const fileName = `${(title || "anime").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-tierlist.png`;
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          showToast("Failed to generate image blob", "error");
+          return;
+        }
+
+        const file = new File([blob], fileName, { type: "image/png" });
+
+        // If Web Share supports files (Twitter, Discord, WhatsApp, etc.)
+        if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              title: title || "My Anime Tier List",
+              text: `Check out my anime tier list "${title}" on AniWaveX!`,
+              url: window.location.href,
+              files: [file],
+            });
+            showToast("Tier list shared successfully!", "info");
+            return;
+          } catch (e: any) {
+            if (e.name === "AbortError") return;
+          }
+        }
+
+        // Fallback: direct browser download
+        const dataUrl = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.download = fileName;
+        link.href = dataUrl;
+        link.click();
+        showToast("Tier list image downloaded!", "info");
+      }, "image/png");
     } catch (err: any) {
       console.error("Export error:", err);
       showToast("Failed to export image: " + (err?.message || "Unknown error"), "error");
@@ -773,9 +803,10 @@ export default function TierListClient({ initialPresetAnime = [] }: { initialPre
               onClick={handleExportImage}
               disabled={isExporting}
               className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-2xl text-xs font-bold transition-all shadow-lg hover:scale-105"
+              title="Export high-resolution PNG image and share to Twitter or Discord"
             >
-              {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <span>Download Image</span>
+              {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+              <span>Share / Export</span>
             </button>
 
             {showResetConfirm ? (

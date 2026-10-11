@@ -95,6 +95,7 @@ export default function AnimeImage({
       fill={fill}
       sizes={sizes || "(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"}
       priority={priority}
+      loading={priority ? undefined : "lazy"}
       quality={quality}
       className={className}
       onError={handleError}

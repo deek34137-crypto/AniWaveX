@@ -17,6 +17,7 @@ const nextConfig: NextConfig = {
     ],
   },
   images: {
+    formats: ['image/avif', 'image/webp'],
     qualities: [75, 85],
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
@@ -113,6 +114,18 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "**.flixcloud.cc",
+      },
+      {
+        protocol: "https",
+        hostname: "uploads.mangadex.org",
+      },
+      {
+        protocol: "https",
+        hostname: "**.mangadex.org",
+      },
+      {
+        protocol: "https",
+        hostname: "api.mangadex.org",
       },
     ],
   },

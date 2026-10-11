@@ -22,6 +22,7 @@ import { SITE_CONFIG, getAbsoluteUrl } from "@/lib/seo/site-config";
 import { JsonLd, createWebSiteSchema, createOrganizationSchema } from "@/lib/seo/jsonld";
 import NotificationManager from "@/components/NotificationManager";
 import NavigationProgress from "@/components/NavigationProgress";
+import OfflineIndicatorBanner from "@/components/OfflineIndicatorBanner";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -91,6 +92,7 @@ export default function RootLayout({
             {children}
             <CommandPalette />
             <MobileBottomNav />
+            <OfflineIndicatorBanner />
           </AuthProvider>
         </ThemeProvider>
         <Analytics />

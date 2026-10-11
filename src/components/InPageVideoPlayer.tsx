@@ -1,9 +1,27 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity, FastForward, Play, List, Search, RectangleHorizontal } from "lucide-react";
-import NativePlayer from "./NativePlayer";
+import dynamic from "next/dynamic";
+import { Loader2, X, Keyboard, Tv, AlertCircle, Sparkles, Maximize2, Minimize2, Server, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Activity, FastForward, Play, List, Search, RectangleHorizontal, Sliders, Users } from "lucide-react";
+
+// Dynamically import NativePlayer with SSR disabled to keep initial SSR bundles lightweight
+const NativePlayer = dynamic(() => import("./NativePlayer"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-3 text-slate-400">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      <span className="text-xs font-semibold">Initializing Player Engine...</span>
+    </div>
+  ),
+});
+
 import SyncHudToast from "./player/SyncHudToast";
+import MobilePlayerControlsSheet from "./player/MobilePlayerControlsSheet";
+import SeekRipple from "./player/SeekRipple";
+import WatchPartyModal from "./player/WatchPartyModal";
+import { useWatchParty } from "@/lib/useWatchParty";
+import { SkipIntervalButton } from "./player/SkipIntervalButton";
+import { usePlayerKeyboardShortcuts } from "./player/usePlayerKeyboardShortcuts";
 import { useAuth } from "@/providers/AuthProvider";
 import { benchmarkStreamSources, getFastestServerIndex, formatLatencyBadge } from "@/lib/latency-benchmarker";
 import { syncProgressToAniList } from "@/lib/sync/anilist-sync";
@@ -12,25 +30,13 @@ import { getEpisodeSkipTimes, type SkipInterval } from "@/lib/aniskip";
 import type { MediaPlayerInstance } from "@vidstack/react";
 import type { LiveSyncResult } from "@/types/sync";
 
+import { isValidEmbedUrl } from "@/lib/proxy-security";
+import { safeStorage } from "@/lib/safe-storage";
+
 interface StreamSource {
   url: string;
   quality: string;
   isM3U8: boolean;
-}
-
-function isValidEmbedUrl(url: string | null | undefined): boolean {
-  if (!url || typeof url !== "string") return false;
-  if (
-    url.startsWith("/api/proxy") || 
-    url.includes(".m3u8") || 
-    url.includes("animeapps.top") ||
-    url.includes("short.ink") ||
-    url.includes("vidstreaming.xyz") ||
-    url.includes("ww19.")
-  ) {
-    return false;
-  }
-  return url.startsWith("http://") || url.startsWith("https://");
 }
 
 function isMegaOrVidstream(s: any): boolean {
@@ -85,10 +91,10 @@ export function getStoredEpisodeProgress(
     return (serverProgress && serverProgress > 5) ? Math.floor(serverProgress) : 0;
   }
 
-  // 1. Check episode-specific key in localStorage
+  // 1. Check episode-specific key in safeStorage
   try {
     const storageKey = `watch_progress_${animeSlug}_ep_${episodeId}`;
-    const saved = localStorage.getItem(storageKey);
+    const saved = safeStorage.getItem(storageKey);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed.currentTime && parsed.currentTime > 5) {
@@ -101,7 +107,7 @@ export function getStoredEpisodeProgress(
 
   // 2. Check unified recent watches list as fallback
   try {
-    const rawRecent = localStorage.getItem("aniwavex_recent_watches");
+    const rawRecent = safeStorage.getItem("aniwavex_recent_watches");
     if (rawRecent) {
       const list = JSON.parse(rawRecent);
       if (Array.isArray(list)) {
@@ -203,6 +209,13 @@ export default function InPageVideoPlayer({
     });
   }, [episodes, drawerSearchQuery]);
 
+  // Mobile Controls Bottom Sheet & Seek Ripple States
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [seekRipple, setSeekRipple] = useState<'forward' | 'backward' | null>(null);
+  const seekRippleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTapRef = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
+
   // AniSkip & Next Episode Endscreen State
   const [skipIntervals, setSkipIntervals] = useState<SkipInterval[]>([]);
   const [activeSkip, setActiveSkip] = useState<SkipInterval | null>(null);
@@ -216,6 +229,66 @@ export default function InPageVideoPlayer({
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasAutoSkippedRef = useRef<Set<string>>(new Set());
   
+  // Watch Party Realtime Sync State
+  const [isWatchPartyModalOpen, setIsWatchPartyModalOpen] = useState(false);
+
+  const handleRemoteSeek = useCallback((targetSeconds: number) => {
+    if (mediaPlayerRef.current) {
+      try {
+        const cur = mediaPlayerRef.current.currentTime || 0;
+        if (Math.abs(cur - targetSeconds) > 1.5) {
+          mediaPlayerRef.current.currentTime = targetSeconds;
+        }
+      } catch {}
+    }
+  }, []);
+
+  const handleRemotePlay = useCallback(() => {
+    if (mediaPlayerRef.current && mediaPlayerRef.current.paused) {
+      try {
+        mediaPlayerRef.current.play();
+      } catch {}
+    }
+  }, []);
+
+  const handleRemotePause = useCallback(() => {
+    if (mediaPlayerRef.current && !mediaPlayerRef.current.paused) {
+      try {
+        mediaPlayerRef.current.pause();
+      } catch {}
+    }
+  }, []);
+
+  const handleRemoteEpisodeChange = useCallback((targetEpId: number | string) => {
+    if (episodes && onEpisodeChange) {
+      const targetEp = episodes.find((e) => String(e.id) === String(targetEpId));
+      if (targetEp) {
+        onEpisodeChange(targetEp);
+      }
+    }
+  }, [episodes, onEpisodeChange]);
+
+  const {
+    roomId: watchPartyRoomId,
+    isPartyActive: isWatchPartyActive,
+    isHost: isWatchPartyHost,
+    members: watchPartyMembers,
+    createParty: handleCreateWatchParty,
+    joinParty: handleJoinWatchParty,
+    leaveParty: handleLeaveWatchParty,
+    broadcastSync: broadcastPartySync,
+    broadcastPlay: broadcastPartyPlay,
+    broadcastPause: broadcastPartyPause,
+  } = useWatchParty({
+    animeSlug,
+    episodeId: episode?.id,
+    user: currentUserRef.current,
+    onRemoteSeek: handleRemoteSeek,
+    onRemotePlay: handleRemotePlay,
+    onRemotePause: handleRemotePause,
+    onRemoteEpisodeChange: handleRemoteEpisodeChange,
+  });
+
   const currentUserRef = useRef<any>(authUser || initialUser);
   const playerRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -422,19 +495,24 @@ export default function InPageVideoPlayer({
       }
     }
 
-    // Save to localStorage every 2 seconds
+    // Save progress safely every 2 seconds with automatic mobile quota fallback
     if (Math.abs(currentTime - lastSavedTimeRef.current) >= 2) {
       lastSavedTimeRef.current = currentTime;
       try {
         const storageKey = `watch_progress_${animeSlug}_ep_${episode.id}`;
-        localStorage.setItem(storageKey, JSON.stringify({
+        safeStorage.setItem(storageKey, JSON.stringify({
           currentTime: floorTime,
           duration: floorDur,
           updatedAt: Date.now()
         }));
 
+        // If Watch Party is active and this user is host, broadcast timestamp sync
+        if (isWatchPartyActive && isWatchPartyHost) {
+          broadcastPartySync(currentTime, Boolean(mediaPlayerRef.current?.paused));
+        }
+
         // Update unified recent watches list for Continue Watching row
-        const rawRecent = localStorage.getItem("aniwavex_recent_watches");
+        const rawRecent = safeStorage.getItem("aniwavex_recent_watches");
         let recentList = rawRecent ? JSON.parse(rawRecent) : [];
         if (!Array.isArray(recentList)) recentList = [];
         recentList = recentList.filter((x: any) => x.animeSlug !== animeSlug);
@@ -449,9 +527,9 @@ export default function InPageVideoPlayer({
           updatedAt: Date.now()
         });
         if (recentList.length > 20) recentList = recentList.slice(0, 20);
-        localStorage.setItem("aniwavex_recent_watches", JSON.stringify(recentList));
+        safeStorage.setItem("aniwavex_recent_watches", JSON.stringify(recentList));
       } catch {
-        // Ignore localStorage quota errors
+        // Handled by safeStorage
       }
     }
 
@@ -677,37 +755,20 @@ export default function InPageVideoPlayer({
   const userExplicitlySelectedServerRef = useRef(false);
   const lastAniListSyncEpRef = useRef<number | null>(null);
 
-  // Smart Server Latency Benchmarker & Auto-Selection
+  // Lazy-load latency metrics on-demand when the user opens server settings
   useEffect(() => {
-    if (!activeSources || activeSources.length === 0) return;
+    if (!isMobileControlsOpen || !activeSources || activeSources.length === 0) return;
     let isCancelled = false;
 
     benchmarkStreamSources(activeSources).then((latencies) => {
       if (isCancelled) return;
       setServerLatencies(latencies);
-
-      // Only auto-switch if user has not explicitly locked a server and playback has not already commenced
-      if (!userExplicitlySelectedServerRef.current) {
-        let liveTime = 0;
-        try {
-          liveTime = mediaPlayerRef.current?.currentTime || 0;
-        } catch {
-          liveTime = 0;
-        }
-        if (liveTime < 1) {
-          const fastestIdx = getFastestServerIndex(activeSources, latencies);
-          if (fastestIdx !== validServerIndex && latencies[activeSources[fastestIdx]?.url] < 300) {
-            setSelectedServerIndex(fastestIdx);
-            setFallbackToIframe(!activeSources[fastestIdx].isM3U8);
-          }
-        }
-      }
     });
 
     return () => {
       isCancelled = true;
     };
-  }, [activeSources]);
+  }, [isMobileControlsOpen, activeSources]);
 
   // Preserve timestamp when switching servers
   const handleSelectServer = useCallback((newIdx: number, isAutoFailover = false) => {
@@ -1098,162 +1159,88 @@ export default function InPageVideoPlayer({
     return () => window.removeEventListener("message", handleWindowMessage);
   }, [handleEnded]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is in an input field or any modal dialog/overlay/palette is active
-      const targetEl = e.target as HTMLElement | null;
-      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
-      
-      if (
-        activeTag === 'input' || 
-        activeTag === 'textarea' || 
-        activeTag === 'select' || 
-        targetEl?.isContentEditable ||
-        targetEl?.closest('input, textarea, select, [role="dialog"], [aria-modal="true"], .command-palette') ||
-        showShortcuts ||
-        document.body.classList.contains('overflow-hidden') ||
-        document.querySelector('[role="dialog"]') ||
-        document.querySelector('[aria-modal="true"]') ||
-        document.querySelector('.fixed.z-\\[200\\]') ||
-        document.querySelector('.fixed.z-\\[100\\]') ||
-        document.querySelector('[data-state="open"]') ||
-        document.querySelector('dialog[open]')
-      ) {
-        return;
+  const triggerSeek = useCallback((deltaSeconds: number) => {
+    const player = mediaPlayerRef.current;
+    if (!player) return;
+
+    const cur = player.currentTime || 0;
+    const dur = player.duration;
+    const target = deltaSeconds > 0
+      ? (dur && !isNaN(dur) && dur > 0 ? Math.min(dur, cur + deltaSeconds) : cur + deltaSeconds)
+      : Math.max(0, cur + deltaSeconds);
+
+    player.currentTime = target;
+
+    // Trigger visual seek ripple
+    setSeekRipple(deltaSeconds > 0 ? 'forward' : 'backward');
+    if (seekRippleTimeoutRef.current) clearTimeout(seekRippleTimeoutRef.current);
+    seekRippleTimeoutRef.current = setTimeout(() => {
+      setSeekRipple(null);
+    }, 650);
+  }, []);
+
+  const handleTouchTap = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    const now = Date.now();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const tapX = touch.clientX - rect.left;
+    const width = rect.width;
+
+    // Double tap within 300ms
+    if (now - lastTapRef.current.time < 320 && Math.abs(tapX - lastTapRef.current.x) < 70) {
+      if (tapX > width * 0.6) {
+        // Double tap right side: +10s
+        triggerSeek(10);
+      } else if (tapX < width * 0.4) {
+        // Double tap left side: -10s
+        triggerSeek(-10);
       }
+      lastTapRef.current = { time: 0, x: 0 };
+    } else {
+      lastTapRef.current = { time: now, x: tapX };
+    }
+  }, [triggerSeek]);
 
-      const player = mediaPlayerRef.current;
+  const handlePlaybackRateChange = useCallback((rate: number) => {
+    setPlaybackRate(rate);
+    if (mediaPlayerRef.current) {
+      try {
+        mediaPlayerRef.current.playbackRate = rate;
+      } catch {}
+    }
+    showToast(`Speed: ${rate}x`);
+  }, [showToast]);
 
-      switch (e.key) {
-        case ' ':
-        case 'k':
-        case 'K':
-          if (player) {
-            e.preventDefault();
-            if (player.paused) {
-              player.play();
-            } else {
-              player.pause();
-            }
-          }
-          break;
-        case 'f':
-        case 'F':
-          e.preventDefault();
-          toggleFullscreen();
-          break;
-        case 't':
-        case 'T':
-          e.preventDefault();
-          toggleTheaterMode();
-          break;
-        case 'm':
-        case 'M':
-          if (player) {
-            e.preventDefault();
-            player.muted = !player.muted;
-          }
-          break;
-        case 'ArrowLeft':
-          if (player) {
-            e.preventDefault();
-            const cur = player.currentTime || 0;
-            player.currentTime = Math.max(0, cur - 5);
-          }
-          break;
-        case 'ArrowRight':
-          if (player) {
-            e.preventDefault();
-            const dur = player.duration;
-            const cur = player.currentTime || 0;
-            player.currentTime = (dur && !isNaN(dur) && dur > 0) ? Math.min(dur, cur + 5) : cur + 5;
-          }
-          break;
-        case 's':
-          e.preventDefault();
-          handleNextSource();
-          break;
-        case 'S':
-          e.preventDefault();
-          if (e.shiftKey) {
-            handlePrevSource();
-          } else {
-            handleNextSource();
-          }
-          break;
-        case 'n':
-        case 'N':
-          if (hasNext) {
-            e.preventDefault();
-            handleNext();
-          }
-          break;
-        case 'p':
-        case 'P':
-          if (hasPrev) {
-            e.preventDefault();
-            handlePrev();
-          }
-          break;
-        case 'e':
-        case 'E':
-          e.preventDefault();
-          setIsEpisodeDrawerOpen((prev) => !prev);
-          break;
-        case 'Escape':
-          if (isEpisodeDrawerOpen) {
-            e.preventDefault();
-            setIsEpisodeDrawerOpen(false);
-          }
-          break;
-        case '?':
-          setShowShortcuts((prev) => !prev);
-          break;
-        default:
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasNext, hasPrev, handleNext, handlePrev, handleNextSource, handlePrevSource, toggleFullscreen, toggleTheaterMode, showShortcuts, isEpisodeDrawerOpen]);
+  usePlayerKeyboardShortcuts({
+    mediaPlayerRef,
+    showShortcuts,
+    setShowShortcuts,
+    isEpisodeDrawerOpen,
+    setIsEpisodeDrawerOpen,
+    hasNext,
+    hasPrev,
+    handleNext,
+    handlePrev,
+    handleNextSource,
+    handlePrevSource,
+    toggleFullscreen,
+    toggleTheaterMode,
+    triggerSeek,
+  });
 
   if (!episode) return null;
 
   const playbackOverlays = (
     <>
-      {/* On-Screen Skip / Watch Next Button Matching Reference UI */}
-      {activeSkip && !playerError && !isLoading && (() => {
-        const dur = mediaDuration || 1440;
-        const isPostCredits = activeSkip.type === "ed" && (dur - activeSkip.endTime > 90);
-        const buttonLabel = activeSkip.type === "op"
-          ? "Skip Intro"
-          : activeSkip.type === "ed"
-          ? (hasNext && !isPostCredits ? "Watch Next" : "Skip Outro")
-          : "Skip Recap";
-
-        return (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleExecuteSkip();
-            }}
-            className="absolute bottom-16 sm:bottom-[4.5rem] right-4 sm:right-6 z-40 overflow-hidden min-w-[128px] sm:min-w-[144px] h-9 sm:h-10 px-6 sm:px-7 rounded-md bg-black/70 hover:bg-black/90 border border-white/80 text-white font-semibold text-xs sm:text-sm backdrop-blur-sm shadow-2xl opacity-70 hover:opacity-100 transition-all duration-200 flex items-center justify-center cursor-pointer pointer-events-auto active:scale-95 animate-in fade-in whitespace-nowrap"
-            title={`${buttonLabel} (${Math.round(activeSkip.endTime - activeSkip.startTime)}s)`}
-          >
-            {/* Left-to-Right Fill Progress Effect (Hardware-accelerated CSS animation) */}
-            <div
-              className="absolute inset-y-0 left-0 bg-white/20 border-r border-white/40 pointer-events-none"
-              style={{ animation: "skipProgressFill 10s linear forwards" }}
-            />
-
-            <span className="relative z-10 select-none tracking-wide text-white whitespace-nowrap">
-              {buttonLabel}
-            </span>
-          </button>
-        );
-      })()}
+      {/* On-Screen Skip / Watch Next Button */}
+      <SkipIntervalButton
+        activeSkip={activeSkip}
+        mediaDuration={mediaDuration}
+        hasNext={hasNext}
+        onExecuteSkip={handleExecuteSkip}
+        disabled={!!playerError || isLoading}
+      />
 
       {/* Netflix-Style Next Episode Endscreen Overlay */}
       {showNextEpOverlay && hasNext && episodes && currentIndex !== -1 && (
@@ -1353,10 +1340,21 @@ export default function InPageVideoPlayer({
             </div>
           </div>
           
-          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap max-w-full min-w-0">
-            {/* Server Switcher with Next / Prev Source Controls */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap max-w-full min-w-0">
+            {/* Mobile Consolidated Controls Button */}
+            <button
+              type="button"
+              onClick={() => setIsMobileControlsOpen(true)}
+              className="sm:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+            >
+              <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Settings & Servers</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse ml-0.5" />
+            </button>
+
+            {/* Desktop Server Switcher with Next / Prev Source Controls */}
             {activeSources && activeSources.length > 0 && (
-              <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-lg border border-white/10 max-w-full min-w-0">
+              <div className="hidden sm:flex items-center gap-1.5 bg-white/5 p-1 rounded-lg border border-white/10 max-w-full min-w-0">
                 {activeSources.length > 1 && (
                   <button
                     type="button"
@@ -1424,8 +1422,8 @@ export default function InPageVideoPlayer({
               </div>
             )}
 
-            {/* Language Selector: SUB / ENG DUB / HINDI DUB */}
-            <div className="flex p-1 bg-white/5 rounded-lg border border-white/10 shrink-0 gap-1">
+            {/* Language Selector: SUB / ENG DUB / HINDI DUB (Desktop) */}
+            <div className="hidden sm:flex p-1 bg-white/5 rounded-lg border border-white/10 shrink-0 gap-1">
               <button 
                 onClick={() => {
                   setActiveTab("sub");
@@ -1499,6 +1497,7 @@ export default function InPageVideoPlayer({
           {/* Single Unified Video Player Container (Docked or Floating PiP) */}
           <div 
             ref={videoContainerRef}
+            onTouchEnd={handleTouchTap}
             onMouseEnter={() => {
               if (typeof window !== 'undefined') window.focus();
             }}
@@ -1513,6 +1512,8 @@ export default function InPageVideoPlayer({
                 : "relative w-full h-full bg-black rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-white/10 flex items-center justify-center [&:fullscreen]:w-screen [&:fullscreen]:h-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0 [&:fullscreen]:max-w-none"
             }`}
           >
+            {/* Visual Double-Tap Seek Ripple Animation (+10s / -10s) */}
+            <SeekRipple type={seekRipple} seekAmount={10} />
             {/* Floating Mini Player Controls Overlay */}
             {isFloatingPiP && (
               <div className="absolute top-0 left-0 right-0 p-2.5 bg-gradient-to-b from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-between pointer-events-auto z-30">
@@ -1926,6 +1927,25 @@ export default function InPageVideoPlayer({
               <span className="hidden sm:inline">Ambient Glow</span>
             </button>
 
+            {/* Social Watch Party Button */}
+            <button
+              type="button"
+              onClick={() => setIsWatchPartyModalOpen(true)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                isWatchPartyActive
+                  ? "bg-purple-600/30 text-purple-300 border-purple-500/50 shadow-md shadow-purple-500/10"
+                  : "bg-slate-900/50 hover:bg-slate-800/80 text-slate-400 hover:text-white border-white/5"
+              }`}
+              title="Watch together with friends in real-time"
+              aria-label="Social Watch Party"
+            >
+              <Users className="w-4 h-4 text-purple-400" />
+              <span className="hidden sm:inline">Watch Party</span>
+              {isWatchPartyActive && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+              )}
+            </button>
+
             {/* Theater Mode Toggle Button */}
             <button
               type="button"
@@ -2007,6 +2027,44 @@ export default function InPageVideoPlayer({
             <div><kbd className="px-2 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono text-white font-bold">Shift+S</kbd> Prev Source</div>
           </div>
         )}
+
+        {/* Mobile Player Controls & Server Selection Bottom Sheet */}
+        <MobilePlayerControlsSheet
+          isOpen={isMobileControlsOpen}
+          onClose={() => setIsMobileControlsOpen(false)}
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            setSelectedServerIndex(0);
+            setPlayerError(false);
+            setFallbackToIframe(false);
+          }}
+          activeSources={activeSources || []}
+          validServerIndex={validServerIndex}
+          onSelectServer={(idx) => handleSelectServer(idx)}
+          serverLatencies={serverLatencies}
+          ambientMode={ambientMode}
+          onToggleAmbient={toggleAmbientMode}
+          isTheaterMode={isTheaterMode}
+          onToggleTheater={toggleTheaterMode}
+          playbackRate={playbackRate}
+          onPlaybackRateChange={handlePlaybackRateChange}
+          autoSkip={autoSkip}
+          onToggleAutoSkip={toggleAutoSkip}
+        />
+
+        {/* Watch Party Social Sync Modal */}
+        <WatchPartyModal
+          isOpen={isWatchPartyModalOpen}
+          onClose={() => setIsWatchPartyModalOpen(false)}
+          roomId={watchPartyRoomId}
+          isPartyActive={isWatchPartyActive}
+          isHost={isWatchPartyHost}
+          members={watchPartyMembers}
+          onCreateParty={handleCreateWatchParty}
+          onJoinParty={handleJoinWatchParty}
+          onLeaveParty={handleLeaveWatchParty}
+        />
       </div>
     </div>
   );

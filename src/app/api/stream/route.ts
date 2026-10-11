@@ -5,9 +5,9 @@ import { resolveAnilistIdFromSlugOrKitsu } from "@/lib/kitsu-mapper";
 import { unstable_cache } from "next/cache";
 import { BoundedLRU } from "@/lib/lru-cache";
 import { resolveRefererForStream } from "@/lib/referer-resolver";
+import { distributedStreamCache } from "@/lib/distributed-cache";
 
-// Bounded LRU cache: 200 items, 3-minute TTL (conservative for signed stream URLs)
-const streamCache = new BoundedLRU(200);
+// 3-minute TTL (conservative for signed stream URLs)
 const STREAM_CACHE_TTL_MS = 3 * 60 * 1000;
 
 // In-flight request deduplication Map (bounded to 500 entries, FIFO eviction)
@@ -990,8 +990,8 @@ export async function GET(request: Request) {
   // Build deterministic cache key with every parameter affecting stream resolution
   const cacheKey = `stream:${id}:${ep}:${title.toLowerCase().trim()}:${audio}:${type || ''}:${anilistParam || ''}:${excludeParam || ''}:${providerParam || ''}`;
 
-  // 1. Check L1 in-memory LRU Cache (Fastest same-instance hit)
-  const cached = streamCache.get(cacheKey);
+  // 1. Check Distributed Cache (L1 LRU + Redis/Cloudflare KV)
+  const cached = await distributedStreamCache.get(cacheKey);
   if (cached && isPlayableStream(cached)) {
     return NextResponse.json(cached, {
       headers: {
@@ -1029,8 +1029,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Stream not found" }, { status: 404 });
     }
 
-    // Cache valid resolution in L1 LRU Cache
-    streamCache.set(cacheKey, result, STREAM_CACHE_TTL_MS);
+    // Cache valid resolution in Distributed Cache
+    await distributedStreamCache.set(cacheKey, result, 180);
 
     return NextResponse.json(result, {
       headers: {
