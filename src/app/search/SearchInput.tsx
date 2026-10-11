@@ -291,9 +291,6 @@ export default function SearchInput({ initialQuery = "" }: { initialQuery?: stri
               <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
                 Search Anime by Screenshot
               </h3>
-              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                Trace.moe
-              </span>
             </div>
             <p className="text-[11px] sm:text-xs text-slate-400 truncate mt-0.5">
               Drop an image, paste (<kbd className="font-mono text-[10px] text-slate-300">Ctrl+V</kbd>), or tap to identify any anime scene &amp; timestamp

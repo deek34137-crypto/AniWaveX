@@ -58,7 +58,7 @@ export default function CommandPalette() {
   const staticActions = useMemo(() => [
     {
       id: "act-screenshot-search",
-      label: "Search Anime by Screenshot (Trace.moe)",
+      label: "Search Anime by Screenshot",
       category: "Quick Actions",
       icon: Camera,
       action: () => {
