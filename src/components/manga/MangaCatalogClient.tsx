@@ -127,7 +127,7 @@ export default function MangaCatalogClient({
     <div className="space-y-8">
       {/* Unified In-Catalog Manga Search Bar */}
       <div className="relative max-w-2xl mx-auto">
-        <div className="relative flex items-center bg-slate-900/90 border border-white/10 hover:border-cyan-500/40 focus-within:border-cyan-500 focus-within:ring-2 focus-within:ring-cyan-500/20 rounded-2xl transition-all shadow-xl backdrop-blur-md">
+        <div className="relative flex items-center bg-slate-900/90 border border-white/10 hover:border-cyan-500/40 focus-within:border-cyan-500 focus-within:ring-2 focus-within:ring-cyan-500/30 focus-within:shadow-[0_0_25px_rgba(6,182,212,0.25)] rounded-2xl transition-all shadow-xl backdrop-blur-md">
           <div className="pl-4 text-slate-400">
             {isLoading ? (
               <Loader2 className="w-5 h-5 animate-spin text-cyan-400" />
@@ -140,7 +140,7 @@ export default function MangaCatalogClient({
             value={searchQuery}
             onChange={handleSearchChange}
             placeholder="Search all manga, manhwa & comics directly..."
-            className="w-full bg-transparent px-3.5 py-3 text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none"
+            className="w-full bg-transparent px-3.5 py-3 text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none focus:ring-0 rounded-2xl"
           />
           {searchQuery && (
             <button

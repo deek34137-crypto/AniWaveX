@@ -406,19 +406,29 @@ html.reduce-motion *::after {
    TV (10-FOOT UI), 4K & LARGE DISPLAY RESPONSIVE SYSTEM
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Universal accessible focus outline for remote controls & keyboards */
+/* Accessible focus outline for remote controls & keyboards (inherits border curvature) */
 :focus-visible {
-  outline: 3px solid #38bdf8 !important;
-  outline-offset: 3px !important;
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+  border-radius: inherit;
 }
 
 a:focus-visible,
 button:focus-visible,
-input:focus-visible,
 select:focus-visible {
-  outline: 3px solid #38bdf8 !important;
-  outline-offset: 3px !important;
-  box-shadow: 0 0 25px rgba(56, 189, 248, 0.5) !important;
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+  border-radius: inherit;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+}
+
+/* Form inputs & search bars: suppress harsh rectangular outlines in favor of soft rounded focus rings */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
 }
 
 /* TV safe content container: scales padding smoothly from 1080p to 4K */
