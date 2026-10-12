@@ -27,6 +27,13 @@ export default function NotificationsSection({ initialSettings }: NotificationsS
     };
     setSettings(updated);
 
+    if (key === "episodes") {
+      try {
+        localStorage.setItem("aniwavex_notif_episodes", String(updated.episodes));
+        window.dispatchEvent(new CustomEvent("aniwavex_notif_pref_change", { detail: updated }));
+      } catch {}
+    }
+
     setIsSaving(true);
     setSavedSuccess(false);
     try {

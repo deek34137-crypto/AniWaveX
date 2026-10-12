@@ -157,3 +157,79 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+// ── Web Push & In-App Notification Navigation ───────────────────────────────
+
+function getValidatedNotificationUrl(rawUrl) {
+  try {
+    if (!rawUrl || typeof rawUrl !== "string") {
+      return "/airing";
+    }
+    if (rawUrl.startsWith("/")) {
+      return rawUrl;
+    }
+    const parsed = new URL(rawUrl, self.location.origin);
+    if (parsed.origin === self.location.origin) {
+      return parsed.pathname + parsed.search + parsed.hash;
+    }
+  } catch {}
+  return "/airing";
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const rawUrl = event.notification.data?.url || "/airing";
+  const targetPath = getValidatedNotificationUrl(rawUrl);
+  const targetFullUrl = new URL(targetPath, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && client.url.startsWith(self.location.origin) && "focus" in client) {
+          return client.focus().then((focusedClient) => {
+            const targetClient = focusedClient || client;
+            if (targetClient && "navigate" in targetClient) {
+              return targetClient.navigate(targetFullUrl);
+            }
+          });
+        }
+      }
+
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetFullUrl);
+      }
+    })
+  );
+});
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  try {
+    let payload = {};
+    try {
+      payload = event.data.json();
+    } catch {
+      payload = { title: "AniWaveX Airing Alert", body: event.data.text() };
+    }
+
+    const title = payload.title || "AniWaveX Airing Alert";
+    const body = payload.body || "A new episode is now broadcasting. Tap to watch.";
+    const targetUrl = getValidatedNotificationUrl(payload.url || payload.data?.url);
+    const tag = payload.tag || "aniwavex-airing-alert";
+    const icon = payload.icon || "/logo.png";
+
+    event.waitUntil(
+      self.registration.showNotification(title, {
+        body,
+        icon,
+        badge: "/logo.png",
+        tag,
+        data: { url: targetUrl },
+      })
+    );
+  } catch (err) {
+    console.warn("[SW] Push handling warning:", err);
+  }
+});
+

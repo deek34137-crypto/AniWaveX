@@ -24,6 +24,21 @@ export interface UserNotificationSettings {
   security: boolean;
 }
 
+export interface AiringAlertItem {
+  id: string;
+  animeId: string | number;
+  anilistId?: number;
+  slug: string;
+  title: string;
+  posterImage: string;
+  episodeNumber: number;
+  airingAt: number; // Unix seconds
+  airingAtIso?: string;
+  createdAt: number; // Unix ms
+  read: boolean;
+  browserNotificationDelivered: boolean;
+}
+
 export interface UserStats {
   anime_watched: number;
   episodes_watched: number;
