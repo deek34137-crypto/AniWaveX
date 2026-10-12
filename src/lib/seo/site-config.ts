@@ -14,7 +14,7 @@ export const SITE_CONFIG = {
     (process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : "https://www.aniwavex.bond"),
-  ogImage: "https://media.kitsu.io/anime/poster_images/1/large.jpg",
+  ogImage: "https://www.aniwavex.bond/logo.png",
   twitterHandle: "@aniwavex",
   locale: "en_US",
 } as const;

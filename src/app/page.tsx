@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     description: SITE_CONFIG.description,
     url: getAbsoluteUrl("/"),
     siteName: SITE_CONFIG.name,
-    images: [{ url: SITE_CONFIG.ogImage, width: 1200, height: 630, alt: "AniWaveX Anime Discovery" }],
+    images: [{ url: SITE_CONFIG.ogImage, width: 1024, height: 1024, alt: "AniWaveX Anime Discovery" }],
     type: "website",
   },
 };
