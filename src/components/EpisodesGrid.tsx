@@ -35,41 +35,56 @@ export default function EpisodesGrid({
   const [episodeProgressMap, setEpisodeProgressMap] = useState<Record<number, number>>({});
   const fetchedOffsetsRef = useRef<Set<number>>(new Set());
 
-  // Load episode watch progress from localStorage
+  // Load episode watch progress from localStorage efficiently:
+  // Instead of 500+ individual synchronous localStorage.getItem calls across all anime episodes,
+  // we scan localStorage keys once for keys starting with the anime prefix or check displayed episodes.
   const refreshProgress = useCallback(() => {
-    if (!animeSlug || !episodes || episodes.length === 0) return;
+    if (typeof window === "undefined" || !animeSlug || !episodes || episodes.length === 0) return;
     try {
       const map: Record<number, number> = {};
-      let recentItem: any = null;
+
+      // 1. Check recent watch item for fallback
       try {
         const rawRecent = localStorage.getItem("aniwavex_recent_watches");
         if (rawRecent) {
           const list = JSON.parse(rawRecent);
           if (Array.isArray(list)) {
-            recentItem = list.find((it: any) => it.animeSlug === animeSlug);
+            const recentItem = list.find((it: any) => it.animeSlug === animeSlug);
+            if (recentItem && recentItem.episodeId && recentItem.progressSeconds && recentItem.totalSeconds) {
+              const pct = Math.min(100, Math.round((recentItem.progressSeconds / recentItem.totalSeconds) * 100));
+              map[Number(recentItem.episodeId)] = pct;
+            }
           }
         }
       } catch {}
 
-      for (const ep of episodes) {
-        const storageKey = `watch_progress_${animeSlug}_ep_${ep.id}`;
-        const raw = localStorage.getItem(storageKey);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed.currentTime && parsed.duration) {
-            const pct = Math.min(100, Math.round((parsed.currentTime / parsed.duration) * 100));
-            map[ep.id] = pct;
-            continue;
+      // 2. Scan localStorage keys for watch progress matching this anime slug.
+      // localStorage.length is typically < 50 items total, making a single key-scan
+      // O(N_stored_keys) instead of O(N_episodes) queries with 500+ blocking getItem() calls.
+      const prefix = `watch_progress_${animeSlug}_ep_`;
+      const storageLen = localStorage.length;
+      for (let i = 0; i < storageLen; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          const epId = Number(key.slice(prefix.length));
+          if (!Number.isNaN(epId)) {
+            try {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed.currentTime && parsed.duration) {
+                  const pct = Math.min(100, Math.round((parsed.currentTime / parsed.duration) * 100));
+                  map[epId] = pct;
+                }
+              }
+            } catch {}
           }
         }
-        if (recentItem && Number(recentItem.episodeId) === Number(ep.id) && recentItem.progressSeconds && recentItem.totalSeconds) {
-          const pct = Math.min(100, Math.round((recentItem.progressSeconds / recentItem.totalSeconds) * 100));
-          map[ep.id] = pct;
-        }
       }
+
       setEpisodeProgressMap(map);
     } catch {}
-  }, [animeSlug, episodes]);
+  }, [animeSlug, episodes.length]);
 
   useEffect(() => {
     refreshProgress();

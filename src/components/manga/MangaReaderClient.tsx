@@ -36,6 +36,7 @@ import {
   deleteOfflineChapter,
   type OfflineChapter,
 } from "@/lib/manga/offline-storage";
+import MangaErrorBoundary from "./MangaErrorBoundary";
 
 interface ReaderPageProps {
   mangaId: string;
@@ -119,7 +120,7 @@ const MODE_LABELS: Record<ReadingMode, string> = {
   "paged-ltr": "Comic (Left to Right)",
 };
 
-export default function MangaReaderClient({
+function MangaReaderContent({
   mangaId,
   mangaTitle = "Manga",
   posterImage,
@@ -1457,6 +1458,23 @@ export default function MangaReaderClient({
                   }}
                 />
 
+                {/* Individual Failed Image Overlay with Retry Button in Paged Mode */}
+                {retryCount > 0 && !offlineBlobs[p.pageNumber] && (
+                  <div className="absolute inset-0 bg-slate-950/90 z-25 flex flex-col items-center justify-center p-6 text-center gap-3">
+                    <AlertCircle className="w-8 h-8 text-rose-400" />
+                    <p className="text-sm font-semibold text-slate-200">Failed to load Page {p.pageNumber}</p>
+                    <p className="text-xs text-slate-400">Upstream image server temporarily timed out</p>
+                    <button
+                      type="button"
+                      onClick={() => handleImageError(p.pageNumber, true)}
+                      className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 focus-visible:ring-4 focus-visible:ring-cyan-400 focus-visible:outline-none cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Retry Page {p.pageNumber}
+                    </button>
+                  </div>
+                )}
+
                 {/* Tap Zones: Left (30%) & Right (30%) */}
                 <button
                   type="button"
@@ -1577,6 +1595,9 @@ export default function MangaReaderClient({
                       src={offlineBlobs[hoverScrubPage] || `/api/image-proxy?url=${encodeURIComponent(pages[hoverScrubPage - 1].imageUrl)}${pages[hoverScrubPage - 1].referer ? `&referer=${encodeURIComponent(pages[hoverScrubPage - 1].referer!)}` : ""}`}
                       alt={`Preview page ${hoverScrubPage}`}
                       className="w-16 h-24 object-cover rounded-lg border border-white/10"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLElement).style.display = "none";
+                      }}
                     />
                     <span className="text-[10px] font-mono font-bold text-cyan-300">
                       Page {hoverScrubPage}
@@ -1837,5 +1858,13 @@ export default function MangaReaderClient({
         </div>
       )}
     </div>
+  );
+}
+
+export default function MangaReaderClient(props: ReaderPageProps) {
+  return (
+    <MangaErrorBoundary mangaId={props.mangaId} mangaTitle={props.mangaTitle}>
+      <MangaReaderContent {...props} />
+    </MangaErrorBoundary>
   );
 }

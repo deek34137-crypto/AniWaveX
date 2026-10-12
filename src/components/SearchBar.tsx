@@ -11,6 +11,7 @@ import {
   removeSearchItem,
   clearSearchHistory,
 } from "@/lib/search-history";
+import { searchAnime } from "@/lib/search-service";
 
 import Image from "next/image";
 
@@ -101,20 +102,15 @@ export default function SearchBar() {
       setIsSearching(true);
       setHasSearchError(false);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&limit=5`, {
-          signal: controller.signal,
-        });
-        const data = await res.json();
+        const data = await searchAnime(debouncedQuery, 5, controller.signal);
 
         // Check if request is still active
         if (searchRequestIdRef.current !== currentRequestId || controller.signal.aborted) {
           return;
         }
 
-        if (Array.isArray(data)) {
-          setResults(data);
-          setIsOpen(true);
-        }
+        setResults(data);
+        setIsOpen(true);
       } catch (error: any) {
         if (error.name !== "AbortError" && !controller.signal.aborted) {
           console.error("Search error:", error);
@@ -263,6 +259,11 @@ export default function SearchBar() {
             <div className="p-4 text-center text-sm text-red-400">
               Search failed — please try again
             </div>
+          ) : isSearching || query.trim() !== debouncedQuery.trim() ? (
+            <div className="p-4 flex items-center justify-center gap-2 text-xs text-slate-400">
+              <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+              <span>Searching &ldquo;{query.trim()}&rdquo;...</span>
+            </div>
           ) : results.length > 0 ? (
             <div className="flex flex-col">
               {results.map((anime) => (
@@ -303,11 +304,11 @@ export default function SearchBar() {
                 View all results for "{query}"
               </button>
             </div>
-          ) : !isSearching && results.length === 0 ? (
+          ) : (
             <div className="p-4 text-center text-sm text-slate-400">
               No results found for "{query}"
             </div>
-          ) : null}
+          )}
         </div>
       )}
       </div>

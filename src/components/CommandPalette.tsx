@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import ImageSearchModal from "@/components/ImageSearchModal";
+import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
+import { searchAnime, searchManga } from "@/lib/search-service";
 
 interface SearchItem {
   id: string | number;
@@ -38,7 +40,7 @@ interface MangaSearchItem {
   id: string;
   slug?: string;
   title: string;
-  posterImage: string;
+  posterImage?: string;
   rating?: string;
   type?: string;
   status?: string;
@@ -158,7 +160,12 @@ export default function CommandPalette() {
     },
   ], [router]);
 
-  // Global hotkey listener (Ctrl+K, Cmd+K, or custom event)
+  const isOpenRef = useRef(isOpen);
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  // Global hotkey listener (Ctrl+K, Cmd+K, or custom event) attached once on mount
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -167,7 +174,7 @@ export default function CommandPalette() {
         return;
       }
 
-      if (e.key === "Escape" && isOpen) {
+      if (e.key === "Escape" && isOpenRef.current) {
         e.preventDefault();
         setIsOpen(false);
       }
@@ -182,9 +189,9 @@ export default function CommandPalette() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("open-command-palette", handleCustomOpen);
     };
-  }, [isOpen]);
+  }, []);
 
-  // Auto focus input when opened
+  // Auto focus input and manage reference-counted scroll lock when opened
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -192,14 +199,11 @@ export default function CommandPalette() {
       setAnimeResults([]);
       setMangaResults([]);
       setSelectedIndex(0);
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
+      lockScroll();
+      return () => {
+        unlockScroll();
+      };
     }
-
-    return () => {
-      document.body.style.overflow = "";
-    };
   }, [isOpen]);
 
   // Live dual search debounced query (Anime + Manga)
@@ -219,14 +223,9 @@ export default function CommandPalette() {
 
     const timer = setTimeout(async () => {
       try {
-        const encoded = encodeURIComponent(trimmed);
         const [animeRes, mangaRes] = await Promise.all([
-          fetch(`/api/search?q=${encoded}&limit=6`, { signal: controller.signal })
-            .then((r) => (r.ok ? r.json() : []))
-            .catch(() => []),
-          fetch(`/api/manga/browse?q=${encoded}&limit=6`, { signal: controller.signal })
-            .then((r) => (r.ok ? r.json() : { success: false, data: [] }))
-            .catch(() => ({ success: false, data: [] })),
+          searchAnime(trimmed, 6, controller.signal).catch(() => []),
+          searchManga(trimmed, 6, controller.signal).catch(() => []),
         ]);
 
         if (Array.isArray(animeRes)) {
@@ -235,8 +234,8 @@ export default function CommandPalette() {
           setAnimeResults([]);
         }
 
-        if (mangaRes?.success && Array.isArray(mangaRes?.data)) {
-          setMangaResults(mangaRes.data);
+        if (Array.isArray(mangaRes)) {
+          setMangaResults(mangaRes);
         } else {
           setMangaResults([]);
         }

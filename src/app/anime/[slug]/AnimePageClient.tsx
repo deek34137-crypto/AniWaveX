@@ -80,7 +80,6 @@ export default function AnimePageClient({
 
     const epParam = searchParams.get("ep");
     const playParam = searchParams.get("play");
-    const timeParam = searchParams.get("t") || searchParams.get("time");
 
     // Helper to auto-play if ?play=1 is requested
     const triggerAutoPlayIfRequested = (targetEpId?: number | null) => {
@@ -152,22 +151,29 @@ export default function AnimePageClient({
       return;
     }
 
-    // 3. Scan per-episode localStorage keys as a fallback
+    // 3. Scan per-episode localStorage keys efficiently via prefix scan
     try {
-      const epIds = (data.episodes || []).map((e: any) => e.id).filter(Boolean);
+      const prefix = `watch_progress_${data.slug}_ep_`;
       let bestEpId: number | null = null;
       let bestTime = 0;
       let bestProgress = 0;
       let bestDuration = 0;
-      for (const epId of epIds) {
-        const epRaw = localStorage.getItem(`watch_progress_${data.slug}_ep_${epId}`);
-        if (epRaw) {
-          const parsed = JSON.parse(epRaw);
-          if ((parsed.updatedAt || 0) > bestTime) {
-            bestTime = parsed.updatedAt || 0;
-            bestEpId = epId;
-            bestProgress = parsed.currentTime || 0;
-            bestDuration = parsed.duration || 0;
+      const sLen = localStorage.length;
+      for (let i = 0; i < sLen; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(prefix)) {
+          const epRaw = localStorage.getItem(k);
+          if (epRaw) {
+            const parsed = JSON.parse(epRaw);
+            if ((parsed.updatedAt || 0) > bestTime) {
+              const parsedEpId = Number(k.slice(prefix.length));
+              if (!Number.isNaN(parsedEpId)) {
+                bestTime = parsed.updatedAt || 0;
+                bestEpId = parsedEpId;
+                bestProgress = parsed.currentTime || 0;
+                bestDuration = parsed.duration || 0;
+              }
+            }
           }
         }
       }
@@ -181,7 +187,16 @@ export default function AnimePageClient({
 
     // Fallback: If ?play=1 requested but no watch history existed, auto-play first episode
     triggerAutoPlayIfRequested(data.episodes?.[0]?.id ?? 1);
-  }, [data, searchParams, serverLastWatched, serverProgressSeconds, serverTotalSeconds]);
+  }, [
+    data?.slug,
+    data?.id,
+    data?.episodes?.length,
+    searchParams.get("ep"),
+    searchParams.get("play"),
+    serverLastWatched,
+    serverProgressSeconds,
+    serverTotalSeconds,
+  ]);
 
   // Listen for live episode updates from player or background sync
   useEffect(() => {

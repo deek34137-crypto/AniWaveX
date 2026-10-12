@@ -1,8 +1,11 @@
+import { Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import HeroSlider from "@/components/HeroSlider";
 import AnimeRow from "@/components/AnimeRow";
 import JumpBackInRow from "@/components/JumpBackInRow";
 import TodayAiringRow from "@/components/TodayAiringRow";
+import AnimeRowSkeleton from "@/components/AnimeRowSkeleton";
+import TodayAiringSkeleton from "@/components/TodayAiringSkeleton";
 import { getTrendingAnime, getTopRatedAnime, getGenreAnime } from "@/lib/api";
 import { getUnifiedAiringSchedule } from "@/lib/schedule";
 import { JsonLd, createItemListSchema } from "@/lib/seo/jsonld";
@@ -25,14 +28,32 @@ export const metadata: Metadata = {
   },
 };
 
+// Streamed async Server Component for below-the-fold genre rows
+async function StreamedGenreRow({
+  genre,
+  title,
+  viewAllHref,
+}: {
+  genre: string;
+  title: string;
+  viewAllHref: string;
+}) {
+  const items = await getGenreAnime(genre, 12).catch(() => []);
+  if (!items || items.length === 0) return null;
+  return <AnimeRow title={title} items={items} viewAllHref={viewAllHref} />;
+}
+
+// Streamed async Server Component for the today's airing schedule row
+async function StreamedAiringRow() {
+  const airingSchedule = await getUnifiedAiringSchedule().catch(() => []);
+  return <TodayAiringRow initialSchedule={airingSchedule} />;
+}
+
 export default async function Home() {
-  const [trending, topRated, romance, comedy, isekai, airingSchedule] = await Promise.all([
-    getTrendingAnime(),
-    getTopRatedAnime(),
-    getGenreAnime("romance", 12),
-    getGenreAnime("comedy", 12),
-    getGenreAnime("isekai", 12),
-    getUnifiedAiringSchedule().catch(() => []),
+  // Critical above-the-fold content: Only block on primary trending & top rated anime
+  const [trending, topRated] = await Promise.all([
+    getTrendingAnime().catch(() => []),
+    getTopRatedAnime().catch(() => []),
   ]);
 
   // Use top 5 trending anime for the hero slider
@@ -57,34 +78,41 @@ export default async function Home() {
         
         <JumpBackInRow />
 
-        <TodayAiringRow initialSchedule={airingSchedule} />
+        {/* Streamed: Airing Schedule */}
+        <Suspense fallback={<TodayAiringSkeleton />}>
+          <StreamedAiringRow />
+        </Suspense>
 
+        {/* Critical rows: Trending and Highest Rated */}
         <AnimeRow title="Trending Now" items={trendingRow} viewAllHref="/catalog?sort=popularity" />
         <AnimeRow title="Highest Rated" items={topRated} viewAllHref="/catalog?sort=rating" />
 
-        {romance && romance.length > 0 && (
-          <AnimeRow
+        {/* Streamed non-critical rows: Romance */}
+        <Suspense fallback={<AnimeRowSkeleton title="Best of Romance" />}>
+          <StreamedGenreRow
+            genre="romance"
             title="Best of Romance"
-            items={romance}
             viewAllHref="/genre/romance"
           />
-        )}
+        </Suspense>
 
-        {comedy && comedy.length > 0 && (
-          <AnimeRow
+        {/* Streamed non-critical rows: Comedy */}
+        <Suspense fallback={<AnimeRowSkeleton title="Top Comedy" />}>
+          <StreamedGenreRow
+            genre="comedy"
             title="Top Comedy"
-            items={comedy}
             viewAllHref="/genre/comedy"
           />
-        )}
+        </Suspense>
 
-        {isekai && isekai.length > 0 && (
-          <AnimeRow
+        {/* Streamed non-critical rows: Isekai */}
+        <Suspense fallback={<AnimeRowSkeleton title="Best Isekai" />}>
+          <StreamedGenreRow
+            genre="isekai"
             title="Best Isekai"
-            items={isekai}
             viewAllHref="/genre/isekai"
           />
-        )}
+        </Suspense>
       </div>
     </main>
   );

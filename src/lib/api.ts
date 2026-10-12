@@ -475,10 +475,11 @@ function generateSlugFromTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-/** Fetch AniList relations for a title. Returns array of related media sorted chronologically. */
-async function fetchAniListRelations(title: string): Promise<{
+/** Fetch AniList relations and community recommendations for a title. */
+async function fetchAniListRelationsAndRecs(title: string): Promise<{
   nextInSeries: { slug: string; title: string; posterImage: string; year: string; rating: string; tags: string[]; relationType: string } | null;
   franchiseSlugs: string[];
+  communityRecs: any[];
 }> {
   try {
     const gqlQuery = `query($search: String) {
@@ -500,10 +501,31 @@ async function fetchAniListRelations(title: string): Promise<{
             }
           }
         }
+        recommendations(sort: RATING_DESC, perPage: 12) {
+          nodes {
+            rating
+            mediaRecommendation {
+              id
+              type
+              startDate { year }
+              title { english romaji }
+              coverImage { large extraLarge }
+              averageScore
+              genres
+              format
+              description
+            }
+          }
+        }
       }
     }`;
 
-    const data = await fetchAniListGraphQL<{ Media?: { relations?: { edges?: any[] } } }>(
+    const data = await fetchAniListGraphQL<{
+      Media?: {
+        relations?: { edges?: any[] };
+        recommendations?: { nodes?: any[] };
+      };
+    }>(
       gqlQuery,
       { search: title },
       { ttlMs: 24 * 60 * 60 * 1000, retries: 2, timeoutMs: 6000 }
@@ -511,7 +533,7 @@ async function fetchAniListRelations(title: string): Promise<{
 
     const edges: any[] = data?.Media?.relations?.edges || [];
 
-    // Collect all franchise slugs (to exclude from genre recs)
+    // Collect all franchise slugs (to exclude from recs)
     const franchiseSlugs: string[] = [];
     for (const edge of edges) {
       if (FRANCHISE_RELATION_TYPES.includes(edge.relationType) && edge.node?.type === "ANIME") {
@@ -525,31 +547,26 @@ async function fetchAniListRelations(title: string): Promise<{
       .filter(e => SEQUEL_RELATION_TYPES.includes(e.relationType) && e.node?.type === "ANIME")
       .sort((a, b) => (a.node.startDate?.year ?? 9999) - (b.node.startDate?.year ?? 9999));
 
-    if (sequelEdges.length === 0) return { nextInSeries: null, franchiseSlugs };
-
-    const next = sequelEdges[0].node;
-    const nextTitle = next.title?.english || next.title?.romaji || "";
-
-    // Resolve real canonical Kitsu slug & ID deterministically via ARM/AniZip
-    let nextSlug = "";
-    if (next.id) {
-      try {
-        const mappedKitsu = await resolveKitsuSlugFromAnilist(next.id, {
-          romaji: next.title?.romaji,
-          english: next.title?.english,
-        });
-        if (mappedKitsu?.slug) {
-          nextSlug = mappedKitsu.slug;
-        }
-      } catch {}
-    }
-
-    if (!nextSlug) {
-      nextSlug = generateSlugFromTitle(nextTitle);
-    }
-
-    return {
-      nextInSeries: {
+    let nextInSeries: any = null;
+    if (sequelEdges.length > 0) {
+      const next = sequelEdges[0].node;
+      const nextTitle = next.title?.english || next.title?.romaji || "";
+      let nextSlug = "";
+      if (next.id) {
+        try {
+          const mappedKitsu = await resolveKitsuSlugFromAnilist(next.id, {
+            romaji: next.title?.romaji,
+            english: next.title?.english,
+          });
+          if (mappedKitsu?.slug) {
+            nextSlug = mappedKitsu.slug;
+          }
+        } catch {}
+      }
+      if (!nextSlug) {
+        nextSlug = generateSlugFromTitle(nextTitle);
+      }
+      nextInSeries = {
         slug: nextSlug,
         title: nextTitle,
         posterImage: next.coverImage?.extraLarge || next.coverImage?.large || "",
@@ -557,20 +574,70 @@ async function fetchAniListRelations(title: string): Promise<{
         rating: next.averageScore ? (next.averageScore / 10).toFixed(1) : "N/A",
         tags: next.genres?.slice(0, 3) || [],
         relationType: sequelEdges[0].relationType,
-      },
+      };
+    }
+
+    // Process AniList community recommendations
+    const recNodes = data?.Media?.recommendations?.nodes || [];
+    const validRecNodes = recNodes
+      .filter((n: any) => n.mediaRecommendation && n.mediaRecommendation.type === "ANIME")
+      .map((n: any) => n.mediaRecommendation);
+
+    const communityRecs = await Promise.all(
+      validRecNodes.slice(0, 8).map(async (rec: any) => {
+        const recTitle = rec.title?.english || rec.title?.romaji || "";
+        let slug = "";
+        let id: string | number = rec.id;
+        if (rec.id) {
+          try {
+            const mapped = await resolveKitsuSlugFromAnilist(rec.id, {
+              romaji: rec.title?.romaji,
+              english: rec.title?.english,
+            });
+            if (mapped?.slug) {
+              slug = mapped.slug;
+              id = mapped.id;
+            }
+          } catch {}
+        }
+        if (!slug) {
+          slug = generateSlugFromTitle(recTitle);
+        }
+
+        return {
+          id: id || `rec-${slug}`,
+          slug,
+          title: recTitle,
+          posterImage: rec.coverImage?.extraLarge || rec.coverImage?.large || "",
+          backgroundImage: rec.coverImage?.extraLarge || rec.coverImage?.large || "",
+          year: rec.startDate?.year ? String(rec.startDate.year) : "Unknown",
+          rating: rec.averageScore ? (rec.averageScore / 10).toFixed(1) : "N/A",
+          status: "Completed",
+          type: rec.format || "TV",
+          tags: rec.genres?.slice(0, 3) || [],
+          description: rec.description || "",
+          duration: "24m",
+        };
+      })
+    );
+
+    return {
+      nextInSeries,
       franchiseSlugs,
+      communityRecs,
     };
   } catch (err) {
-    console.error("AniList relations fetch failed:", err);
-    return { nextInSeries: null, franchiseSlugs: [] };
+    console.error("AniList relations & recommendations fetch failed:", err);
+    return { nextInSeries: null, franchiseSlugs: [], communityRecs: [] };
   }
 }
 
 export const getRecommendedAnime = cache(async (slug: string, genres?: string[], title?: string) => {
-  // Step 1: Fetch sequel/franchise data from AniList in parallel with genre recs
   const searchTitle = title || slug.replace(/-/g, " ");
-  const [relationsData, genreResults] = await Promise.allSettled([
-    fetchAniListRelations(searchTitle),
+
+  // Fetch AniList relations & community recommendations in parallel with genre fallback
+  const [aniListData, genreResults] = await Promise.allSettled([
+    fetchAniListRelationsAndRecs(searchTitle),
     (async () => {
       const primaryGenre = (genres || [])
         .map(g => g.trim().toLowerCase())
@@ -597,23 +664,20 @@ export const getRecommendedAnime = cache(async (slug: string, genres?: string[],
     })(),
   ]);
 
-  const { nextInSeries, franchiseSlugs } =
-    relationsData.status === "fulfilled" ? relationsData.value : { nextInSeries: null, franchiseSlugs: [] };
+  const { nextInSeries, franchiseSlugs, communityRecs } =
+    aniListData.status === "fulfilled"
+      ? aniListData.value
+      : { nextInSeries: null, franchiseSlugs: [], communityRecs: [] };
 
   const genreAnime: any[] =
     genreResults.status === "fulfilled" ? genreResults.value : [];
 
-  // Step 2: Build exclusion set — current slug + ALL franchise slugs + sequel slug
+  // Build exclusion set — current anime + ALL franchise entries
   const excludeSlugs = new Set<string>([slug, ...(franchiseSlugs || [])]);
 
-  // Step 3: Genre fill — exclude current + entire franchise
-  const genreFill = genreAnime
-    .filter((a: any) => !excludeSlugs.has(a.slug))
-    .slice(0, nextInSeries ? 4 : 5); // leave 1 slot for sequel if found
-
-  // Step 4: Compose final list — sequel FIRST, then genre fill
   const final: any[] = [];
 
+  // 1. Next in series (sequel) prioritized first if present
   if (nextInSeries) {
     final.push({
       ...nextInSeries,
@@ -623,20 +687,39 @@ export const getRecommendedAnime = cache(async (slug: string, genres?: string[],
       description: "",
       duration: "24m",
       backgroundImage: nextInSeries.posterImage,
-      isNextInSeries: true, // flag for UI badge
+      isNextInSeries: true,
     });
   }
 
-  final.push(...genreFill);
+  // 2. PRIMARY: Real AniList community-voted recommendations
+  for (const rec of communityRecs) {
+    if (final.length >= 5) break;
+    if (!excludeSlugs.has(rec.slug) && !final.some(f => f.slug === rec.slug)) {
+      final.push(rec);
+    }
+  }
 
-  // Step 5: If still short, pad with trending
-  if (final.length < 3) {
+  // 3. FALLBACK A: Genre fill if community recommendations are fewer than 5
+  if (final.length < 5) {
+    for (const a of genreAnime) {
+      if (final.length >= 5) break;
+      if (!excludeSlugs.has(a.slug) && !final.some(f => f.slug === a.slug)) {
+        final.push(a);
+      }
+    }
+  }
+
+  // 4. FALLBACK B: Rare cases — randomize 5 anime from curated/trending pool
+  if (final.length < 5) {
     try {
       const trending = await getTrendingAnime();
-      const trendingFill = trending
-        .filter((a: any) => !excludeSlugs.has(a.slug) && !final.find((f: any) => f.slug === a.slug))
-        .slice(0, 5 - final.length);
-      final.push(...trendingFill);
+      const shuffled = [...trending].sort(() => 0.5 - Math.random());
+      for (const item of shuffled) {
+        if (final.length >= 5) break;
+        if (!excludeSlugs.has(item.slug) && !final.some(f => f.slug === item.slug)) {
+          final.push(item);
+        }
+      }
     } catch {}
   }
 

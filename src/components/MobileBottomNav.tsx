@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Download
 } from "lucide-react";
+import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 
 function BottomNavContent() {
   const pathname = usePathname();
@@ -35,16 +36,14 @@ function BottomNavContent() {
     setIsExploreOpen(false);
   }, [pathname, searchParams]);
 
-  // Lock body scroll when explore drawer is open
+  // Lock body scroll when explore drawer is open using reference-counted scroll lock
   useEffect(() => {
     if (isExploreOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
+      lockScroll();
+      return () => {
+        unlockScroll();
+      };
     }
-    return () => {
-      document.body.style.overflow = "";
-    };
   }, [isExploreOpen]);
 
   // Listen for Escape key to close explore drawer

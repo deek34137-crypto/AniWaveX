@@ -118,7 +118,7 @@ export default function CalendarReminderButton({
             e.preventDefault();
             e.stopPropagation();
           }}
-          className="absolute right-0 bottom-full mb-1.5 w-48 bg-slate-900/98 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-1 z-50 animate-in fade-in zoom-in-95 space-y-0.5"
+          className="absolute right-0 top-full mt-1.5 w-44 bg-slate-900/98 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-1 z-50 animate-in fade-in zoom-in-95 space-y-0.5"
         >
           <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/10 mb-1">
             Episode Reminders
