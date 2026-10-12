@@ -10,9 +10,14 @@ import {
   Search,
   Radio,
   Globe,
+  Bookmark,
+  Check,
+  Loader2,
 } from "lucide-react";
 import AnimeImage from "@/components/AnimeImage";
 import CalendarReminderButton from "@/components/airing/CalendarReminderButton";
+import AuthModal from "@/components/AuthModal";
+import { useAuth } from "@/providers/AuthProvider";
 import type { AiringAnimeScheduleItem } from "@/lib/schedule";
 
 export type TimezoneMode = "local" | "jst";
@@ -190,6 +195,10 @@ const AiringAnimeCard = memo(function AiringAnimeCard({
 }) {
   const isToday = anime.effectiveDay.toString() === todayId;
   const [isLive, setIsLive] = useState(() => Boolean(anime.airingAt && anime.timeUntilAiring === 0));
+  const { user, isBookmarked: checkBookmarked, toggleBookmark } = useAuth();
+  const isBookmarked = checkBookmarked(anime.slug);
+  const [isBookmarking, setIsBookmarking] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
     if (anime.airingAt) {
@@ -197,61 +206,109 @@ const AiringAnimeCard = memo(function AiringAnimeCard({
     }
   }, [anime.airingAt]);
 
+  const handleQuickBookmark = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    setIsBookmarking(true);
+    try {
+      await toggleBookmark({
+        slug: anime.slug,
+        title: anime.title,
+        posterImage: anime.posterImage,
+      });
+    } catch (err) {
+      console.error("Failed to update bookmark:", err);
+    } finally {
+      setIsBookmarking(false);
+    }
+  };
+
   return (
-    <Link
-      href={`/anime/${anime.slug}`}
-      className="group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] hover:scale-[1.02] flex flex-col"
-    >
-      {/* Vertical Poster */}
-      <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950">
-        <AnimeImage
-          src={anime.posterImage}
-          alt={anime.title}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+    <>
+      <Link
+        href={`/anime/${anime.slug}`}
+        className="group relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 hover:border-blue-500/50 transition-all duration-300 shadow-lg hover:shadow-[0_0_25px_rgba(37,99,235,0.25)] hover:scale-[1.02] flex flex-col"
+      >
+        {/* Vertical Poster */}
+        <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950">
+          <AnimeImage
+            src={anime.posterImage}
+            alt={anime.title}
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+          />
 
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent pointer-events-none" />
+          {/* Gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent pointer-events-none" />
 
-        {/* Airing-now glow border */}
-        {isLive && (
-          <div className="absolute inset-0 rounded-2xl border-2 border-red-500/70 animate-pulse pointer-events-none z-20" />
-        )}
+          {/* Airing-now glow border */}
+          {isLive && (
+            <div className="absolute inset-0 rounded-2xl border-2 border-red-500/70 animate-pulse pointer-events-none z-20" />
+          )}
 
-        {/* Top badges */}
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
-          {/* EP badge */}
-          <span
-            className={`px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-md backdrop-blur-md shadow-sm ${
-              isLive
-                ? "bg-red-600/90 text-white"
-                : "bg-blue-600/90 text-white"
-            }`}
-          >
-            EP {anime.nextEpisodeNumber}
-          </span>
+          {/* Top badges */}
+          <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+            {/* EP badge & Rating */}
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-md backdrop-blur-md shadow-sm ${
+                  isLive
+                    ? "bg-red-600/90 text-white"
+                    : "bg-blue-600/90 text-white"
+                }`}
+              >
+                EP {anime.nextEpisodeNumber}
+              </span>
 
-          {/* Rating & Calendar Reminder */}
-          <div className="flex items-center gap-1.5">
-            {anime.rating && anime.rating !== "N/A" && (
-              <div className="flex items-center gap-1 bg-black/75 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/10 shadow-sm">
-                <Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />
-                <span className="text-[11px] font-bold text-white">
-                  {anime.rating}
-                </span>
-              </div>
-            )}
-            {!isLive && anime.airingAt && (
-              <CalendarReminderButton
-                title={anime.title}
-                episodeNumber={anime.nextEpisodeNumber}
-                airingAt={anime.airingAt}
-                slug={anime.slug}
-              />
-            )}
+              {anime.rating && anime.rating !== "N/A" && (
+                <div className="flex items-center gap-1 bg-black/75 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/10 shadow-sm">
+                  <Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />
+                  <span className="text-[11px] font-bold text-white">
+                    {anime.rating}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons: Calendar Reminder & Quick Add to Watchlist */}
+            <div className="flex items-center gap-1.5">
+              {anime.airingAt && (
+                <CalendarReminderButton
+                  title={anime.title}
+                  episodeNumber={anime.nextEpisodeNumber}
+                  airingAt={anime.airingAt}
+                  slug={anime.slug}
+                />
+              )}
+
+              <button
+                type="button"
+                onClick={handleQuickBookmark}
+                disabled={isBookmarking}
+                aria-label={isBookmarked ? `Remove ${anime.title} from watchlist` : `Add ${anime.title} to watchlist`}
+                className={`p-1.5 rounded-lg border backdrop-blur-md transition-all shadow-md active:scale-90 cursor-pointer ${
+                  isBookmarked
+                    ? "bg-blue-600 border-blue-400 text-white"
+                    : "bg-black/70 hover:bg-slate-800 border-white/15 text-slate-300 hover:text-white"
+                }`}
+                title={isBookmarked ? "In Watchlist (Airing Alerts Active)" : "Quick Add to Watchlist"}
+              >
+                {isBookmarking ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : isBookmarked ? (
+                  <Check className="w-3.5 h-3.5 text-white" />
+                ) : (
+                  <Bookmark className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
           </div>
-        </div>
 
         {/* Play hover */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
@@ -306,6 +363,13 @@ const AiringAnimeCard = memo(function AiringAnimeCard({
         </div>
       </div>
     </Link>
+      {isAuthModalOpen && (
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+        />
+      )}
+    </>
   );
 });
 
