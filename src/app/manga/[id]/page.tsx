@@ -10,7 +10,7 @@ import { generateMangaMetadata } from "@/lib/seo/metadata";
 import { JsonLd, createMangaBookSchema, createBreadcrumbSchema } from "@/lib/seo/jsonld";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 export async function generateMetadata({
   params,

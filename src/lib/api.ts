@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { fetchAniListGraphQL } from "@/lib/schedule";
 import { getAnilistId } from "@/lib/providers/anikoto-wrapper";
 import { BoundedLRU } from "@/lib/lru-cache";
@@ -232,11 +233,7 @@ export async function fetchKitsuEpisodeRange(animeId: string, offset: number = 0
   }
 }
 
-export const getAnimeData = cache(async (slug: string) => {
-  if (!slug) return null;
-  const cached = animeDataLRU.get(slug);
-  if (cached) return cached;
-
+async function fetchAnimeDataInternal(slug: string) {
   const headers = {
     "Accept": "application/vnd.api+json",
     "Content-Type": "application/vnd.api+json",
@@ -303,28 +300,24 @@ export const getAnimeData = cache(async (slug: string) => {
             title { english romaji }
           }
         }`;
-        const alRes = await fetch("https://graphql.anilist.co", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ query: aniListQuery, variables: { search: cleanTitle } }),
-          signal: AbortSignal.timeout(4000)
-        });
-        if (alRes.ok) {
-          const alData = await alRes.json();
-          const alMedia = alData?.data?.Media;
-          if (alMedia?.id) {
-            const mappedKitsuId = await resolveKitsuIdFromAnilistId(alMedia.id);
-            if (mappedKitsuId) {
-              const directRes = await fetch(`https://kitsu.io/api/edge/anime/${encodeURIComponent(mappedKitsuId)}?include=categories,episodes`, {
-                headers,
-                signal: AbortSignal.timeout(8000),
-                next: { revalidate: 86400 }
-              });
-              if (directRes.ok) {
-                const directJson = await directRes.json();
-                if (directJson.data) {
-                  json = { data: [directJson.data], included: directJson.included || [] };
-                }
+        const alData = await fetchAniListGraphQL<{ Media?: { id: number; title?: { english?: string; romaji?: string } } }>(
+          aniListQuery,
+          { search: cleanTitle },
+          { ttlMs: 24 * 60 * 60 * 1000, retries: 0, timeoutMs: 3000 }
+        );
+        const alMedia = alData?.Media;
+        if (alMedia?.id) {
+          const mappedKitsuId = await resolveKitsuIdFromAnilistId(alMedia.id);
+          if (mappedKitsuId) {
+            const directRes = await fetch(`https://kitsu.io/api/edge/anime/${encodeURIComponent(mappedKitsuId)}?include=categories,episodes`, {
+              headers,
+              signal: AbortSignal.timeout(8000),
+              next: { revalidate: 86400 }
+            });
+            if (directRes.ok) {
+              const directJson = await directRes.json();
+              if (directJson.data) {
+                json = { data: [directJson.data], included: directJson.included || [] };
               }
             }
           }
@@ -464,6 +457,29 @@ export const getAnimeData = cache(async (slug: string) => {
     console.error(`Failed to fetch anime data for slug "${slug}":`, error);
     return null;
   }
+}
+
+const getAnimeDataCached = (cleanSlug: string) =>
+  unstable_cache(
+    async () => fetchAnimeDataInternal(cleanSlug),
+    [`anime_data_${cleanSlug}`],
+    { revalidate: 3600, tags: [`anime_${cleanSlug}`, "anime_metadata"] }
+  )();
+
+export const getAnimeData = cache(async (slug: string) => {
+  if (!slug) return null;
+  const cleanSlug = slug.toLowerCase().trim();
+  const cached = animeDataLRU.get(cleanSlug);
+  if (cached) return cached;
+
+  const finalData = await getAnimeDataCached(cleanSlug);
+  if (finalData) {
+    animeDataLRU.set(cleanSlug, finalData, 1000 * 60 * 60 * 2);
+    if (finalData.slug && finalData.slug !== cleanSlug) {
+      animeDataLRU.set(finalData.slug, finalData, 1000 * 60 * 60 * 2);
+    }
+  }
+  return finalData;
 });
 
 // ── AniList relation types that count as "next in series" ────────────────────
@@ -632,7 +648,7 @@ async function fetchAniListRelationsAndRecs(title: string): Promise<{
   }
 }
 
-export const getRecommendedAnime = cache(async (slug: string, genres?: string[], title?: string) => {
+async function fetchRecommendedAnimeInternal(slug: string, genres?: string[], title?: string) {
   const searchTitle = title || slug.replace(/-/g, " ");
 
   // Fetch AniList relations & community recommendations in parallel with genre fallback
@@ -724,6 +740,25 @@ export const getRecommendedAnime = cache(async (slug: string, genres?: string[],
   }
 
   return final.slice(0, 5);
+}
+
+const getRecommendedAnimeCached = (
+  cleanSlug: string,
+  _genresKey: string,
+  searchTitle: string,
+  genres?: string[]
+) =>
+  unstable_cache(
+    async () => fetchRecommendedAnimeInternal(cleanSlug, genres, searchTitle),
+    [`anime_recs_${cleanSlug}`],
+    { revalidate: 86400, tags: [`recs_${cleanSlug}`, "anime_recommendations"] }
+  )();
+
+export const getRecommendedAnime = cache(async (slug: string, genres?: string[], title?: string) => {
+  const cleanSlug = (slug || "").toLowerCase().trim();
+  const searchTitle = title || cleanSlug.replace(/-/g, " ");
+  const genresKey = (genres || []).slice(0, 3).join(",");
+  return await getRecommendedAnimeCached(cleanSlug, genresKey, searchTitle, genres);
 });
 
 export interface CatalogFilters {

@@ -187,7 +187,9 @@ export async function GET(req: NextRequest) {
       headers: {
         "Content-Type": contentType,
         "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "public, max-age=604800, immutable",
+        "Cache-Control": "public, max-age=604800, s-maxage=2592000, stale-while-revalidate=86400, immutable",
+        "CDN-Cache-Control": "public, max-age=2592000, stale-while-revalidate=86400",
+        "Vercel-CDN-Cache-Control": "public, max-age=2592000, stale-while-revalidate=86400",
       },
     });
   } catch (err: any) {

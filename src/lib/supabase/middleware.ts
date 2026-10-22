@@ -10,8 +10,20 @@ export async function updateSession(request: NextRequest) {
   if (
     pathname.startsWith('/api/proxy') ||
     pathname.startsWith('/api/stream') ||
+    pathname.startsWith('/api/image-proxy') ||
     pathname.startsWith('/api/heartbeat')
   ) {
+    return supabaseResponse;
+  }
+
+  // Fast check: If the request carries zero Supabase auth cookies,
+  // do not make an expensive round-trip to Supabase auth for anonymous crawlers/visitors.
+  const allCookies = request.cookies.getAll();
+  const hasSupabaseCookie = allCookies.some(
+    (c) => c.name.startsWith('sb-') || c.name.includes('auth-token')
+  );
+
+  if (!hasSupabaseCookie) {
     return supabaseResponse;
   }
 

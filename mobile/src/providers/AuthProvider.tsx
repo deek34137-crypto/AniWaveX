@@ -168,7 +168,7 @@ export function AuthProvider({
 
       return nextState;
     },
-    [bookmarkedSlugs, user?.id, supabase]
+    [bookmarkedSlugs, user, supabase]
   );
 
   const removeBookmarkSlug = useCallback((slug: string) => {

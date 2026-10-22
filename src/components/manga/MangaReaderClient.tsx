@@ -29,6 +29,7 @@ import {
   MousePointerClick,
 } from "lucide-react";
 import { MangaChapter } from "@/lib/manga/types";
+import { useAuth } from "@/providers/AuthProvider";
 import {
   saveChapterOffline,
   getOfflineChapter,
@@ -132,6 +133,7 @@ function MangaReaderContent({
   initialPage,
 }: ReaderPageProps) {
   const router = useRouter();
+  const { user } = useAuth();
 
   // Active chapter state: initialized from props, updated immediately on client navigation
   const [activeChapterId, setActiveChapterId] = useState(chapterId);
@@ -636,8 +638,8 @@ function MangaReaderContent({
         }
       } catch {}
 
-      // Fallback: Check Supabase cloud progress if not found in local storage
-      if (!targetPage && !hasRestoredPageRef.current) {
+      // Fallback: Check Supabase cloud progress if authenticated and not found in local storage
+      if (user && !targetPage && !hasRestoredPageRef.current) {
         fetch(`/api/manga/progress?mangaId=${encodeURIComponent(mangaId)}`)
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
@@ -750,9 +752,9 @@ function MangaReaderContent({
       }
     } catch {}
 
-    // 2. Debounced Cloud sync to Supabase (/api/manga/progress)
+    // 2. Debounced Cloud sync to Supabase (/api/manga/progress) if authenticated
     const now = Date.now();
-    if (now - lastCloudSyncRef.current > 4000) {
+    if (user && now - lastCloudSyncRef.current > 4000) {
       lastCloudSyncRef.current = now;
       setIsSyncingCloud(true);
 
@@ -772,6 +774,7 @@ function MangaReaderContent({
         });
     }
   }, [
+    user,
     mangaId,
     mangaTitle,
     posterImage,

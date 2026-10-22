@@ -13,8 +13,18 @@ export interface MangaSyncPayload {
   completed?: boolean;
 }
 
+function hasSupabaseAuthCookie(req: NextRequest): boolean {
+  return req.cookies.getAll().some(
+    (c) => c.name.startsWith('sb-') || c.name.includes('auth-token')
+  );
+}
+
 export async function GET(req: NextRequest) {
   try {
+    if (!hasSupabaseAuthCookie(req)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -60,6 +70,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!hasSupabaseAuthCookie(req)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -130,6 +144,10 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    if (!hasSupabaseAuthCookie(req)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 

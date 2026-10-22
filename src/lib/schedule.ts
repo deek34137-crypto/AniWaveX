@@ -72,6 +72,19 @@ class AniListLRUCache {
 const anilistMemoryCache = new AniListLRUCache();
 const inFlightAniListRequests = new Map<string, Promise<any>>();
 
+// Circuit breaker state for upstream AniList disruptions
+let anilistCircuitOpenUntil = 0;
+const CIRCUIT_BREAKER_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
+
+export function isAniListAvailable(): boolean {
+  return Date.now() >= anilistCircuitOpenUntil;
+}
+
+export function tripAniListCircuitBreaker(reason?: string): void {
+  anilistCircuitOpenUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN_MS;
+  console.warn(`[AniList Circuit Breaker] Activated for 15m (${reason || "Upstream failure"}). Serving cached/fallback data.`);
+}
+
 export interface AniListOptions {
   ttlMs?: number;
   retries?: number;
@@ -85,14 +98,19 @@ export async function fetchAniListGraphQL<T = any>(
 ): Promise<T | null> {
   const {
     ttlMs = 30 * 60 * 1000,
-    retries = 2,
-    timeoutMs = 7000,
+    retries = 1,
+    timeoutMs = 6000,
   } = options;
 
   const cacheKey = `anilist:${JSON.stringify({ q: query.replace(/\s+/g, " ").trim(), v: variables })}`;
 
   const cached = anilistMemoryCache.get<T>(cacheKey);
-  if (cached) return cached;
+  if (cached !== null) return cached;
+
+  if (!isAniListAvailable()) {
+    // Upstream circuit breaker is active; return null without network penalty
+    return null;
+  }
 
   if (inFlightAniListRequests.has(cacheKey)) {
     return inFlightAniListRequests.get(cacheKey) as Promise<T | null>;
@@ -100,41 +118,51 @@ export async function fetchAniListGraphQL<T = any>(
 
   const queryPromise = (async () => {
     let attempt = 0;
-    let delayMs = 600;
+    let delayMs = 500;
 
     while (attempt <= retries) {
+      if (!isAniListAvailable()) return null;
+
       try {
         const res = await fetch("https://graphql.anilist.co", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            Origin: "https://anilist.co",
-            Referer: "https://anilist.co/",
+            "User-Agent": "AniWaveX/1.0 (+https://aniwavex.bond)",
           },
           body: JSON.stringify({ query, variables }),
           signal: AbortSignal.timeout(timeoutMs),
           next: { revalidate: Math.floor(ttlMs / 1000) },
         });
 
+        if (res.status === 403) {
+          // AniList 403: upstream disabled or Cloudflare WAF block.
+          // Activate circuit breaker immediately and cache negative response.
+          tripAniListCircuitBreaker("HTTP 403 Forbidden");
+          anilistMemoryCache.set(cacheKey, null, CIRCUIT_BREAKER_COOLDOWN_MS);
+          return null;
+        }
+
         if (res.status === 429) {
           attempt++;
           if (attempt > retries) {
-            console.warn(`[AniList 429] Rate limit reached after ${retries} retries.`);
+            tripAniListCircuitBreaker("Rate limit exceeded");
             return null;
           }
 
           const retryAfter = res.headers.get("Retry-After");
           const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delayMs + Math.random() * 300;
-          console.warn(`[AniList 429] Backing off for ${Math.round(waitTime)}ms (attempt ${attempt}/${retries})...`);
-          await new Promise((r) => setTimeout(r, waitTime));
+          await new Promise((r) => setTimeout(r, Math.min(waitTime, 3000)));
           delayMs *= 2;
           continue;
         }
 
         if (!res.ok) {
           console.warn(`[AniList Error] HTTP ${res.status}: ${res.statusText}`);
+          if (res.status >= 500) {
+            tripAniListCircuitBreaker(`HTTP ${res.status}`);
+          }
           return null;
         }
 

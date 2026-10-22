@@ -4,7 +4,9 @@ import { useEffect, RefObject } from "react";
 import type { MediaPlayerInstance } from "@vidstack/react";
 
 interface UsePlayerKeyboardShortcutsOptions {
-  mediaPlayerRef: RefObject<MediaPlayerInstance | null>;
+  mediaPlayerRef?: RefObject<MediaPlayerInstance | null>;
+  togglePlay?: () => void;
+  toggleMute?: () => void;
   showShortcuts: boolean;
   setShowShortcuts: React.Dispatch<React.SetStateAction<boolean>>;
   isEpisodeDrawerOpen: boolean;
@@ -22,6 +24,8 @@ interface UsePlayerKeyboardShortcutsOptions {
 
 export function usePlayerKeyboardShortcuts({
   mediaPlayerRef,
+  togglePlay,
+  toggleMute,
   showShortcuts,
   setShowShortcuts,
   isEpisodeDrawerOpen,
@@ -60,14 +64,16 @@ export function usePlayerKeyboardShortcuts({
         return;
       }
 
-      const player = mediaPlayerRef.current;
+      const player = mediaPlayerRef?.current;
 
       switch (e.key) {
         case " ":
         case "k":
         case "K":
-          if (player) {
-            e.preventDefault();
+          e.preventDefault();
+          if (togglePlay) {
+            togglePlay();
+          } else if (player) {
             if (player.paused) {
               player.play();
             } else {
@@ -87,19 +93,21 @@ export function usePlayerKeyboardShortcuts({
           break;
         case "m":
         case "M":
-          if (player) {
-            e.preventDefault();
+          e.preventDefault();
+          if (toggleMute) {
+            toggleMute();
+          } else if (player) {
             player.muted = !player.muted;
           }
           break;
         case "ArrowLeft":
-          if (player) {
+          if (player || triggerSeek) {
             e.preventDefault();
             triggerSeek(-10);
           }
           break;
         case "ArrowRight":
-          if (player) {
+          if (player || triggerSeek) {
             e.preventDefault();
             triggerSeek(10);
           }
@@ -153,6 +161,8 @@ export function usePlayerKeyboardShortcuts({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     mediaPlayerRef,
+    togglePlay,
+    toggleMute,
     hasNext,
     hasPrev,
     handleNext,

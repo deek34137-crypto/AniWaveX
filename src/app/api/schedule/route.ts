@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
       {
         status: 200,
         headers: {
-          "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=86400",
+          "Cache-Control": "public, max-age=300, s-maxage=1800, stale-while-revalidate=86400",
+          "CDN-Cache-Control": "public, max-age=1800, stale-while-revalidate=86400",
+          "Vercel-CDN-Cache-Control": "public, max-age=1800, stale-while-revalidate=86400",
           "Access-Control-Allow-Origin": "*",
         },
       }

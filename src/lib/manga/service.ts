@@ -10,7 +10,10 @@
  *  3. Chapter pages              → backend /api/pages (with logo filtering & referer injection)
  */
 
+import { cache } from 'react';
+import { unstable_cache } from 'next/cache';
 import { MangaItem, MangaChapter, MangaChapterPages, MangaAdaptation } from './types';
+import { isAniListAvailable, tripAniListCircuitBreaker } from '@/lib/schedule';
 
 const configuredUrl = process.env.NEXT_PUBLIC_MANGA_WORKER_URL || process.env.MANGA_API_URL;
 const BACKEND =
@@ -46,14 +49,26 @@ const GQL_FIELDS = `
 `;
 
 async function anilistQuery(query: string, variables: Record<string, any>, retries = 1): Promise<any> {
+  if (!isAniListAvailable()) {
+    return null;
+  }
+
   try {
     const res = await fetch('https://graphql.anilist.co', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'User-Agent': 'AniWaveX/1.0 (+https://aniwavex.bond)',
+      },
       body: JSON.stringify({ query, variables }),
       signal: AbortSignal.timeout(6000),
-      next: { revalidate: 300 },
+      next: { revalidate: 3600 },
     });
+    if (res.status === 403) {
+      tripAniListCircuitBreaker('Manga AniList HTTP 403');
+      return null;
+    }
     if (!res.ok) {
       if (retries > 0 && (res.status === 429 || res.status >= 500)) {
         await new Promise((resolve) => setTimeout(resolve, 600));
@@ -63,7 +78,7 @@ async function anilistQuery(query: string, variables: Record<string, any>, retri
     }
     return await res.json();
   } catch {
-    if (retries > 0) {
+    if (retries > 0 && isAniListAvailable()) {
       await new Promise((resolve) => setTimeout(resolve, 600));
       return anilistQuery(query, variables, retries - 1);
     }
@@ -361,7 +376,7 @@ function parseCompositeId(id: string | number): { provider: string; mangaId: str
   return null;
 }
 
-export async function getMangaDetails(id: string | number): Promise<MangaItem | null> {
+async function fetchMangaDetailsInternal(id: string | number): Promise<MangaItem | null> {
   const strId = String(id).trim();
   const composite = parseCompositeId(strId);
 
@@ -431,6 +446,19 @@ export async function getMangaDetails(id: string | number): Promise<MangaItem | 
 
   return null;
 }
+
+const getMangaDetailsCached = (strId: string) =>
+  unstable_cache(
+    async () => fetchMangaDetailsInternal(strId),
+    [`manga_details_${strId}`],
+    { revalidate: 3600, tags: [`manga_${strId}`, 'manga_metadata'] }
+  )();
+
+export const getMangaDetails = cache(async (id: string | number): Promise<MangaItem | null> => {
+  const strId = String(id || '').trim();
+  if (!strId) return null;
+  return await getMangaDetailsCached(strId);
+});
 
 export async function getMangaAdaptation(
   animeTitle: string,
@@ -837,7 +865,7 @@ function cleanChapterTitle(rawTitle: string, num: number | string): string {
   return firstLine;
 }
 
-export async function getMangaChapters(
+async function fetchMangaChaptersInternal(
   title: string,
   _mangaId?: string | number,
   romajiTitle?: string,
@@ -857,7 +885,7 @@ export async function getMangaChapters(
           id: composite.mangaId,
         }),
         signal: AbortSignal.timeout(8000),
-        cache: 'no-store',
+        next: { revalidate: 3600 },
       });
       if (res.ok) {
         const data = await res.json();
@@ -1009,7 +1037,7 @@ export async function getMangaChapters(
             url: match.url,
           }),
           signal: AbortSignal.timeout(8000),
-          cache: 'no-store',
+          next: { revalidate: 3600 },
         });
 
         if (!res.ok) continue;
@@ -1116,6 +1144,32 @@ export async function getMangaChapters(
 
   return bestChapters;
 }
+
+const getMangaChaptersCached = (
+  title: string,
+  strMangaId: string,
+  romajiTitle?: string,
+  synonymsKey?: string,
+  synonyms?: string[]
+) =>
+  unstable_cache(
+    async () => fetchMangaChaptersInternal(title, strMangaId, romajiTitle, synonyms),
+    [`manga_chapters_${strMangaId || title.toLowerCase().replace(/[^a-z0-9]/g, '_')}`],
+    { revalidate: 3600, tags: [`manga_ch_${strMangaId || title}`, 'manga_chapters'] }
+  )();
+
+export const getMangaChapters = cache(
+  async (
+    title: string,
+    _mangaId?: string | number,
+    romajiTitle?: string,
+    synonyms?: string[]
+  ): Promise<MangaChapter[]> => {
+    const strMangaId = String(_mangaId || '').trim();
+    const synonymsKey = (synonyms || []).slice(0, 3).join(',');
+    return await getMangaChaptersCached(title, strMangaId, romajiTitle, synonymsKey, synonyms);
+  }
+);
 
 /* ───────────────────────────────────────────────
    Backend — Chapter Pages

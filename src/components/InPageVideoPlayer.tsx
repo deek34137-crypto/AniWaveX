@@ -241,6 +241,16 @@ export default function InPageVideoPlayer({
   // Watch Party Realtime Sync State
   const [isWatchPartyModalOpen, setIsWatchPartyModalOpen] = useState(false);
 
+  const playerRef = useRef<HTMLDivElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+  const mediaPlayerRef = useRef<MediaPlayerInstance>(null);
+  const lastSavedTimeRef = useRef(0);
+  const lastSupabaseSyncRef = useRef(0);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Timestamp of the last manual server switch — auto-failover is suppressed for 8s after a manual switch
+  const manualSwitchAtRef = useRef<number>(0);
+  const currentUserRef = useRef<any>(authUser || initialUser);
+
   const handleTabChange = useCallback((tab: "sub" | "dub" | "hindi", persistPreference = true) => {
     setActiveTab(tab);
     setSelectedServerIndex(0);
@@ -290,8 +300,6 @@ export default function InPageVideoPlayer({
     }
   }, [episodes, onEpisodeChange]);
 
-  const currentUserRef = useRef<any>(authUser || initialUser);
-
   const {
     roomId: watchPartyRoomId,
     isPartyActive: isWatchPartyActive,
@@ -306,21 +314,12 @@ export default function InPageVideoPlayer({
   } = useWatchParty({
     animeSlug,
     episodeId: episode?.id,
-    user: currentUserRef.current,
+    user: currentUser,
     onRemoteSeek: handleRemoteSeek,
     onRemotePlay: handleRemotePlay,
     onRemotePause: handleRemotePause,
     onRemoteEpisodeChange: handleRemoteEpisodeChange,
   });
-
-  const playerRef = useRef<HTMLDivElement>(null);
-  const videoContainerRef = useRef<HTMLDivElement>(null);
-  const mediaPlayerRef = useRef<MediaPlayerInstance>(null);
-  const lastSavedTimeRef = useRef(0);
-  const lastSupabaseSyncRef = useRef(0);
-  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Timestamp of the last manual server switch — auto-failover is suppressed for 8s after a manual switch
-  const manualSwitchAtRef = useRef<number>(0);
 
   // Helper to trigger temporary server toast notifications
   const showToast = useCallback((msg: string) => {
@@ -1235,8 +1234,27 @@ export default function InPageVideoPlayer({
     showToast(`Speed: ${rate}x`);
   }, [showToast]);
 
+  const togglePlay = useCallback(() => {
+    const player = mediaPlayerRef.current;
+    if (player) {
+      if (player.paused) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const player = mediaPlayerRef.current;
+    if (player) {
+      player.muted = !player.muted;
+    }
+  }, []);
+
   usePlayerKeyboardShortcuts({
-    mediaPlayerRef,
+    togglePlay,
+    toggleMute,
     showShortcuts,
     setShowShortcuts,
     isEpisodeDrawerOpen,

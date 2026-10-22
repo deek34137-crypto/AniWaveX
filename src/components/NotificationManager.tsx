@@ -107,7 +107,7 @@ export default function NotificationManager() {
       // Refresh schedule if cache is stale or missing
       if (!cachedSchedule || now - lastScheduleFetchTime > SCHEDULE_CACHE_TTL_MS) {
         try {
-          const res = await fetch("/api/schedule", { cache: "no-store" });
+          const res = await fetch("/api/schedule");
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data?.schedule)) {

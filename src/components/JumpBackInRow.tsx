@@ -323,32 +323,34 @@ export default function JumpBackInRow() {
       }
 
       // 3. Fetch cloud progress if logged in (/api/manga/progress)
-      try {
-        const res = await fetch("/api/manga/progress");
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data?.history)) {
-            data.history.forEach((cloudP: any) => {
-              const mId = String(cloudP.manga_id);
-              const cloudUpdatedAt = new Date(cloudP.updated_at).getTime();
-              const existing = historyMap.get(mId);
-              if (!existing || cloudUpdatedAt > existing.updatedAt) {
-                historyMap.set(mId, {
-                  type: "manga" as const,
-                  id: mId,
-                  mangaId: mId,
-                  title: cloudP.manga_title || existing?.title || "Manga",
-                  posterImage: cloudP.poster_image || existing?.posterImage,
-                  chapterId: String(cloudP.chapter_id),
-                  chapterNumber: Number(cloudP.chapter_number) || 1,
-                  pageNumber: Number(cloudP.page_number) || 1,
-                  updatedAt: cloudUpdatedAt,
-                });
-              }
-            });
+      if (user) {
+        try {
+          const res = await fetch("/api/manga/progress");
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data?.history)) {
+              data.history.forEach((cloudP: any) => {
+                const mId = String(cloudP.manga_id);
+                const cloudUpdatedAt = new Date(cloudP.updated_at).getTime();
+                const existing = historyMap.get(mId);
+                if (!existing || cloudUpdatedAt > existing.updatedAt) {
+                  historyMap.set(mId, {
+                    type: "manga" as const,
+                    id: mId,
+                    mangaId: mId,
+                    title: cloudP.manga_title || existing?.title || "Manga",
+                    posterImage: cloudP.poster_image || existing?.posterImage,
+                    chapterId: String(cloudP.chapter_id),
+                    chapterNumber: Number(cloudP.chapter_number) || 1,
+                    pageNumber: Number(cloudP.page_number) || 1,
+                    updatedAt: cloudUpdatedAt,
+                  });
+                }
+              });
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
 
       const sortedManga = Array.from(historyMap.values())
         .sort((a, b) => b.updatedAt - a.updatedAt)

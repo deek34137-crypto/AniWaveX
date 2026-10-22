@@ -16,6 +16,7 @@ import {
 import { MangaChapter } from "@/lib/manga/types";
 import { getDownloadedChaptersForManga } from "@/lib/manga/offline-storage";
 import MangaBookmarkButton from "@/components/manga/MangaBookmarkButton";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface MangaDetailChaptersClientProps {
   mangaId: string;
@@ -44,6 +45,7 @@ export default function MangaDetailChaptersClient({
   romajiTitle,
   synonyms,
 }: MangaDetailChaptersClientProps) {
+  const { user } = useAuth();
   const [chapterList, setChapterList] = useState<MangaChapter[]>(chapters || []);
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -137,36 +139,38 @@ export default function MangaDetailChaptersClient({
       }
     } catch {}
 
-    // Check cloud progress from Supabase (/api/manga/progress?mangaId=...)
-    fetch(`/api/manga/progress?mangaId=${encodeURIComponent(mangaId)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.progress) {
-          const cloudP = data.progress;
-          const cloudUpdatedAt = new Date(cloudP.updated_at).getTime();
+    // Check cloud progress from Supabase if authenticated (/api/manga/progress?mangaId=...)
+    if (user) {
+      fetch(`/api/manga/progress?mangaId=${encodeURIComponent(mangaId)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.progress) {
+            const cloudP = data.progress;
+            const cloudUpdatedAt = new Date(cloudP.updated_at).getTime();
 
-          setProgress((currentLocal) => {
-            if (!currentLocal || cloudUpdatedAt > (currentLocal.updatedAt || 0)) {
-              const mapped: MangaReadingProgress = {
-                mangaId: cloudP.manga_id,
-                chapterId: cloudP.chapter_id,
-                chapterNumber: Number(cloudP.chapter_number),
-                pageNumber: cloudP.page_number,
-                updatedAt: cloudUpdatedAt,
-                mangaTitle: cloudP.manga_title || mangaTitle,
-                posterImage: cloudP.poster_image || posterImage,
-              };
-              try {
-                localStorage.setItem(`aniwavex_manga_progress_${mangaId}`, JSON.stringify(mapped));
-              } catch {}
-              return mapped;
-            }
-            return currentLocal;
-          });
-        }
-      })
-      .catch(() => {});
-  }, [mangaId, mangaTitle, posterImage]);
+            setProgress((currentLocal) => {
+              if (!currentLocal || cloudUpdatedAt > (currentLocal.updatedAt || 0)) {
+                const mapped: MangaReadingProgress = {
+                  mangaId: cloudP.manga_id,
+                  chapterId: cloudP.chapter_id,
+                  chapterNumber: Number(cloudP.chapter_number),
+                  pageNumber: cloudP.page_number,
+                  updatedAt: cloudUpdatedAt,
+                  mangaTitle: cloudP.manga_title || mangaTitle,
+                  posterImage: cloudP.poster_image || posterImage,
+                };
+                try {
+                  localStorage.setItem(`aniwavex_manga_progress_${mangaId}`, JSON.stringify(mapped));
+                } catch {}
+                return mapped;
+              }
+              return currentLocal;
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [mangaId, mangaTitle, posterImage, user]);
 
   // Filter and sort chapters
   const filteredChapters = useMemo(() => {

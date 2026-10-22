@@ -1,13 +1,12 @@
 "use client";
 
-import { Bell, User, LogOut, Shield, Bookmark, Link2, Download, Calendar, Radio, Check } from "lucide-react";
+import { Bell, User, LogOut, Shield, Bookmark, Link2, Download } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import AuthModal from "./AuthModal";
 import UsernameModal from "./UsernameModal";
 import Link from "next/link";
 import { getAvatarUrl } from "@/lib/avatars";
 import { useAuth } from "@/providers/AuthProvider";
-import { isAdminUser } from "@/lib/admin";
 import { getRecentAlerts, getUnreadAlertsCount, markAlertsAsRead, clearUserNotifications } from "@/lib/notifications";
 import type { AiringAlertItem } from "@/types/account";
 import { useRouter } from "next/navigation";
@@ -16,13 +15,13 @@ import Image from "next/image";
 export default function NavbarActions({ user: initialUser }: { user?: any }) {
   const { user: authUser, supabase } = useAuth();
   const currentUser = authUser || initialUser;
-  const isAdmin = isAdminUser(currentUser);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isUsernameModalOpen, setIsUsernameModalOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [alerts, setAlerts] = useState<AiringAlertItem[]>([]);
+  const [nowSec, setNowSec] = useState<number>(0);
   const [hasMounted, setHasMounted] = useState(false);
   
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -62,6 +61,7 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
 
   useEffect(() => {
     setHasMounted(true);
+    setNowSec(Math.floor(Date.now() / 1000));
     setUnreadCount(getUnreadAlertsCount());
     setAlerts(getRecentAlerts());
 
@@ -96,6 +96,7 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
     const nextState = !isNotificationsOpen;
     setIsNotificationsOpen(nextState);
     if (nextState) {
+      setNowSec(Math.floor(Date.now() / 1000));
       markAlertsAsRead();
       setUnreadCount(0);
       setAlerts(getRecentAlerts());
@@ -170,8 +171,7 @@ export default function NavbarActions({ user: initialUser }: { user?: any }) {
             <div className="max-h-96 overflow-y-auto divide-y divide-white/5 scrollbar-thin scrollbar-thumb-slate-800">
               {alerts.length > 0 ? (
                 alerts.slice(0, 30).map((alert) => {
-                  const nowSec = Math.floor(Date.now() / 1000);
-                  const isLive = alert.airingAt <= nowSec;
+                  const isLive = nowSec > 0 && alert.airingAt <= nowSec;
 
                   return (
                     <Link
