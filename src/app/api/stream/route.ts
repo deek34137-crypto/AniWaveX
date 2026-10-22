@@ -801,9 +801,10 @@ async function multiProviderProbeEngine(
       const HINDI_WORKER_URL = process.env.HINDI_STREAM_API_URL || "https://aniwavex-hindi-worker.rajverma159310.workers.dev";
       const japFallbackProviders = providerCircuitBreaker.sortProvidersByHealth(['reanime', 'justanime', 'anikoto', 'kaa']);
 
-      // t = 0ms: Speculatively invoke the standalone Hindi worker & local Hindi scraper in parallel
+      // Primary: invoke the dedicated Cloudflare Hindi Worker first to save Vercel compute
       (async () => {
         const startTime = Date.now();
+        let workerSucceeded = false;
         try {
           const res = await fetchHindiWorkerStream(
             HINDI_WORKER_URL,
@@ -811,30 +812,32 @@ async function multiProviderProbeEngine(
             title,
             parsedEp,
             masterController.signal,
-            4000
+            2500
           );
           if (res && res.sources.length > 0) {
+            workerSucceeded = true;
             onProviderSuccess('hindi-worker', res, Date.now() - startTime);
           }
         } catch {
           // Worker failure gracefully handled by fallback
         }
-      })();
 
-      (async () => {
-        const startTime = Date.now();
-        try {
-          const res = await fetchLocalHindiStream(
-            title,
-            parsedEp,
-            masterController.signal,
-            4500
-          );
-          if (res && res.sources.length > 0) {
-            onProviderSuccess('hindi-local', res, Date.now() - startTime);
+        // Fallback: Only invoke local scraper on Vercel if the Cloudflare Worker failed or returned no sources
+        if (!workerSucceeded && !isCompleted && gatheredResults.length === 0) {
+          const localStartTime = Date.now();
+          try {
+            const res = await fetchLocalHindiStream(
+              title,
+              parsedEp,
+              masterController.signal,
+              3500
+            );
+            if (res && res.sources.length > 0) {
+              onProviderSuccess('hindi-local', res, Date.now() - localStartTime);
+            }
+          } catch {
+            // Handled by sub fallback
           }
-        } catch {
-          // Handled by fallback
         }
       })();
 

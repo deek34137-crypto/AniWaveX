@@ -12,6 +12,8 @@ import { JsonLd, createItemListSchema } from "@/lib/seo/jsonld";
 import { SITE_CONFIG, getAbsoluteUrl } from "@/lib/seo/site-config";
 import type { Metadata } from "next";
 
+export const revalidate = 1800; // Cache homepage generation for 30 minutes (ISR)
+
 export const metadata: Metadata = {
   title: "AniWaveX — Watch Anime Online & Discover Latest Series",
   description: SITE_CONFIG.description,

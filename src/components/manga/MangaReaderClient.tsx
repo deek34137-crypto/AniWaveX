@@ -183,6 +183,24 @@ function MangaReaderContent({
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [offlineBlobs, setOfflineBlobs] = useState<Record<number, string>>({});
 
+  // Track all allocated object URLs to prevent browser memory leaks on mobile/desktop
+  const createdBlobUrlsRef = useRef<Set<string>>(new Set());
+
+  const revokeAllBlobUrls = useCallback(() => {
+    createdBlobUrlsRef.current.forEach((url) => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {}
+    });
+    createdBlobUrlsRef.current.clear();
+  }, []);
+
+  const createBlobUrl = useCallback((blob: Blob): string => {
+    const url = URL.createObjectURL(blob);
+    createdBlobUrlsRef.current.add(url);
+    return url;
+  }, []);
+
   // Reading Tone, Tap Zone Mode & Mobile Chrome Visibility State (starts hidden for maximum immersion)
   const [readingTone, setReadingTone] = useState<ReadingTone>("dark");
   const [tapZoneMode, setTapZoneMode] = useState<TapZoneMode>("three-zone");
@@ -399,13 +417,15 @@ function MangaReaderContent({
         if (downloaded) {
           getOfflineChapter(mangaId, activeChapterId).then((offlineCh) => {
             if (!isMounted || !offlineCh) return;
+            revokeAllBlobUrls();
             const blobsMap: Record<number, string> = {};
             offlineCh.pages.forEach((p) => {
-              blobsMap[p.pageNumber] = URL.createObjectURL(p.blob);
+              blobsMap[p.pageNumber] = createBlobUrl(p.blob);
             });
             setOfflineBlobs(blobsMap);
           });
         } else {
+          revokeAllBlobUrls();
           setOfflineBlobs({});
         }
       })
@@ -414,18 +434,14 @@ function MangaReaderContent({
     return () => {
       isMounted = false;
     };
-  }, [mangaId, activeChapterId]);
+  }, [mangaId, activeChapterId, createBlobUrl, revokeAllBlobUrls]);
 
-  // Clean up object URLs on unmount or chapter change
+  // Clean up all object URLs on unmount or chapter change
   useEffect(() => {
     return () => {
-      Object.values(offlineBlobs).forEach((url) => {
-        try {
-          URL.revokeObjectURL(url);
-        } catch {}
-      });
+      revokeAllBlobUrls();
     };
-  }, [offlineBlobs]);
+  }, [activeChapterId, revokeAllBlobUrls]);
 
 
   // Fullscreen state listener
@@ -462,7 +478,7 @@ function MangaReaderContent({
           mimeType: blob.type || "image/jpeg",
         });
 
-        blobsMap[p.pageNumber] = URL.createObjectURL(blob);
+        blobsMap[p.pageNumber] = createBlobUrl(blob);
         setDownloadProgress(Math.round(((i + 1) / pages.length) * 100));
       }
 
@@ -488,12 +504,13 @@ function MangaReaderContent({
       setIsDownloading(false);
       setDownloadProgress(0);
     }
-  }, [pages, isDownloading, mangaId, activeChapterId, activeChapterNum, currentChapterObj, mangaTitle, posterImage]);
+  }, [pages, isDownloading, mangaId, activeChapterId, activeChapterNum, currentChapterObj, mangaTitle, posterImage, createBlobUrl]);
 
   const handleRemoveOfflineChapter = async () => {
     try {
       await deleteOfflineChapter(mangaId, activeChapterId);
       setIsDownloaded(false);
+      revokeAllBlobUrls();
       setOfflineBlobs({});
     } catch (err) {
       console.error("[Offline Removal] Error:", err);
@@ -514,9 +531,10 @@ function MangaReaderContent({
       try {
         const offlineCh = await getOfflineChapter(mangaId, activeChapterId);
         if (offlineCh && offlineCh.pages.length > 0) {
+          revokeAllBlobUrls();
           const blobsMap: Record<number, string> = {};
           const offlinePagesList = offlineCh.pages.map((p) => {
-            const blobUrl = URL.createObjectURL(p.blob);
+            const blobUrl = createBlobUrl(p.blob);
             blobsMap[p.pageNumber] = blobUrl;
             return {
               pageNumber: p.pageNumber,
@@ -555,9 +573,10 @@ function MangaReaderContent({
         try {
           const offlineCh = await getOfflineChapter(mangaId, activeChapterId);
           if (offlineCh && offlineCh.pages.length > 0) {
+            revokeAllBlobUrls();
             const blobsMap: Record<number, string> = {};
             const offlinePagesList = offlineCh.pages.map((p) => {
-              const blobUrl = URL.createObjectURL(p.blob);
+              const blobUrl = createBlobUrl(p.blob);
               blobsMap[p.pageNumber] = blobUrl;
               return {
                 pageNumber: p.pageNumber,
@@ -578,7 +597,7 @@ function MangaReaderContent({
     } finally {
       setIsLoading(false);
     }
-  }, [activeChapterId, mangaId]);
+  }, [activeChapterId, mangaId, createBlobUrl, revokeAllBlobUrls]);
 
   useEffect(() => {
     fetchPages();

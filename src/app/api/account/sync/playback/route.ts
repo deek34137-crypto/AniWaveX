@@ -3,8 +3,17 @@ import { createClient } from '@/lib/supabase/server';
 import { ProgressSyncEngine } from '@/lib/sync/progress-sync-engine';
 import { PlaybackSession } from '@/types/sync';
 
+function hasSupabaseAuthCookie(req: NextRequest): boolean {
+  const cookieHeader = req.headers.get("cookie") || "";
+  return cookieHeader.includes("sb-") || cookieHeader.includes("auth-token");
+}
+
 export async function POST(req: NextRequest) {
   try {
+    if (!hasSupabaseAuthCookie(req)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 

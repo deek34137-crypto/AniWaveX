@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:seo": "node scripts/seo-audit.mjs",
-    "test:resilience": "npx tsx scripts/test-resilience.mjs"
+    "test:resilience": "npx --yes tsx scripts/test-resilience.mjs"
   },
   "dependencies": {
     "@capacitor/core": "^7.6.9",

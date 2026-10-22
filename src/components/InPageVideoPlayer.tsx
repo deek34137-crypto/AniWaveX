@@ -449,6 +449,10 @@ export default function InPageVideoPlayer({
   // Live progress sync to AniList & MAL in background
   const triggerLiveProgressSync = useCallback(async (isCompleted = false, currentPos?: number, totalDur?: number) => {
     if (!episode?.id || !animeSlug) return;
+    // Auth gate: Anonymous / Guest visitors have no linked account or AniList/MAL sync session.
+    // Skip remote playback sync API calls to prevent 401s and Vercel function invocation overhead.
+    if (!currentUserRef.current?.id) return;
+
     const pos = typeof currentPos === 'number' ? currentPos : (lastSavedTimeRef.current || 0);
     const dur = typeof totalDur === 'number' ? totalDur : (lastKnownDurationRef.current || 0);
 
