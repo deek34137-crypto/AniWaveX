@@ -32,6 +32,8 @@ export function generateProxySignature(url: string, exp: number): string {
   return createHmac("sha256", getProxySecret()).update(payload).digest("hex");
 }
 
+export const CLOUDFLARE_PROXY_FALLBACK = "https://anidb-proxy.deek34137.workers.dev";
+
 /**
  * Get proxy base URL (Cloudflare Worker or Vercel API route)
  */
@@ -40,7 +42,9 @@ export function getProxyBaseUrl(): string {
   if (envUrl) {
     return envUrl.replace(/\/+$/, "");
   }
-  return "/api/proxy";
+  // Default to the dedicated Cloudflare Worker instead of Vercel serverless function
+  // to avoid consuming Vercel Fluid Active CPU duration on streaming video payloads.
+  return CLOUDFLARE_PROXY_FALLBACK;
 }
 
 /**

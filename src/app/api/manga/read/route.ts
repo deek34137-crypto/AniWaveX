@@ -10,7 +10,16 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await getChapterPages(chapterId);
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json(
+      { success: true, data },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+          "CDN-Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
+          "Vercel-CDN-Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

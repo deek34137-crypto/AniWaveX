@@ -998,7 +998,9 @@ export async function GET(request: Request) {
   if (cached && isPlayableStream(cached)) {
     return NextResponse.json(cached, {
       headers: {
-        "Cache-Control": "public, s-maxage=180, stale-while-revalidate=360",
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        "CDN-Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        "Vercel-CDN-Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
       }
     });
   }
@@ -1037,7 +1039,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json(result, {
       headers: {
-        "Cache-Control": "public, s-maxage=180, stale-while-revalidate=360",
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        "CDN-Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        "Vercel-CDN-Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
       }
     });
   } catch (error) {

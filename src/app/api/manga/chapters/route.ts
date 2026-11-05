@@ -55,12 +55,21 @@ export async function GET(req: NextRequest) {
     const chapters = await getMangaChapters(title, mangaId, romajiTitle, synonyms);
     logs.push(`getMangaChapters returned: ${chapters.length}`);
 
-    return NextResponse.json({
-      success: true,
-      chapters,
-      count: chapters.length,
-      logs,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        chapters,
+        count: chapters.length,
+        logs,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400",
+          "CDN-Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+          "Vercel-CDN-Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+        },
+      }
+    );
   } catch (err: any) {
     logs.push(`error: ${err?.message}`);
     return NextResponse.json(

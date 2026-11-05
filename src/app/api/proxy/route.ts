@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyProxySignature, generateProxySignature, getProxyBaseUrl } from "@/lib/proxy-security";
+import { verifyProxySignature, generateProxySignature, getProxyBaseUrl, CLOUDFLARE_PROXY_FALLBACK } from "@/lib/proxy-security";
 import { BoundedLRU } from "@/lib/lru-cache";
 import { resolveRefererForStream } from "@/lib/referer-resolver";
 
@@ -445,6 +445,40 @@ export async function GET(request: NextRequest) {
     refererOrigin = "https://flixcloud.cc";
   }
 
+  // CRITICAL VERCEL FLUID CPU PRESERVATION:
+  // Binary video segments (.ts, .m4s, .mp4) consume massive active streaming I/O time on Vercel serverless.
+  // Instantly redirect them (307 Temporary Redirect) to the Cloudflare Worker proxy so Vercel compute is never charged!
+  const isVideoSegment =
+    targetUrl.pathname.endsWith(".ts") ||
+    targetUrl.pathname.endsWith(".m4s") ||
+    targetUrl.pathname.endsWith(".mp4") ||
+    searchParams.has("segment");
+
+  if (isVideoSegment) {
+    const workerUrl = process.env.NEXT_PUBLIC_PROXY_URL || process.env.STREAM_PROXY_URL || CLOUDFLARE_PROXY_FALLBACK;
+    if (workerUrl && !workerUrl.includes("/api/proxy")) {
+      try {
+        const redirectDest = new URL(workerUrl.startsWith("http") ? workerUrl : `https://${workerUrl}`);
+        redirectDest.searchParams.set("url", target);
+        if (exp) redirectDest.searchParams.set("exp", exp);
+        if (sig) redirectDest.searchParams.set("sig", sig);
+        if (referer) redirectDest.searchParams.set("referer", referer);
+
+        return NextResponse.redirect(redirectDest.toString(), {
+          status: 307,
+          headers: {
+            ...corsHeaders,
+            "Cache-Control": "public, max-age=86400, s-maxage=86400, immutable",
+            "CDN-Cache-Control": "public, max-age=86400, s-maxage=86400",
+            "Vercel-CDN-Cache-Control": "public, max-age=86400, s-maxage=86400",
+          },
+        });
+      } catch {
+        // Fallback to in-process fetch if URL construction fails
+      }
+    }
+  }
+
   const rangeHeader = request.headers.get("range");
   const upstreamHeaders: Record<string, string> = {
     "User-Agent": UA,
@@ -591,6 +625,8 @@ export async function GET(request: NextRequest) {
           ...corsHeaders,
           "Content-Type": "application/vnd.apple.mpegurl",
           "Cache-Control": "public, max-age=60, s-maxage=60",
+          "CDN-Cache-Control": "public, max-age=60, s-maxage=60",
+          "Vercel-CDN-Cache-Control": "public, max-age=60, s-maxage=60",
         },
       });
     }
@@ -611,6 +647,8 @@ export async function GET(request: NextRequest) {
           ...corsHeaders,
           "Content-Type": "text/vtt; charset=utf-8",
           "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+          "CDN-Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+          "Vercel-CDN-Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
         },
       });
     }
@@ -629,6 +667,8 @@ export async function GET(request: NextRequest) {
           ...corsHeaders,
           "Content-Type": "text/vtt; charset=utf-8",
           "Cache-Control": "public, max-age=86400, s-maxage=86400",
+          "CDN-Cache-Control": "public, max-age=86400, s-maxage=86400",
+          "Vercel-CDN-Cache-Control": "public, max-age=86400, s-maxage=86400",
         },
       });
     }
